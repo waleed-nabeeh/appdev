@@ -10,3 +10,5 @@ cluster does not need to download a Helm dependency at reconciliation time.
 
 Argo CD deploys the Kubernetes resources only. Vault initialization, recovery
 keys, unseal material, and the initial root token are handled out of band.
+The demo route targets the general Vault service so initialization can be
+performed before an active Raft node exists.
