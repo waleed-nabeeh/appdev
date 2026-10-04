@@ -5,6 +5,9 @@ injector:
   enabled: false
 
 server:
+  # The workshop demo has one schedulable node. Customer HA must retain
+  # multi-node placement and anti-affinity.
+  affinity: ""
   image:
     repository: registry.connect.redhat.com/hashicorp/vault
     tag: 1.20.4-ubi
