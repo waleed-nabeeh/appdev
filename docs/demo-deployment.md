@@ -20,6 +20,7 @@ oc wait --for=jsonpath='{.status.phase}'=Succeeded \
 ## Bootstrap Argo CD
 
 ```bash
+oc apply -f bootstrap/namespaces/vault.yaml
 helm template customer-bootstrap bootstrap/app-of-apps \
   --namespace openshift-gitops \
   --values bootstrap/app-of-apps/values-demo.yaml | oc apply -f -
