@@ -1,0 +1,45 @@
+# OpenShift-specific defaults (from upstream)
+global:
+  openshift: true
+
+injector:
+  image:
+    repository: "registry.connect.redhat.com/hashicorp/vault-k8s"
+    tag: "1.7.0-ubi"
+
+  agentImage:
+    repository: "registry.connect.redhat.com/hashicorp/vault"
+    tag: "1.20.4-ubi"
+
+server:
+  image:
+    repository: "registry.connect.redhat.com/hashicorp/vault"
+    tag: "1.20.4-ubi"
+
+  # === Added for our environment ===
+  ha:
+    enabled: true
+    replicas: 3
+    raft:
+      enabled: true
+
+  dataStorage:
+    enabled: true
+    size: 10Gi
+    storageClass: px-csi-replicated
+
+  readinessProbe:
+    path: "/v1/sys/health?uninitcode=204"
+
+csi:
+  image:
+    repository: "registry.connect.redhat.com/hashicorp/vault-csi-provider"
+    tag: "1.6.0-ubi"
+
+  agent:
+    image:
+      repository: "registry.connect.redhat.com/hashicorp/vault"
+      tag: "1.20.4-ubi"
+
+ui:
+  enabled: true

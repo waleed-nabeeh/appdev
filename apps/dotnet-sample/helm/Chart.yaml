@@ -1,0 +1,6 @@
+apiVersion: v2
+name: mofa-dotnet-sample
+description: MOFA release-engineering .NET sample application
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

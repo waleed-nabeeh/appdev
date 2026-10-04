@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mofa-dotnet-sample.fullname" . }}
+  labels:
+    {{- include "mofa-dotnet-sample.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "mofa-dotnet-sample.labels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http

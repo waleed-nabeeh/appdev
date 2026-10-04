@@ -1,0 +1,54 @@
+global:
+  openshift: true
+
+injector:
+  enabled: false
+
+server:
+  image:
+    repository: INTERNAL_REGISTRY/hashicorp/vault
+    tag: APPROVED_TAG
+    pullPolicy: IfNotPresent
+  route:
+    enabled: true
+    activeService: true
+    host: vault.apps.CUSTOMER_CLUSTER_DOMAIN
+    tls:
+      termination: reencrypt
+  dataStorage:
+    enabled: true
+    size: 20Gi
+    storageClass: APPROVED_RWO_STORAGE_CLASS
+  auditStorage:
+    enabled: true
+    size: 10Gi
+    storageClass: APPROVED_RWO_STORAGE_CLASS
+  standalone:
+    enabled: false
+  ha:
+    enabled: true
+    replicas: 3
+    raft:
+      enabled: true
+      setNodeId: true
+      config: |
+        ui = true
+        listener "tcp" {
+          tls_disable = 0
+          address = "[::]:8200"
+          cluster_address = "[::]:8201"
+          tls_cert_file = "/vault/userconfig/tls/tls.crt"
+          tls_key_file = "/vault/userconfig/tls/tls.key"
+          tls_client_ca_file = "/vault/userconfig/tls/ca.crt"
+        }
+        storage "raft" {
+          path = "/vault/data"
+        }
+        service_registration "kubernetes" {}
+
+ui:
+  enabled: true
+  serviceType: ClusterIP
+
+csi:
+  enabled: false

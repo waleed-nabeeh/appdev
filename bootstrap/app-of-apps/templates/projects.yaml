@@ -1,0 +1,29 @@
+{{- range $name, $project := .Values.projects }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: {{ $name }}
+  {{- $labels := merge ($project.labels | default dict) ($.Values.default.project.labels | default dict) }}
+  {{- with $labels }}
+  labels:
+{{ toYaml . | indent 4 }}
+  {{- end }}
+  {{- with $project.annotations }}
+  annotations:
+{{ toYaml . | indent 4 }}
+  {{- end }}
+spec:
+  description: {{ tpl $project.description $ | quote }}
+  sourceRepos:
+{{ toYaml $project.sourceRepos | indent 4 }}
+  destinations:
+{{ tpl ($project.destinations | default $.Values.default.project.destinations) $ | indent 4 }}
+  {{- with $project.roles | default $.Values.default.project.roles }}
+  roles:
+{{ toYaml . | indent 4 }}
+  {{- end }}
+  {{- with $project.extraFields }}
+{{ tpl . $ | indent 2 }}
+  {{- end }}
+{{- end }}

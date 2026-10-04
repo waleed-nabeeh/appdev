@@ -1,0 +1,54 @@
+global:
+  openshift: true
+
+injector:
+  enabled: false
+
+server:
+  image:
+    repository: registry.connect.redhat.com/hashicorp/vault
+    tag: 1.20.4-ubi
+    pullPolicy: IfNotPresent
+  route:
+    enabled: true
+    activeService: true
+    host: ""
+    tls:
+      termination: edge
+  dataStorage:
+    enabled: true
+    size: 10Gi
+    storageClass: ocs-external-storagecluster-ceph-rbd
+  auditStorage:
+    enabled: true
+    size: 5Gi
+    storageClass: ocs-external-storagecluster-ceph-rbd
+  standalone:
+    enabled: false
+  ha:
+    enabled: true
+    replicas: 3
+    raft:
+      enabled: true
+      setNodeId: true
+      config: |
+        ui = true
+        listener "tcp" {
+          tls_disable = 1
+          address = "[::]:8200"
+          cluster_address = "[::]:8201"
+        }
+        storage "raft" {
+          path = "/vault/data"
+        }
+        service_registration "kubernetes" {}
+  readinessProbe:
+    enabled: true
+    path: /v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204
+
+ui:
+  enabled: true
+  serviceType: ClusterIP
+
+csi:
+  enabled: false

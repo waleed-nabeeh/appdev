@@ -1,0 +1,34 @@
+default:
+  app:
+    enabled: true
+    project: mt-app
+    destination: 
+      namespace: app-dev
+      server: 'https://kubernetes.default.svc'
+    source:
+      targetRevision: master
+    enableAutoSync: true
+  project:
+    labels:
+      argocd.argoproj.io/project-inherit: global-project
+
+
+projects:
+  mt-app:
+    labels:
+      app: mt-app
+    description: project for all mt-app microservices
+    sourceRepos:
+      - '*'
+    destinations: |
+      - namespace: app-dev
+        server: 'https://kubernetes.default.svc'
+
+applications:
+  mt-app-onboarding:
+    destination: 
+      namespace: app-dev
+      server: "'https://kubernetes.default.svc'"
+    source: 
+      repoURL: https://AZURE_URL/_git/java-microservices-helm
+      path: mt-app-onboarding

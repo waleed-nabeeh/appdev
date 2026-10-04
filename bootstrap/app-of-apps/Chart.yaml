@@ -1,0 +1,8 @@
+apiVersion: v2
+name: mofa-app-of-apps
+version: 0.1.0
+description: MOFA demo bootstrap for platform and application GitOps resources
+type: application
+kubeVersion: '>=1.14.6'
+maintainers:
+- name: Waleed Nabeeh

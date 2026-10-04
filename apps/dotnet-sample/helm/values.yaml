@@ -1,0 +1,24 @@
+replicaCount: 1
+
+image:
+  repository: image-registry.openshift-image-registry.svc:5000/mofa-demo/mofa-dotnet-sample
+  tag: develop
+  digest: ""
+  pullPolicy: IfNotPresent
+
+service:
+  port: 8080
+
+route:
+  enabled: true
+  host: ""
+  tls:
+    termination: edge
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

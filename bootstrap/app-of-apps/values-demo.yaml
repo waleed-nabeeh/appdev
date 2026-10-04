@@ -1,0 +1,50 @@
+default:
+  app:
+    enabled: true
+    project: mofa-platform
+    destination:
+      server: https://kubernetes.default.svc
+    source:
+      repoURL: https://github.com/waleed-nabeeh/appdev.git
+      targetRevision: develop
+    enableAutoSync: true
+    autoSyncPrune: true
+    syncOptions:
+      - CreateNamespace=true
+  project:
+    labels:
+      app.kubernetes.io/part-of: mofa-release-engineering
+
+projects:
+  mofa-platform:
+    description: MOFA shared release-engineering platform services
+    sourceRepos:
+      - https://github.com/waleed-nabeeh/appdev.git
+    destinations: |
+      - namespace: vault
+        server: https://kubernetes.default.svc
+      - namespace: trusted-artifact-signer
+        server: https://kubernetes.default.svc
+
+applications:
+  vault:
+    destination:
+      namespace: vault
+      server: https://kubernetes.default.svc
+    source:
+      repoURL: https://github.com/waleed-nabeeh/appdev.git
+      targetRevision: develop
+      path: platform/vault/chart
+      extraSourceFields: |
+        helm:
+          valueFiles:
+            - values-demo.yaml
+  rhtas:
+    enabled: false
+    destination:
+      namespace: trusted-artifact-signer
+      server: https://kubernetes.default.svc
+    source:
+      repoURL: https://github.com/waleed-nabeeh/appdev.git
+      targetRevision: develop
+      path: platform/rhtas/chart
