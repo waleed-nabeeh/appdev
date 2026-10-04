@@ -1,7 +1,7 @@
 # Branching and Release Strategy
 
 This repository follows the branching model documented on printed pages 5 and
-6 of the MOFA Release Engineering Design.
+6 of the Customer Release Engineering Design.
 
 | Branch | Purpose | Deployment intent |
 | --- | --- | --- |

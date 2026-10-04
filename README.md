@@ -1,6 +1,6 @@
-# MOFA Release Engineering Demo
+# Customer Release Engineering Demo
 
-GitOps and pipeline-as-code assets for the MOFA release-engineering demo. The
+GitOps and pipeline-as-code assets for the Customer release-engineering demo. The
 same structure is intended for customer use after replacing demo endpoints,
 storage classes, image references, and credentials with approved internal
 values.

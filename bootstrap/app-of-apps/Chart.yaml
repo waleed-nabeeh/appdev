@@ -1,7 +1,7 @@
 apiVersion: v2
-name: mofa-app-of-apps
+name: customer-app-of-apps
 version: 0.1.0
-description: MOFA demo bootstrap for platform and application GitOps resources
+description: Customer demo bootstrap for platform and application GitOps resources
 type: application
 kubeVersion: '>=1.14.6'
 maintainers:

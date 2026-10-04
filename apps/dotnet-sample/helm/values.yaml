@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: image-registry.openshift-image-registry.svc:5000/mofa-demo/mofa-dotnet-sample
+  repository: image-registry.openshift-image-registry.svc:5000/customer-demo/customer-dotnet-sample
   tag: develop
   digest: ""
   pullPolicy: IfNotPresent

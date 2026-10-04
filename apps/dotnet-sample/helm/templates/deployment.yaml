@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "mofa-dotnet-sample.fullname" . }}
+  name: {{ include "customer-dotnet-sample.fullname" . }}
   labels:
-    {{- include "mofa-dotnet-sample.labels" . | nindent 4 }}
+    {{- include "customer-dotnet-sample.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      {{- include "mofa-dotnet-sample.labels" . | nindent 6 }}
+      {{- include "customer-dotnet-sample.labels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "mofa-dotnet-sample.labels" . | nindent 8 }}
+        {{- include "customer-dotnet-sample.labels" . | nindent 8 }}
     spec:
       containers:
         - name: application
