@@ -4,6 +4,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
   name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
   {{- $labels := merge ($project.labels | default dict) ($.Values.default.project.labels | default dict) }}
   {{- with $labels }}
   labels:
