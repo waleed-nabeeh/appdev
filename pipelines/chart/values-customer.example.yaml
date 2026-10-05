@@ -1,6 +1,6 @@
 images:
   git: registry.customer.example/openshift4/ose-cli-rhel9@sha256:REPLACE
-  dotnet: registry.customer.example/ubi9/dotnet-80@sha256:REPLACE
+  dotnet: registry.customer.example/ubi9/dotnet-100@sha256:REPLACE
   buildah: registry.customer.example/rhel9/buildah@sha256:REPLACE
   rhacs: registry.customer.example/rhacs/rhacs-roxctl-rhel9@sha256:REPLACE
   cosign: registry.customer.example/rhtas/cosign-rhel9@sha256:REPLACE

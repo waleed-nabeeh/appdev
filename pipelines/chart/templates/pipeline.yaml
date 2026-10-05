@@ -28,6 +28,9 @@ spec:
       default: develop
     - name: values-file
       type: string
+    - name: perform-gitops-update
+      type: string
+      default: "true"
     - name: fulcio-url
       type: string
       default: {{ .Values.rhtas.fulcioUrl | quote }}
@@ -43,6 +46,7 @@ spec:
   workspaces:
     - name: source
     - name: git-credentials
+      optional: true
     - name: registry-auth
   tasks:
     - name: clone
@@ -93,6 +97,10 @@ spec:
         - {name: registry-auth, workspace: registry-auth}
     - name: update-helm-chart
       runAfter: [sign-image]
+      when:
+        - input: $(params.perform-gitops-update)
+          operator: in
+          values: ["true"]
       taskRef: {name: update-helm-chart}
       params:
         - {name: repository, value: $(params.gitops-url)}
