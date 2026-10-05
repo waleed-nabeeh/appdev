@@ -1,0 +1,10 @@
+central:
+  name: stackrox-central-services
+  scannerV4: Enabled
+
+securedCluster:
+  enabled: false
+  name: stackrox-secured-cluster-services
+  clusterName: customer-hub
+  centralEndpoint: central.stackrox.svc:443
+  collection: CORE_BPF

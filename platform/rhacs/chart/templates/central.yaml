@@ -1,0 +1,24 @@
+apiVersion: platform.stackrox.io/v1alpha1
+kind: Central
+metadata:
+  name: {{ .Values.central.name }}
+spec:
+  central:
+    exposure:
+      route:
+        enabled: true
+  scannerV4:
+    scannerComponent: {{ .Values.central.scannerV4 }}
+{{- if .Values.securedCluster.enabled }}
+---
+apiVersion: platform.stackrox.io/v1alpha1
+kind: SecuredCluster
+metadata:
+  name: {{ .Values.securedCluster.name }}
+spec:
+  clusterName: {{ .Values.securedCluster.clusterName | quote }}
+  centralEndpoint: {{ .Values.securedCluster.centralEndpoint | quote }}
+  perNode:
+    collector:
+      collection: {{ .Values.securedCluster.collection }}
+{{- end }}

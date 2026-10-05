@@ -45,6 +45,7 @@ helm template customer-bootstrap bootstrap/app-of-apps \
 oc apply -f bootstrap/namespaces/vault.yaml
 oc apply -f bootstrap/namespaces/trusted-artifact-signer.yaml
 oc apply -f bootstrap/namespaces/customer-cicd.yaml
+oc apply -f bootstrap/namespaces/stackrox.yaml
 
 helm template customer-bootstrap bootstrap/app-of-apps \
   --namespace openshift-gitops \
@@ -92,7 +93,15 @@ All three custom resources must report `Ready`. Fulcio uses the configured OIDC
 issuer for keyless identities; Rekor records signatures; TUF publishes trust
 material; TSA supplies trusted timestamps.
 
-## 6. Create pipeline credentials
+## 6. Deploy RHACS
+
+Deploy Central first with `securedCluster.enabled: false`. Wait for Central and
+Scanner V4 to become Ready, generate and apply the cluster registration secret
+outside Git, and then change `securedCluster.enabled` to `true`. Argo CD creates
+the local SecuredCluster services in the same `stackrox` namespace as Central.
+Create a least-privilege RHACS API token for image scanning and policy checks.
+
+## 7. Create pipeline credentials
 
 Create these directly in `customer-cicd`, preferably through Vault Secrets
 Operator. The names and keys are contracts used by the checked-in Tasks:
@@ -108,7 +117,7 @@ source and write access only to the approved Helm/GitOps repository. The Quay
 robot account needs push and pull access to the target image repository. The
 RHACS token needs only image scan and policy-check permissions.
 
-## 7. Run the release pipeline
+## 8. Run the release pipeline
 
 Copy the example PipelineRun to a temporary file, replace the image destination
 and revisions, and submit it:
@@ -122,7 +131,7 @@ Do not commit a PipelineRun containing production identifiers or credentials.
 For normal operation, an approved Azure DevOps/Git webhook or Pipelines as Code
 event creates a PipelineRun with the commit SHA and immutable image tag.
 
-## 8. Promotion and deployment
+## 9. Promotion and deployment
 
 The pipeline never runs `oc apply` against a workload cluster. After successful
 tests, RHACS gates, and keyless signing, it updates the Helm values file with the
@@ -131,7 +140,7 @@ commit and deploys it to the environment allowed by the branch and promotion
 policy. Production promotion requires the customer approval process and uses
 the same already-signed digest; it does not rebuild the image.
 
-## 9. Acceptance checks
+## 10. Acceptance checks
 
 ```bash
 oc get applications -n openshift-gitops

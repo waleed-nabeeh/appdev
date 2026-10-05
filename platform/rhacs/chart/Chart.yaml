@@ -1,0 +1,6 @@
+apiVersion: v2
+name: customer-rhacs
+description: RHACS Central and secured-cluster services for the hub cluster
+type: application
+version: 0.1.0
+appVersion: "4.11"

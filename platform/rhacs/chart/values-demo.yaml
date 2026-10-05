@@ -1,0 +1,3 @@
+securedCluster:
+  enabled: false
+  clusterName: demo-hub
