@@ -2,5 +2,5 @@ demoSizing:
   enabled: true
 
 securedCluster:
-  enabled: false
+  enabled: true
   clusterName: demo-hub
