@@ -34,7 +34,7 @@ openssl x509 -req -in "${WORK_DIR}/intCA.csr.pem" \
   -extfile <(printf '%s\n' 'basicConstraints=critical,CA:TRUE,pathlen:0' \
     'keyUsage=critical,keyCertSign,cRLSign')
 
-openssl rand -base64 32 >"${WORK_DIR}/tsa-password"
+openssl rand -base64 32 | tr -d '\r\n' >"${WORK_DIR}/tsa-password"
 openssl genrsa -aes256 -passout "file:${WORK_DIR}/tsa-password" \
   -out "${WORK_DIR}/tsa.key.pem" 3072
 openssl req -new -key "${WORK_DIR}/tsa.key.pem" \
