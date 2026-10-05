@@ -1,4 +1,5 @@
 FROM registry.access.redhat.com/ubi9/dotnet-100 AS build
+USER 0
 WORKDIR /src
 COPY src/Customer.Sample.Api/Customer.Sample.Api.csproj src/Customer.Sample.Api/
 RUN dotnet restore src/Customer.Sample.Api/Customer.Sample.Api.csproj
