@@ -32,11 +32,25 @@ if [[ ! -s "${KEY_FILE}" ]]; then
 fi
 
 for pod in vault-0 vault-1 vault-2; do
-  for index in 0 1 2; do
-    key="$(jq -r ".unseal_keys_b64[${index}]" "${KEY_FILE}")"
-    ${OC_BIN} exec -n "${NAMESPACE}" "${pod}" -- \
-      vault operator unseal "${key}" >/dev/null
+  for _ in $(seq 1 60); do
+    status="$(${OC_BIN} exec -n "${NAMESPACE}" "${pod}" -- \
+      vault status -format=json 2>/dev/null || true)"
+    [[ "$(jq -r '.initialized // false' <<<"${status}")" == "true" ]] && break
+    sleep 5
   done
+
+  if [[ "$(jq -r '.initialized // false' <<<"${status}")" != "true" ]]; then
+    echo "Timed out waiting for ${pod} to join the initialized Raft cluster" >&2
+    exit 1
+  fi
+
+  if [[ "$(jq -r '.sealed' <<<"${status}")" == "true" ]]; then
+    for index in 0 1 2; do
+      key="$(jq -r ".unseal_keys_b64[${index}]" "${KEY_FILE}")"
+      ${OC_BIN} exec -n "${NAMESPACE}" "${pod}" -- \
+        vault operator unseal "${key}" >/dev/null
+    done
+  fi
 done
 
 ${OC_BIN} exec -n "${NAMESPACE}" vault-0 -- vault status
