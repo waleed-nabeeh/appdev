@@ -103,6 +103,8 @@ spec:
     - name: scan
       image: {{ .Values.images.rhacs }}
       env:
+        - name: HOME
+          value: /tekton/home
         - name: ROX_ENDPOINT
           valueFrom:
             secretKeyRef:
@@ -118,7 +120,16 @@ spec:
       script: |
         #!/usr/bin/env bash
         set -euo pipefail
-        roxctl image scan --image "$(params.image)" --output json > /tmp/scan.json
+        for attempt in $(seq 1 30); do
+          if roxctl image scan --image "$(params.image)" --output json > /tmp/scan.json; then
+            break
+          fi
+          if [[ "$attempt" == "30" ]]; then
+            echo "RHACS scan did not complete within the retry window" >&2
+            exit 1
+          fi
+          sleep 20
+        done
         printf 'passed' > "$(results.scan-result.path)"
 ---
 apiVersion: tekton.dev/v1
@@ -133,6 +144,8 @@ spec:
     - name: check
       image: {{ .Values.images.rhacs }}
       env:
+        - name: HOME
+          value: /tekton/home
         - name: ROX_ENDPOINT
           valueFrom:
             secretKeyRef:
