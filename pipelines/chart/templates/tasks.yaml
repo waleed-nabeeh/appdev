@@ -215,6 +215,7 @@ spec:
       type: string
   workspaces:
     - name: git-credentials
+      optional: true
   steps:
     - name: update
       image: {{ .Values.images.git }}
