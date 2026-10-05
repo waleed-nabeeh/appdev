@@ -3,3 +3,6 @@ rhtas:
   rekorUrl: https://rekor-server-trusted-artifact-signer.apps.cluster-zmzbt.dyn.redhatworkshops.io
   tufUrl: https://tuf-trusted-artifact-signer.apps.cluster-zmzbt.dyn.redhatworkshops.io
   tsaUrl: https://tsa-trusted-artifact-signer.apps.cluster-zmzbt.dyn.redhatworkshops.io
+
+rhacs:
+  insecureSkipTLSVerify: true

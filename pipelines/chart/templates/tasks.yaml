@@ -113,6 +113,8 @@ spec:
             secretKeyRef:
               name: rhacs-auth
               key: token
+        - name: ROX_INSECURE_CLIENT_SKIP_TLS_VERIFY
+          value: {{ .Values.rhacs.insecureSkipTLSVerify | quote }}
       script: |
         #!/usr/bin/env bash
         set -euo pipefail
@@ -141,6 +143,8 @@ spec:
             secretKeyRef:
               name: rhacs-auth
               key: token
+        - name: ROX_INSECURE_CLIENT_SKIP_TLS_VERIFY
+          value: {{ .Values.rhacs.insecureSkipTLSVerify | quote }}
       script: |
         #!/usr/bin/env bash
         set -euo pipefail

@@ -14,3 +14,6 @@ rhtas:
   rekorUrl: https://rekor-server-trusted-artifact-signer.apps.example.com
   tufUrl: https://tuf-trusted-artifact-signer.apps.example.com
   tsaUrl: https://tsa-trusted-artifact-signer.apps.example.com
+
+rhacs:
+  insecureSkipTLSVerify: false
