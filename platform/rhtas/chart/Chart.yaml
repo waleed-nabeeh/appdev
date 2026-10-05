@@ -1,0 +1,6 @@
+apiVersion: v2
+name: customer-rhtas
+description: Customer keyless signing service managed by the RHTAS Operator
+type: application
+version: 0.1.0
+appVersion: "1.4"

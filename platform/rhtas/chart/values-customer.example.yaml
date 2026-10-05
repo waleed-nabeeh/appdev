@@ -1,0 +1,29 @@
+name: securesign
+
+domain: apps.CUSTOMER_CLUSTER_DOMAIN
+
+organization:
+  name: CUSTOMER_ORGANIZATION
+  email: PLATFORM_TEAM_EMAIL
+
+oidc:
+  issuer: CUSTOMER_APPROVED_OIDC_ISSUER
+  issuerURL: CUSTOMER_APPROVED_OIDC_ISSUER
+  clientID: trusted-artifact-signer
+  type: email
+
+storage:
+  className: APPROVED_RWO_STORAGE_CLASS
+  tufSize: 5Gi
+  rekorSize: 20Gi
+
+tsa:
+  privateKeySecret:
+    name: tsa-signer-key
+    key: tsa.key.pem
+  passwordSecret:
+    name: tsa-password
+    key: password
+  certificateChainSecret:
+    name: tsa-cert-chain
+    key: tsa.certchain.pem

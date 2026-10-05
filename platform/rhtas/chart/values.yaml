@@ -1,0 +1,29 @@
+name: securesign
+
+domain: apps.cluster-zmzbt.dyn.redhatworkshops.io
+
+organization:
+  name: Customer Demo
+  email: platform@example.com
+
+oidc:
+  issuer: https://kubernetes.default.svc
+  issuerURL: https://kubernetes.default.svc
+  clientID: trusted-artifact-signer
+  type: kubernetes
+
+storage:
+  className: ocs-external-storagecluster-ceph-rbd
+  tufSize: 1Gi
+  rekorSize: 5Gi
+
+tsa:
+  privateKeySecret:
+    name: tsa-signer-key
+    key: tsa.key.pem
+  passwordSecret:
+    name: tsa-password
+    key: password
+  certificateChainSecret:
+    name: tsa-cert-chain
+    key: tsa.certchain.pem

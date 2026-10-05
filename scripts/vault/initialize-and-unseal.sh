@@ -13,8 +13,9 @@ fi
 umask 077
 mkdir -p "$(dirname "${KEY_FILE}")"
 
-initialized="$(${OC_BIN} exec -n "${NAMESPACE}" vault-0 -- \
-  vault status -format=json 2>/dev/null | jq -r '.initialized')"
+status="$(${OC_BIN} exec -n "${NAMESPACE}" vault-0 -- \
+  vault status -format=json 2>/dev/null || true)"
+initialized="$(jq -r '.initialized' <<<"${status}")"
 
 if [[ "${initialized}" == "false" ]]; then
   if [[ -e "${KEY_FILE}" ]]; then

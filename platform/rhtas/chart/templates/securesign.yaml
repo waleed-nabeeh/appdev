@@ -1,0 +1,66 @@
+apiVersion: rhtas.redhat.com/v1alpha1
+kind: Securesign
+metadata:
+  name: {{ .Values.name }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.name }}
+    app.kubernetes.io/part-of: trusted-artifact-signer
+spec:
+  rekor:
+    externalAccess:
+      enabled: true
+      host: rekor-server-trusted-artifact-signer.{{ .Values.domain }}
+    pvc:
+      accessModes:
+        - ReadWriteOnce
+      retain: true
+      size: {{ .Values.storage.rekorSize }}
+      storageClass: {{ .Values.storage.className }}
+  tuf:
+    externalAccess:
+      enabled: true
+      host: tuf-trusted-artifact-signer.{{ .Values.domain }}
+    pvc:
+      accessModes:
+        - ReadWriteOnce
+      retain: true
+      size: {{ .Values.storage.tufSize }}
+      storageClass: {{ .Values.storage.className }}
+    signingConfigURLMode: external
+  fulcio:
+    externalAccess:
+      enabled: true
+      host: fulcio-server-trusted-artifact-signer.{{ .Values.domain }}
+    config:
+      OIDCIssuers:
+        - Issuer: {{ .Values.oidc.issuer | quote }}
+          IssuerURL: {{ .Values.oidc.issuerURL | quote }}
+          ClientID: {{ .Values.oidc.clientID | quote }}
+          Type: {{ .Values.oidc.type | quote }}
+    certificate:
+      commonName: fulcio-securesign.{{ .Values.domain }}
+      organizationName: {{ .Values.organization.name | quote }}
+      organizationEmail: {{ .Values.organization.email | quote }}
+  ctlog:
+    externalAccess:
+      enabled: true
+      host: ctlog-trusted-artifact-signer.{{ .Values.domain }}
+  tsa:
+    externalAccess:
+      enabled: true
+      host: tsa-trusted-artifact-signer.{{ .Values.domain }}
+    signer:
+      certificateChain:
+        certificateChainRef:
+          name: {{ .Values.tsa.certificateChainSecret.name }}
+          key: {{ .Values.tsa.certificateChainSecret.key }}
+      file:
+        privateKeyRef:
+          name: {{ .Values.tsa.privateKeySecret.name }}
+          key: {{ .Values.tsa.privateKeySecret.key }}
+        passwordRef:
+          name: {{ .Values.tsa.passwordSecret.name }}
+          key: {{ .Values.tsa.passwordSecret.key }}
+  trillian:
+    database:
+      create: true

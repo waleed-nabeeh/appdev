@@ -44,7 +44,7 @@ applications:
           valueFiles:
             - values-demo.yaml
   rhtas:
-    enabled: false
+    enabled: true
     destination:
       namespace: trusted-artifact-signer
       server: https://kubernetes.default.svc
