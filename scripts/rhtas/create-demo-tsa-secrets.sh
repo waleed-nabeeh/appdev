@@ -22,6 +22,8 @@ chmod 700 "${WORK_DIR}"
 openssl genrsa -out "${WORK_DIR}/rootCA.key.pem" 4096
 openssl req -x509 -new -key "${WORK_DIR}/rootCA.key.pem" -sha256 -days 3650 \
   -subj "/C=SA/O=Customer Demo/CN=Customer TSA Root CA" \
+  -addext 'basicConstraints=critical,CA:TRUE,pathlen:1' \
+  -addext 'keyUsage=critical,keyCertSign,cRLSign' \
   -out "${WORK_DIR}/rootCA.crt.pem"
 
 openssl genrsa -out "${WORK_DIR}/intCA.key.pem" 4096
@@ -32,6 +34,7 @@ openssl x509 -req -in "${WORK_DIR}/intCA.csr.pem" \
   -CA "${WORK_DIR}/rootCA.crt.pem" -CAkey "${WORK_DIR}/rootCA.key.pem" \
   -CAcreateserial -out "${WORK_DIR}/intCA.crt.pem" -days 1825 -sha256 \
   -extfile <(printf '%s\n' 'basicConstraints=critical,CA:TRUE,pathlen:0' \
+    'extendedKeyUsage=critical,timeStamping' \
     'keyUsage=critical,keyCertSign,cRLSign')
 
 openssl rand -base64 32 | tr -d '\r\n' >"${WORK_DIR}/tsa-password"
@@ -44,9 +47,9 @@ openssl req -new -key "${WORK_DIR}/tsa.key.pem" \
 openssl x509 -req -in "${WORK_DIR}/tsa.csr.pem" \
   -CA "${WORK_DIR}/intCA.crt.pem" -CAkey "${WORK_DIR}/intCA.key.pem" \
   -CAcreateserial -out "${WORK_DIR}/tsa.crt.pem" -days 730 -sha256 \
-  -extfile <(printf '%s\n' 'basicConstraints=critical,CA:TRUE,pathlen:0' \
+  -extfile <(printf '%s\n' 'basicConstraints=critical,CA:FALSE' \
     'extendedKeyUsage=critical,timeStamping' \
-    'keyUsage=critical,digitalSignature,keyCertSign,cRLSign' \
+    'keyUsage=critical,digitalSignature' \
     'subjectKeyIdentifier=hash')
 
 cat "${WORK_DIR}/tsa.crt.pem" "${WORK_DIR}/intCA.crt.pem" \
