@@ -20,10 +20,10 @@ spec:
         - name: HOME
           value: /tekton/home
       script: |
-        #!/usr/bin/env bash
+        #!/bin/sh
         set -euo pipefail
         rm -rf "$(workspaces.source.path)"/source
-        if [[ "$(workspaces.git-credentials.bound)" == "true" ]]; then
+        if [ "$(workspaces.git-credentials.bound)" = "true" ]; then
           cp -R "$(workspaces.git-credentials.path)"/. "$HOME"/
           chmod -R go-rwx "$HOME"
         fi
@@ -223,7 +223,7 @@ spec:
         - name: HOME
           value: /tekton/home
       script: |
-        #!/usr/bin/env bash
+        #!/bin/sh
         set -euo pipefail
         cp -R "$(workspaces.git-credentials.path)"/. "$HOME"/
         chmod -R go-rwx "$HOME"

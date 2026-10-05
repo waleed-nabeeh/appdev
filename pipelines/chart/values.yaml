@@ -2,7 +2,7 @@ serviceAccount:
   name: pipeline
 
 images:
-  git: registry.access.redhat.com/ubi9/git:latest
+  git: docker.io/alpine/git:latest
   dotnet: registry.access.redhat.com/ubi9/dotnet-100:latest
   buildah: registry.redhat.io/rhel9/buildah:latest
   rhacs: registry.redhat.io/advanced-cluster-security/rhacs-roxctl-rhel9:4.11
