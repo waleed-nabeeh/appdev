@@ -44,8 +44,10 @@ openssl req -new -key "${WORK_DIR}/tsa.key.pem" \
 openssl x509 -req -in "${WORK_DIR}/tsa.csr.pem" \
   -CA "${WORK_DIR}/intCA.crt.pem" -CAkey "${WORK_DIR}/intCA.key.pem" \
   -CAcreateserial -out "${WORK_DIR}/tsa.crt.pem" -days 730 -sha256 \
-  -extfile <(printf '%s\n' 'extendedKeyUsage=critical,timeStamping' \
-    'keyUsage=critical,digitalSignature' 'subjectKeyIdentifier=hash')
+  -extfile <(printf '%s\n' 'basicConstraints=critical,CA:TRUE,pathlen:0' \
+    'extendedKeyUsage=critical,timeStamping' \
+    'keyUsage=critical,digitalSignature,keyCertSign,cRLSign' \
+    'subjectKeyIdentifier=hash')
 
 cat "${WORK_DIR}/tsa.crt.pem" "${WORK_DIR}/intCA.crt.pem" \
   "${WORK_DIR}/rootCA.crt.pem" >"${WORK_DIR}/tsa.certchain.pem"
