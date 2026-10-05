@@ -7,8 +7,56 @@ spec:
     exposure:
       route:
         enabled: true
+{{- if .Values.demoSizing.enabled }}
+    resources:
+      requests:
+        cpu: 200m
+        memory: 1Gi
+      limits:
+        cpu: 2
+        memory: 4Gi
+    db:
+      resources:
+        requests:
+          cpu: 200m
+          memory: 1Gi
+        limits:
+          cpu: 2
+          memory: 4Gi
+  scanner:
+    scannerComponent: Disabled
+  customize:
+    deploymentDefaults:
+      tolerations:
+        - key: node.kubernetes.io/disk-pressure
+          operator: Exists
+          effect: NoSchedule
+{{- end }}
   scannerV4:
     scannerComponent: {{ .Values.central.scannerV4 }}
+{{- if .Values.demoSizing.enabled }}
+    indexer:
+      scaling:
+        autoScaling: Disabled
+        replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 512Mi
+    matcher:
+      scaling:
+        autoScaling: Disabled
+        replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 512Mi
+    db:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 512Mi
+{{- end }}
 {{- if .Values.securedCluster.enabled }}
 ---
 apiVersion: platform.stackrox.io/v1alpha1

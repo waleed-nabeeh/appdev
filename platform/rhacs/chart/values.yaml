@@ -2,6 +2,9 @@ central:
   name: stackrox-central-services
   scannerV4: Enabled
 
+demoSizing:
+  enabled: false
+
 securedCluster:
   enabled: false
   name: stackrox-secured-cluster-services
