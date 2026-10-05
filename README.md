@@ -16,6 +16,10 @@ values.
 | `apps/dotnet-sample` | .NET sample source and deployment chart |
 | `docs` | Branching, air-gap, bootstrap, and validation runbooks |
 
+Start with [Customer Cluster Implementation](docs/customer-cluster-implementation.md)
+for the complete migration order and [Pipeline Flow](docs/pipeline-flow.md) for
+the task-by-task release behavior.
+
 ## Bootstrap order
 
 1. Install the OpenShift GitOps, Pipelines, RHTAS, Vault Secrets, and RHACS

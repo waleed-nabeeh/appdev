@@ -1,0 +1,43 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: dotnet-sample-release-
+  namespace: customer-cicd
+spec:
+  pipelineRef:
+    name: application-release
+  taskRunTemplate:
+    serviceAccountName: pipeline
+  params:
+    - name: source-url
+      value: https://github.com/waleed-nabeeh/appdev.git
+    - name: source-revision
+      value: develop
+    - name: dotnet-project
+      value: apps/dotnet-sample/src/Customer.Sample.Api/Customer.Sample.Api.csproj
+    - name: image
+      value: quay.example.com/customer/dotnet-sample:REPLACE_TAG
+    - name: build-context
+      value: apps/dotnet-sample
+    - name: containerfile
+      value: apps/dotnet-sample/Containerfile
+    - name: gitops-url
+      value: https://github.com/waleed-nabeeh/appdev.git
+    - name: gitops-revision
+      value: develop
+    - name: values-file
+      value: apps/dotnet-sample/helm/values.yaml
+  workspaces:
+    - name: source
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 2Gi
+    - name: git-credentials
+      secret:
+        secretName: git-credentials
+    - name: registry-auth
+      secret:
+        secretName: registry-auth

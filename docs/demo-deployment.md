@@ -21,14 +21,15 @@ oc wait --for=jsonpath='{.status.phase}'=Succeeded \
 
 ```bash
 oc apply -f bootstrap/namespaces/vault.yaml
+oc apply -f bootstrap/namespaces/trusted-artifact-signer.yaml
+oc apply -f bootstrap/namespaces/customer-cicd.yaml
 helm template customer-bootstrap bootstrap/app-of-apps \
   --namespace openshift-gitops \
   --values bootstrap/app-of-apps/values-demo.yaml | oc apply -f -
 ```
 
-The `vault` Argo CD Application deploys the vendored chart from the `develop`
-branch. RHTAS remains disabled until its identity-provider configuration is
-supplied and validated.
+The Argo CD Applications deploy Vault, RHTAS, and the reusable pipeline catalog
+from the `develop` branch. Runtime credentials remain outside Git.
 
 ## Validate
 
@@ -36,6 +37,8 @@ supplied and validated.
 oc get applications.argoproj.io -n openshift-gitops
 oc get pods,pvc,route -n vault
 oc get route vault -n vault
+oc get securesign,timestampauthority,tuf -n trusted-artifact-signer
+oc get pipeline,task -n customer-cicd
 ```
 
 Vault is expected to start sealed. Initialize and unseal it only through the

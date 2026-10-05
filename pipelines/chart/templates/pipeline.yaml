@@ -1,0 +1,104 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: application-release
+  labels:
+    app.kubernetes.io/part-of: customer-release-pipeline
+spec:
+  params:
+    - name: source-url
+      type: string
+    - name: source-revision
+      type: string
+      default: develop
+    - name: dotnet-project
+      type: string
+    - name: image
+      type: string
+    - name: build-context
+      type: string
+      default: .
+    - name: containerfile
+      type: string
+      default: Containerfile
+    - name: gitops-url
+      type: string
+    - name: gitops-revision
+      type: string
+      default: develop
+    - name: values-file
+      type: string
+    - name: fulcio-url
+      type: string
+      default: {{ .Values.rhtas.fulcioUrl | quote }}
+    - name: rekor-url
+      type: string
+      default: {{ .Values.rhtas.rekorUrl | quote }}
+    - name: tuf-url
+      type: string
+      default: {{ .Values.rhtas.tufUrl | quote }}
+    - name: tsa-url
+      type: string
+      default: {{ .Values.rhtas.tsaUrl | quote }}
+  workspaces:
+    - name: source
+    - name: git-credentials
+    - name: registry-auth
+  tasks:
+    - name: clone
+      taskRef: {name: clone}
+      params:
+        - {name: url, value: $(params.source-url)}
+        - {name: revision, value: $(params.source-revision)}
+      workspaces:
+        - {name: source, workspace: source}
+        - {name: git-credentials, workspace: git-credentials}
+    - name: unit-test
+      runAfter: [clone]
+      taskRef: {name: unit-test}
+      params:
+        - {name: project, value: $(params.dotnet-project)}
+      workspaces:
+        - {name: source, workspace: source}
+    - name: build-image
+      runAfter: [unit-test]
+      taskRef: {name: build-image}
+      params:
+        - {name: image, value: $(params.image)}
+        - {name: context, value: $(params.build-context)}
+        - {name: containerfile, value: $(params.containerfile)}
+      workspaces:
+        - {name: source, workspace: source}
+        - {name: registry-auth, workspace: registry-auth}
+    - name: scan-image
+      runAfter: [build-image]
+      taskRef: {name: scan-image}
+      params:
+        - {name: image, value: $(tasks.build-image.results.image-url)}
+    - name: security-gate
+      runAfter: [scan-image]
+      taskRef: {name: security-gate}
+      params:
+        - {name: image, value: $(tasks.build-image.results.image-url)}
+    - name: sign-image
+      runAfter: [security-gate]
+      taskRef: {name: sign-image}
+      params:
+        - {name: image, value: $(tasks.build-image.results.image-url)}
+        - {name: fulcio-url, value: $(params.fulcio-url)}
+        - {name: rekor-url, value: $(params.rekor-url)}
+        - {name: tuf-url, value: $(params.tuf-url)}
+        - {name: tsa-url, value: $(params.tsa-url)}
+      workspaces:
+        - {name: registry-auth, workspace: registry-auth}
+    - name: update-helm-chart
+      runAfter: [sign-image]
+      taskRef: {name: update-helm-chart}
+      params:
+        - {name: repository, value: $(params.gitops-url)}
+        - {name: revision, value: $(params.gitops-revision)}
+        - {name: values-file, value: $(params.values-file)}
+        - {name: image, value: $(params.image)}
+        - {name: image-digest, value: $(tasks.build-image.results.image-digest)}
+      workspaces:
+        - {name: git-credentials, workspace: git-credentials}

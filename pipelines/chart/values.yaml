@@ -1,0 +1,16 @@
+serviceAccount:
+  name: pipeline
+
+images:
+  git: registry.redhat.io/openshift4/ose-cli-rhel9:v4.22
+  dotnet: registry.access.redhat.com/ubi9/dotnet-80:latest
+  buildah: registry.redhat.io/rhel9/buildah:latest
+  rhacs: registry.redhat.io/advanced-cluster-security/rhacs-roxctl-rhel9:4.11
+  cosign: registry.redhat.io/rhtas/cosign-rhel9:1.4
+
+rhtas:
+  audience: trusted-artifact-signer
+  fulcioUrl: https://fulcio-server-trusted-artifact-signer.apps.example.com
+  rekorUrl: https://rekor-server-trusted-artifact-signer.apps.example.com
+  tufUrl: https://tuf-trusted-artifact-signer.apps.example.com
+  tsaUrl: https://tsa-trusted-artifact-signer.apps.example.com

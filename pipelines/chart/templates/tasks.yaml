@@ -1,0 +1,238 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: clone
+spec:
+  params:
+    - name: url
+      type: string
+    - name: revision
+      type: string
+      default: develop
+  workspaces:
+    - name: source
+    - name: git-credentials
+      optional: true
+  steps:
+    - name: clone
+      image: {{ .Values.images.git }}
+      env:
+        - name: HOME
+          value: /tekton/home
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        rm -rf "$(workspaces.source.path)"/source
+        if [[ "$(workspaces.git-credentials.bound)" == "true" ]]; then
+          cp -R "$(workspaces.git-credentials.path)"/. "$HOME"/
+          chmod -R go-rwx "$HOME"
+        fi
+        git clone --branch "$(params.revision)" --single-branch \
+          "$(params.url)" "$(workspaces.source.path)/source"
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: unit-test
+spec:
+  params:
+    - name: project
+      type: string
+  workspaces:
+    - name: source
+  steps:
+    - name: test
+      image: {{ .Values.images.dotnet }}
+      workingDir: $(workspaces.source.path)/source
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        dotnet restore "$(params.project)"
+        dotnet test "$(params.project)" --no-restore --configuration Release
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: build-image
+spec:
+  params:
+    - name: image
+      type: string
+    - name: context
+      type: string
+      default: .
+    - name: containerfile
+      type: string
+      default: Containerfile
+  results:
+    - name: image-digest
+    - name: image-url
+  workspaces:
+    - name: source
+    - name: registry-auth
+  steps:
+    - name: build-and-push
+      image: {{ .Values.images.buildah }}
+      securityContext:
+        capabilities:
+          add: [SETFCAP]
+      workingDir: $(workspaces.source.path)/source
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        buildah --storage-driver=vfs bud \
+          -f "$(params.containerfile)" -t "$(params.image)" "$(params.context)"
+        digest=$(buildah --storage-driver=vfs push \
+          --authfile "$(workspaces.registry-auth.path)/config.json" \
+          --digestfile /tmp/digest \
+          "$(params.image)" "docker://$(params.image)" && cat /tmp/digest)
+        printf '%s' "$digest" > "$(results.image-digest.path)"
+        printf '%s' "$(params.image)@$digest" > "$(results.image-url.path)"
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: scan-image
+spec:
+  params:
+    - name: image
+      type: string
+  results:
+    - name: scan-result
+  steps:
+    - name: scan
+      image: {{ .Values.images.rhacs }}
+      env:
+        - name: ROX_ENDPOINT
+          valueFrom:
+            secretKeyRef:
+              name: rhacs-auth
+              key: endpoint
+        - name: ROX_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: rhacs-auth
+              key: token
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        roxctl image scan --image "$(params.image)" --output json > /tmp/scan.json
+        printf 'passed' > "$(results.scan-result.path)"
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: security-gate
+spec:
+  params:
+    - name: image
+      type: string
+  steps:
+    - name: check
+      image: {{ .Values.images.rhacs }}
+      env:
+        - name: ROX_ENDPOINT
+          valueFrom:
+            secretKeyRef:
+              name: rhacs-auth
+              key: endpoint
+        - name: ROX_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: rhacs-auth
+              key: token
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        roxctl image check --image "$(params.image)"
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: sign-image
+spec:
+  params:
+    - name: image
+      type: string
+    - name: fulcio-url
+      type: string
+    - name: rekor-url
+      type: string
+    - name: tuf-url
+      type: string
+    - name: tsa-url
+      type: string
+  steps:
+    - name: sign
+      image: {{ .Values.images.cosign }}
+      env:
+        - name: HOME
+          value: /tekton/home
+        - name: DOCKER_CONFIG
+          value: $(workspaces.registry-auth.path)
+      computeResources: {}
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        cosign initialize --mirror="$(params.tuf-url)" --root="$(params.tuf-url)/root.json"
+        cosign sign --yes \
+          --identity-token="$(cat /var/run/sigstore/token)" \
+          --fulcio-url="$(params.fulcio-url)" \
+          --rekor-url="$(params.rekor-url)" \
+          --timestamp-server-url="$(params.tsa-url)" \
+          "$(params.image)"
+      volumeMounts:
+        - name: oidc-token
+          mountPath: /var/run/sigstore
+          readOnly: true
+  volumes:
+    - name: oidc-token
+      projected:
+        sources:
+          - serviceAccountToken:
+              path: token
+              audience: {{ .Values.rhtas.audience }}
+              expirationSeconds: 600
+  workspaces:
+    - name: registry-auth
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: update-helm-chart
+spec:
+  params:
+    - name: repository
+      type: string
+    - name: revision
+      type: string
+      default: develop
+    - name: values-file
+      type: string
+    - name: image
+      type: string
+    - name: image-digest
+      type: string
+  workspaces:
+    - name: git-credentials
+  steps:
+    - name: update
+      image: {{ .Values.images.git }}
+      env:
+        - name: HOME
+          value: /tekton/home
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        cp -R "$(workspaces.git-credentials.path)"/. "$HOME"/
+        chmod -R go-rwx "$HOME"
+        git config --global user.name "Customer Pipeline"
+        git config --global user.email "pipeline@customer.invalid"
+        git clone --branch "$(params.revision)" "$(params.repository)" /tmp/gitops
+        cd /tmp/gitops
+        sed -i "s|^[[:space:]]*repository:.*|  repository: $(params.image)|" "$(params.values-file)"
+        sed -i "s|^[[:space:]]*digest:.*|  digest: $(params.image-digest)|" "$(params.values-file)"
+        git add "$(params.values-file)"
+        git diff --cached --quiet && exit 0
+        git commit -m "Update application image to $(params.image-digest)"
+        git push origin "HEAD:$(params.revision)"

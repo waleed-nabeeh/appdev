@@ -1,0 +1,6 @@
+apiVersion: v2
+name: customer-release-pipeline
+description: Reusable OpenShift Pipelines resources for the customer release flow
+type: application
+version: 0.1.0
+appVersion: "1.0"

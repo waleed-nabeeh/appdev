@@ -29,6 +29,8 @@ projects:
         server: https://kubernetes.default.svc
       - namespace: trusted-artifact-signer
         server: https://kubernetes.default.svc
+      - namespace: customer-cicd
+        server: https://kubernetes.default.svc
 
 applications:
   vault:
@@ -52,3 +54,15 @@ applications:
       repoURL: https://github.com/waleed-nabeeh/appdev.git
       targetRevision: develop
       path: platform/rhtas/chart
+  pipelines:
+    destination:
+      namespace: customer-cicd
+      server: https://kubernetes.default.svc
+    source:
+      repoURL: https://github.com/waleed-nabeeh/appdev.git
+      targetRevision: develop
+      path: pipelines/chart
+      extraSourceFields: |
+        helm:
+          valueFiles:
+            - values-demo.yaml
