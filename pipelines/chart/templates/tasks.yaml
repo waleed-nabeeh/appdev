@@ -179,9 +179,11 @@ spec:
       type: string
     - name: tsa-url
       type: string
+    - name: client-url
+      type: string
   steps:
     - name: sign
-      image: {{ .Values.images.cosign }}
+      image: {{ .Values.images.rhtasClientServer }}
       env:
         - name: HOME
           value: /tekton/home
@@ -191,8 +193,14 @@ spec:
       script: |
         #!/usr/bin/env bash
         set -euo pipefail
-        cosign initialize --mirror="$(params.tuf-url)" --root="$(params.tuf-url)/root.json"
-        cosign sign --yes \
+        curl --fail --silent --show-error --location \
+          "$(params.client-url)/clients/linux/cosign-amd64.gz" \
+          --output /tmp/cosign.gz
+        gzip --decompress /tmp/cosign.gz
+        chmod +x /tmp/cosign
+        /tmp/cosign version
+        /tmp/cosign initialize --mirror="$(params.tuf-url)" --root="$(params.tuf-url)/root.json"
+        /tmp/cosign sign --yes \
           --identity-token="$(cat /var/run/sigstore/token)" \
           --fulcio-url="$(params.fulcio-url)" \
           --rekor-url="$(params.rekor-url)" \

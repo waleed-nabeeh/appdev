@@ -43,6 +43,9 @@ spec:
     - name: tsa-url
       type: string
       default: {{ .Values.rhtas.tsaUrl | quote }}
+    - name: rhtas-client-url
+      type: string
+      default: {{ .Values.rhtas.clientUrl | quote }}
   workspaces:
     - name: source
     - name: git-credentials
@@ -93,6 +96,7 @@ spec:
         - {name: rekor-url, value: $(params.rekor-url)}
         - {name: tuf-url, value: $(params.tuf-url)}
         - {name: tsa-url, value: $(params.tsa-url)}
+        - {name: client-url, value: $(params.rhtas-client-url)}
       workspaces:
         - {name: registry-auth, workspace: registry-auth}
     - name: update-helm-chart

@@ -6,10 +6,11 @@ images:
   dotnet: registry.access.redhat.com/ubi9/dotnet-100:latest
   buildah: registry.redhat.io/rhel9/buildah:latest
   rhacs: registry.redhat.io/advanced-cluster-security/rhacs-roxctl-rhel9:4.11
-  cosign: registry.redhat.io/rhtas/cosign-rhel9:1.4
+  rhtasClientServer: registry.redhat.io/rhtas/client-server-rhel9:1.4
 
 rhtas:
   audience: trusted-artifact-signer
+  clientUrl: http://cli-server.trusted-artifact-signer.svc:8080
   fulcioUrl: https://fulcio-server-trusted-artifact-signer.apps.example.com
   rekorUrl: https://rekor-server-trusted-artifact-signer.apps.example.com
   tufUrl: https://tuf-trusted-artifact-signer.apps.example.com

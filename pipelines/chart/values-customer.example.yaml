@@ -3,10 +3,11 @@ images:
   dotnet: registry.customer.example/ubi9/dotnet-100@sha256:REPLACE
   buildah: registry.customer.example/rhel9/buildah@sha256:REPLACE
   rhacs: registry.customer.example/rhacs/rhacs-roxctl-rhel9@sha256:REPLACE
-  cosign: registry.customer.example/rhtas/cosign-rhel9@sha256:REPLACE
+  rhtasClientServer: registry.customer.example/rhtas/client-server-rhel9@sha256:REPLACE
 
 rhtas:
   audience: trusted-artifact-signer
+  clientUrl: http://cli-server.trusted-artifact-signer.svc:8080
   fulcioUrl: https://fulcio-server-trusted-artifact-signer.apps.CUSTOMER_DOMAIN
   rekorUrl: https://rekor-server-trusted-artifact-signer.apps.CUSTOMER_DOMAIN
   tufUrl: https://tuf-trusted-artifact-signer.apps.CUSTOMER_DOMAIN
