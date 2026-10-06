@@ -177,8 +177,6 @@ spec:
       type: string
     - name: tuf-url
       type: string
-    - name: tsa-url
-      type: string
     - name: client-url
       type: string
   steps:

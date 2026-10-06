@@ -41,6 +41,7 @@ spec:
       commonName: fulcio-securesign.{{ .Values.domain }}
       organizationName: {{ .Values.organization.name | quote }}
       organizationEmail: {{ .Values.organization.email | quote }}
+  {{- if .Values.tsa.enabled }}
   tsa:
     externalAccess:
       enabled: true
@@ -57,6 +58,7 @@ spec:
         passwordRef:
           name: {{ .Values.tsa.passwordSecret.name }}
           key: {{ .Values.tsa.passwordSecret.key }}
+  {{- end }}
   trillian:
     database:
       create: true

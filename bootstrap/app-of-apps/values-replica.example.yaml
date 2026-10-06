@@ -1,0 +1,83 @@
+default:
+  app:
+    enabled: true
+    destination:
+      server: https://kubernetes.default.svc
+    source:
+      repoURL: CUSTOMER_GITOPS_REPOSITORY_URL
+      targetRevision: CUSTOMER_GITOPS_BRANCH
+    enableAutoSync: true
+    autoSyncPrune: true
+    syncOptions:
+      - CreateNamespace=true
+  project:
+    labels:
+      app.kubernetes.io/part-of: customer-release-engineering
+
+projects:
+  customer-platform:
+    description: Vault and RHTAS platform services
+    sourceRepos:
+      - CUSTOMER_GITOPS_REPOSITORY_URL
+    destinations: |
+      - namespace: vault
+        server: https://kubernetes.default.svc
+      - namespace: trusted-artifact-signer
+        server: https://kubernetes.default.svc
+  customer-cicd:
+    description: Pipeline definitions and automation
+    sourceRepos:
+      - CUSTOMER_GITOPS_REPOSITORY_URL
+    destinations: |
+      - namespace: customer-cicd
+        server: https://kubernetes.default.svc
+  customer-apps:
+    description: Workload applications
+    sourceRepos:
+      - CUSTOMER_GITOPS_REPOSITORY_URL
+    destinations: |
+      - namespace: customer-demo
+        server: https://kubernetes.default.svc
+
+applications:
+  vault:
+    project: customer-platform
+    destination:
+      namespace: vault
+    source:
+      path: platform/vault/chart
+      extraSourceFields: |
+        helm:
+          valueFiles:
+            - values-customer.yaml
+  rhtas:
+    project: customer-platform
+    destination:
+      namespace: trusted-artifact-signer
+    source:
+      path: platform/rhtas/chart
+      extraSourceFields: |
+        helm:
+          valueFiles:
+            - values-customer.yaml
+  pipelines:
+    project: customer-cicd
+    destination:
+      namespace: customer-cicd
+    source:
+      path: pipelines/chart
+      extraSourceFields: |
+        helm:
+          valueFiles:
+            - values-customer.yaml
+  customer-dotnet-sample:
+    enabled: false
+    project: customer-apps
+    destination:
+      namespace: customer-demo
+    source:
+      path: apps/dotnet-sample/helm
+      extraSourceFields: |
+        helm:
+          valueFiles:
+            - values-customer.yaml

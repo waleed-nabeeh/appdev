@@ -21,6 +21,9 @@ for the complete migration order and [Pipeline Flow](docs/pipeline-flow.md) for
 the task-by-task release behavior. The tested outcome is recorded in
 [Demo Validation](docs/demo-validation.md).
 
+For a clean installation on another cluster, follow
+[New Cluster Replication](docs/new-cluster-replication.md).
+
 ## Bootstrap order
 
 1. Install the OpenShift GitOps, Pipelines, RHTAS, Vault Secrets, and RHACS

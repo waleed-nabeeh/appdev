@@ -84,26 +84,19 @@ available.
 
 ## 5. Prepare and deploy RHTAS
 
-For the demo, generate the TSA chain and secrets outside Git:
+The reproducible customer profile uses keyless Fulcio signing with Rekor and
+TUF, with `tsa.enabled: false`. No TSA private key or certificate secret is
+required. After Argo CD syncs RHTAS, verify:
 
 ```bash
-OC_BIN=oc ./scripts/rhtas/create-demo-tsa-secrets.sh \
-  /approved/encrypted/location/rhtas-tsa
-```
-
-For production, obtain the TSA signer key and certificate chain from the
-approved PKI/HSM process and create Secrets with the same names and keys. After
-Argo CD syncs RHTAS, verify:
-
-```bash
-oc get securesign,timestampauthority,tuf -n trusted-artifact-signer
+oc get securesign,tuf -n trusted-artifact-signer
 oc get pods,pvc,route -n trusted-artifact-signer
 ```
 
-All three custom resources must report `Ready`. Fulcio uses the configured OIDC
+The resources must report `Ready`. Fulcio uses the configured OIDC
 issuer for keyless identities; Rekor records signatures; TUF publishes trust
-material. Validate TSA responses with the mirrored Cosign client before adding
-timestamps to the signing task.
+material. TSA may be introduced later after its PKI and RFC3161 response are
+validated with the mirrored Cosign client.
 
 ## 6. Deploy RHACS
 

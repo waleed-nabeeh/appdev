@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: customer-app-of-apps
+  namespace: openshift-gitops
+spec:
+  project: default
+  destination:
+    namespace: openshift-gitops
+    server: https://kubernetes.default.svc
+  source:
+    repoURL: CUSTOMER_GITOPS_REPOSITORY_URL
+    targetRevision: CUSTOMER_GITOPS_BRANCH
+    path: bootstrap/app-of-apps
+    helm:
+      valueFiles:
+        - values-replica.yaml
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

@@ -18,6 +18,7 @@ storage:
   rekorSize: 5Gi
 
 tsa:
+  enabled: false
   privateKeySecret:
     name: tsa-signer-key
     key: tsa.key.pem

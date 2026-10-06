@@ -40,9 +40,6 @@ spec:
     - name: tuf-url
       type: string
       default: {{ .Values.rhtas.tufUrl | quote }}
-    - name: tsa-url
-      type: string
-      default: {{ .Values.rhtas.tsaUrl | quote }}
     - name: rhtas-client-url
       type: string
       default: {{ .Values.rhtas.clientUrl | quote }}
@@ -95,7 +92,6 @@ spec:
         - {name: fulcio-url, value: $(params.fulcio-url)}
         - {name: rekor-url, value: $(params.rekor-url)}
         - {name: tuf-url, value: $(params.tuf-url)}
-        - {name: tsa-url, value: $(params.tsa-url)}
         - {name: client-url, value: $(params.rhtas-client-url)}
       workspaces:
         - {name: registry-auth, workspace: registry-auth}

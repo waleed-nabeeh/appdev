@@ -29,10 +29,25 @@ projects:
         server: https://kubernetes.default.svc
       - namespace: trusted-artifact-signer
         server: https://kubernetes.default.svc
+  customer-cicd:
+    description: Customer pipeline definitions and automation
+    sourceRepos:
+      - https://github.com/waleed-nabeeh/appdev.git
+    destinations: |
       - namespace: customer-cicd
         server: https://kubernetes.default.svc
+  customer-security:
+    description: Customer security services used by the demo
+    sourceRepos:
+      - https://github.com/waleed-nabeeh/appdev.git
+    destinations: |
       - namespace: stackrox
         server: https://kubernetes.default.svc
+  customer-apps:
+    description: Customer workload applications
+    sourceRepos:
+      - https://github.com/waleed-nabeeh/appdev.git
+    destinations: |
       - namespace: customer-demo
         server: https://kubernetes.default.svc
 
@@ -59,6 +74,7 @@ applications:
       targetRevision: develop
       path: platform/rhtas/chart
   pipelines:
+    project: customer-cicd
     destination:
       namespace: customer-cicd
       server: https://kubernetes.default.svc
@@ -71,6 +87,7 @@ applications:
           valueFiles:
             - values-demo.yaml
   rhacs:
+    project: customer-security
     destination:
       namespace: stackrox
       server: https://kubernetes.default.svc
@@ -83,6 +100,7 @@ applications:
           valueFiles:
             - values-demo.yaml
   customer-dotnet-sample:
+    project: customer-apps
     destination:
       namespace: customer-demo
       server: https://kubernetes.default.svc

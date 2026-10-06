@@ -6,23 +6,18 @@
 - Rekor records signatures in the private transparency log.
 - TUF publishes the private trust root.
 - CTLog records Fulcio certificate issuance.
-- TSA supplies RFC 3161 timestamps.
+- TSA is optional and disabled in the reproducible customer profile.
 - Vault stores pipeline secrets but is not the image-signing key provider.
 
 The demo uses projected OpenShift service-account tokens. The customer must
 replace this issuer with the approved enterprise identity provider when that is
 required by the security design.
 
-## Prepare the namespace and TSA secrets
+## Prepare the namespace
 
 ```bash
 oc apply -f bootstrap/namespaces/trusted-artifact-signer.yaml
-OC_BIN=oc ./scripts/rhtas/create-demo-tsa-secrets.sh /secure/path/rhtas-tsa
 ```
-
-The generated private keys and password must remain outside Git. Replace the
-self-signed demo chain with certificates issued by the approved corporate PKI
-for the customer deployment.
 
 ## Deploy through GitOps
 
@@ -67,6 +62,6 @@ OC_BIN=oc ./scripts/rhtas/verify-image.sh \
   REGISTRY/ORGANIZATION/IMAGE@sha256:DIGEST
 ```
 
-The demo TSA is Ready, but timestamp attachment is not enabled in the pipeline
-until its RFC3161 response is validated with the deployed Cosign v3 client.
-Fulcio keyless signing and Rekor recording remain mandatory.
+Fulcio keyless signing, Rekor recording, and TUF trust remain mandatory. TSA
+can be introduced later only after its PKI and RFC3161 response are validated
+with the approved Cosign client.
