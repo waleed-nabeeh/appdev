@@ -31,6 +31,8 @@ the task-by-task release behavior. The tested outcome is recorded in
 5. Configure Vault authentication and the Vault Secrets Operator.
 6. Deploy RHTAS and validate its Fulcio, Rekor, and TUF endpoints.
 7. Install the local Tekton catalog and run the sample pipeline.
+8. Run the promotion pipeline to verify the signed digest, update GitOps, and
+   deploy through Argo CD.
 
 No credentials, Vault recovery keys, unseal keys, root tokens, or private keys
 belong in this repository.

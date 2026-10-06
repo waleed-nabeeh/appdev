@@ -224,6 +224,77 @@ spec:
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
+  name: get-approved-image
+spec:
+  params:
+    - name: repository
+      type: string
+    - name: tag
+      type: string
+  results:
+    - name: image-digest
+    - name: image-url
+  workspaces:
+    - name: registry-auth
+  steps:
+    - name: resolve
+      image: {{ .Values.images.buildah }}
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        image="$(params.repository):$(params.tag)"
+        digest="$(skopeo inspect \
+          --authfile "$(workspaces.registry-auth.path)/config.json" \
+          --format '{{`{{.Digest}}`}}' "docker://${image}")"
+        test -n "$digest"
+        printf '%s' "$digest" > "$(results.image-digest.path)"
+        printf '%s' "$(params.repository)@${digest}" > "$(results.image-url.path)"
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: verify-image
+spec:
+  params:
+    - name: image
+      type: string
+    - name: tuf-url
+      type: string
+    - name: client-url
+      type: string
+    - name: certificate-identity-regexp
+      type: string
+    - name: certificate-oidc-issuer
+      type: string
+  workspaces:
+    - name: registry-auth
+  steps:
+    - name: verify
+      image: {{ .Values.images.rhtasClientServer }}
+      env:
+        - name: HOME
+          value: /tekton/home
+        - name: DOCKER_CONFIG
+          value: $(workspaces.registry-auth.path)
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        curl --fail --silent --show-error --location \
+          "$(params.client-url)/clients/linux/cosign-amd64.gz" \
+          --output /tmp/rhtas-cosign-verify.gz
+        gzip --decompress /tmp/rhtas-cosign-verify.gz
+        chmod +x /tmp/rhtas-cosign-verify
+        /tmp/rhtas-cosign-verify initialize \
+          --mirror="$(params.tuf-url)" \
+          --root="$(params.tuf-url)/root.json"
+        /tmp/rhtas-cosign-verify verify \
+          --certificate-identity-regexp="$(params.certificate-identity-regexp)" \
+          --certificate-oidc-issuer="$(params.certificate-oidc-issuer)" \
+          "$(params.image)"
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
   name: update-helm-chart
 spec:
   params:

@@ -1,0 +1,28 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: dotnet-sample-promotion-
+  namespace: customer-cicd
+spec:
+  pipelineRef:
+    name: application-promotion
+  taskRunTemplate:
+    serviceAccountName: pipeline
+  params:
+    - name: approved-image-repository
+      value: demo-registry-quay-quay-enterprise.apps.cluster-zmzbt.dyn.redhatworkshops.io/customer/dotnet-sample
+    - name: approved-image-tag
+      value: demo-test
+    - name: gitops-url
+      value: https://github.com/waleed-nabeeh/appdev.git
+    - name: gitops-revision
+      value: develop
+    - name: values-file
+      value: apps/dotnet-sample/helm/values.yaml
+  workspaces:
+    - name: registry-auth
+      secret:
+        secretName: registry-auth
+    - name: git-credentials
+      secret:
+        secretName: git-credentials

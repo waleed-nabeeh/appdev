@@ -74,3 +74,27 @@ Run the security validation without Git write-back:
 oc create -f pipelines/examples/pipelinerun-demo-test.yaml
 oc get pipelinerun,taskrun -n customer-cicd
 ```
+
+## Test promotion and deployment
+
+Create the workload namespace and copy a repository-scoped Quay pull secret to
+it. Create `git-credentials` in `customer-cicd` using the dedicated Git
+automation identity; the secret must provide a Git-compatible `.gitconfig` and
+credential file under the Tekton home directory.
+
+```bash
+oc apply -f bootstrap/namespaces/customer-demo.yaml
+oc create -f pipelines/examples/pipelinerun-promotion-demo.yaml
+oc get pipelinerun,taskrun -n customer-cicd
+```
+
+The pipeline resolves `demo-test` to an immutable digest, verifies the existing
+RHTAS signature, and pushes the digest change to
+`apps/dotnet-sample/helm/values.yaml`. The `customer-dotnet-sample` Argo CD
+Application then deploys it to `customer-demo`.
+
+```bash
+oc get application customer-dotnet-sample -n openshift-gitops
+oc rollout status deployment -n customer-demo --timeout=5m
+oc get pod,service,route -n customer-demo
+```

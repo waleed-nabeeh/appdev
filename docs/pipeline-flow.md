@@ -39,3 +39,20 @@ timestamp attachment is disabled in the signing command because the demo TSA
 response is not accepted by the RHTAS Cosign v3 client. This does not weaken
 the keyless identity, signature, or Rekor transparency-log checks. Resolve and
 validate the customer PKI/TSA response before enabling timestamp attachment.
+
+## Promotion pipeline
+
+The separate `application-promotion` pipeline promotes an already built and
+approved image. It never rebuilds the application.
+
+| Order | Task | Behavior and integration |
+| --- | --- | --- |
+| 1 | `get-approved-image` | Resolves the approved Quay tag to its immutable digest. |
+| 2 | `verify-image` | Verifies the Cosign signature, Fulcio identity, private TUF trust root, and Rekor evidence. |
+| 3 | `update-helm-chart` | Commits the approved repository and digest to the target GitOps branch. |
+| 4 | Argo CD | Detects the commit and synchronizes the application into the target namespace. |
+
+The promotion stops before Git modification if the tag is missing, registry
+authentication fails, or signature verification fails. The dedicated pipeline
+Git identity requires read/write access only to the approved GitOps repository
+and branch.

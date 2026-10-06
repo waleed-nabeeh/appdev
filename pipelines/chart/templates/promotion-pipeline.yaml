@@ -1,0 +1,67 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: application-promotion
+  labels:
+    app.kubernetes.io/part-of: customer-release-pipeline
+spec:
+  params:
+    - name: approved-image-repository
+      type: string
+    - name: approved-image-tag
+      type: string
+    - name: gitops-url
+      type: string
+    - name: gitops-revision
+      type: string
+      default: develop
+    - name: values-file
+      type: string
+    - name: tuf-url
+      type: string
+      default: {{ .Values.rhtas.tufUrl | quote }}
+    - name: rhtas-client-url
+      type: string
+      default: {{ .Values.rhtas.clientUrl | quote }}
+    - name: certificate-identity-regexp
+      type: string
+      default: {{ .Values.rhtas.certificateIdentityRegexp | quote }}
+    - name: certificate-oidc-issuer
+      type: string
+      default: {{ .Values.rhtas.certificateOidcIssuer | quote }}
+  workspaces:
+    - name: registry-auth
+    - name: git-credentials
+  tasks:
+    - name: get-approved-image
+      taskRef:
+        name: get-approved-image
+      params:
+        - {name: repository, value: $(params.approved-image-repository)}
+        - {name: tag, value: $(params.approved-image-tag)}
+      workspaces:
+        - {name: registry-auth, workspace: registry-auth}
+    - name: verify-image
+      runAfter: [get-approved-image]
+      taskRef:
+        name: verify-image
+      params:
+        - {name: image, value: $(tasks.get-approved-image.results.image-url)}
+        - {name: tuf-url, value: $(params.tuf-url)}
+        - {name: client-url, value: $(params.rhtas-client-url)}
+        - {name: certificate-identity-regexp, value: $(params.certificate-identity-regexp)}
+        - {name: certificate-oidc-issuer, value: $(params.certificate-oidc-issuer)}
+      workspaces:
+        - {name: registry-auth, workspace: registry-auth}
+    - name: update-helm-chart
+      runAfter: [verify-image]
+      taskRef:
+        name: update-helm-chart
+      params:
+        - {name: repository, value: $(params.gitops-url)}
+        - {name: revision, value: $(params.gitops-revision)}
+        - {name: values-file, value: $(params.values-file)}
+        - {name: image, value: $(params.approved-image-repository)}
+        - {name: image-digest, value: $(tasks.get-approved-image.results.image-digest)}
+      workspaces:
+        - {name: git-credentials, workspace: git-credentials}

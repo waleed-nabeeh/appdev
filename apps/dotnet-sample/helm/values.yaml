@@ -6,6 +6,9 @@ image:
   digest: ""
   pullPolicy: IfNotPresent
 
+imagePullSecrets:
+  - name: quay-pull-secret
+
 service:
   port: 8080
 

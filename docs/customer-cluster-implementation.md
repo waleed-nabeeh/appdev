@@ -152,6 +152,17 @@ commit and deploys it to the environment allowed by the branch and promotion
 policy. Production promotion requires the customer approval process and uses
 the same already-signed digest; it does not rebuild the image.
 
+Run promotion only after the image and target environment are approved:
+
+```bash
+oc create -f pipelines/examples/pipelinerun-promotion-demo.yaml
+```
+
+For customer use, create a separate environment-specific PipelineRun with the
+internal Quay repository, approved tag, GitOps branch, and values path. The
+pipeline resolves the digest from Quay and verifies its RHTAS signature before
+it is permitted to change Git.
+
 ## 10. Acceptance checks
 
 ```bash

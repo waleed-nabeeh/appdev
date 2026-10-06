@@ -33,6 +33,8 @@ projects:
         server: https://kubernetes.default.svc
       - namespace: stackrox
         server: https://kubernetes.default.svc
+      - namespace: customer-demo
+        server: https://kubernetes.default.svc
 
 applications:
   vault:
@@ -80,3 +82,11 @@ applications:
         helm:
           valueFiles:
             - values-demo.yaml
+  customer-dotnet-sample:
+    destination:
+      namespace: customer-demo
+      server: https://kubernetes.default.svc
+    source:
+      repoURL: https://github.com/waleed-nabeeh/appdev.git
+      targetRevision: develop
+      path: apps/dotnet-sample/helm

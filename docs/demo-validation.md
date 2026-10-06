@@ -29,3 +29,8 @@ synchronizes the intended workload environment.
 
 Do not reuse demo endpoints, image digests, robot credentials, RHACS tokens,
 Vault initialization data, or RHTAS private keys in another cluster.
+
+The promotion acceptance test uses `application-promotion` and must prove all
+of the following: approved Quay tag resolution, RHTAS verification, GitOps
+digest commit, Argo CD synchronization, successful workload rollout, and a
+healthy application route.

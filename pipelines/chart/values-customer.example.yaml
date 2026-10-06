@@ -8,6 +8,8 @@ images:
 rhtas:
   audience: trusted-artifact-signer
   clientUrl: http://cli-server.trusted-artifact-signer.svc:8080
+  certificateIdentityRegexp: ^https://kubernetes.io/namespaces/customer-cicd/serviceaccounts/pipeline$
+  certificateOidcIssuer: https://kubernetes.default.svc
   fulcioUrl: https://fulcio-server-trusted-artifact-signer.apps.CUSTOMER_DOMAIN
   rekorUrl: https://rekor-server-trusted-artifact-signer.apps.CUSTOMER_DOMAIN
   tufUrl: https://tuf-trusted-artifact-signer.apps.CUSTOMER_DOMAIN
