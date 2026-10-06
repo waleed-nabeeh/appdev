@@ -238,7 +238,7 @@ spec:
     - name: registry-auth
   steps:
     - name: resolve
-      image: {{ .Values.images.buildah }}
+      image: {{ .Values.images.skopeo }}
       script: |
         #!/usr/bin/env bash
         set -euo pipefail
