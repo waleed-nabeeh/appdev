@@ -1,9 +1,9 @@
 replicaCount: 1
 
 image:
-  repository: image-registry.openshift-image-registry.svc:5000/customer-demo/customer-dotnet-sample
+  repository: demo-registry-quay-quay-enterprise.apps.cluster-zmzbt.dyn.redhatworkshops.io/customer/dotnet-sample
   tag: develop
-  digest: ""
+  digest: sha256:99aa20c67a9357ac135a996933a1bd6891fa8b33987169e4be7b55130b44f4ac
   pullPolicy: IfNotPresent
 
 imagePullSecrets:
