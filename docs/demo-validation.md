@@ -30,7 +30,24 @@ synchronizes the intended workload environment.
 Do not reuse demo endpoints, image digests, robot credentials, RHACS tokens,
 Vault initialization data, or RHTAS private keys in another cluster.
 
-The promotion acceptance test uses `application-promotion` and must prove all
-of the following: approved Quay tag resolution, RHTAS verification, GitOps
-digest commit, Argo CD synchronization, successful workload rollout, and a
-healthy application route.
+## Successful promotion path
+
+PipelineRun `dotnet-sample-promotion-wrl8f` completed successfully on
+2026-10-06:
+
+| Task | Result |
+| --- | --- |
+| `get-approved-image` | Resolved the approved Quay tag to an immutable digest |
+| `verify-image` | Verified the Fulcio identity, signature, private TUF trust, and Rekor evidence |
+| `update-helm-chart` | Committed the approved digest to the `develop` GitOps branch |
+| Argo CD | Synchronized commit `7764f84` and reported `Healthy` |
+
+The promoted digest was
+`sha256:97d34a37e6ceda3595370920faf23c8741fad8f15783cfb14a6e5b7cd9c72d75`.
+The deployment completed with one Ready pod and the OpenShift route returned a
+successful `/healthz` response.
+
+Git write access uses a write-enabled deploy key scoped only to this demo
+repository. Its private key is stored outside Git and in the `git-credentials`
+Secret. Use the customer-approved service identity and repository controls in
+the customer environment.

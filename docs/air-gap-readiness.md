@@ -10,11 +10,13 @@ Before customer deployment:
 3. Replace demo image repositories in environment values with internal paths.
 4. Store all Tekton Tasks in this repository; do not resolve public hub content
    during a PipelineRun.
-5. Mirror .NET/NuGet dependencies into the approved internal artifact service.
-6. Configure trusted internal certificate authorities for Git, Vault, Quay,
+5. Mirror the Buildah and Skopeo task images separately; promotion uses Skopeo
+   to resolve an approved Quay tag to its immutable digest.
+6. Mirror .NET/NuGet dependencies into the approved internal artifact service.
+7. Configure trusted internal certificate authorities for Git, Vault, Quay,
    RHACS, RHTAS, and artifact endpoints.
-7. Validate DNS, NTP, storage classes, routes, and backup destinations.
-8. Test with public network access blocked.
+8. Validate DNS, NTP, storage classes, routes, and backup destinations.
+9. Test with public network access blocked.
 
 Secrets are provisioned through Vault, External Secrets, sealed delivery, or an
 approved manual bootstrap. They are never stored in Git.
