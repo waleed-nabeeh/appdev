@@ -6,7 +6,7 @@ images:
   dotnet: registry.access.redhat.com/ubi9/dotnet-100:latest
   buildah: registry.redhat.io/rhel9/buildah:latest
   rhacs: registry.redhat.io/advanced-cluster-security/rhacs-roxctl-rhel9:4.11
-  rhtasClientServer: registry.redhat.io/rhtas/client-server-rhel9:1.4
+  rhtasClientServer: registry.redhat.io/rhtas/client-server-rhel9@sha256:3d08a27f79bda1f19369786723cb8d1e130c3d46cbb8a7f44e30571d5a213240
 
 rhtas:
   audience: trusted-artifact-signer
