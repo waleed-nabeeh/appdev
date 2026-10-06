@@ -56,6 +56,16 @@ Argo CD then creates and continuously reconciles the Vault, RHTAS, and pipeline
 applications. Configure the private Git repository credential in Argo CD before
 bootstrapping; do not place the credential in values files.
 
+Enable the OpenShift Pipelines console plugin after the Pipelines Operator is
+Ready. The helper preserves every console plugin already enabled on the cluster:
+
+```bash
+OC_BIN=oc ./scripts/openshift/enable-pipelines-console-plugin.sh
+oc get console.operator.openshift.io cluster -o jsonpath='{.spec.plugins}'
+```
+
+Refresh the OpenShift console after the Console Operator completes its rollout.
+
 ## 4. Initialize Vault
 
 Wait for all Vault pods, then initialize once and unseal every member:

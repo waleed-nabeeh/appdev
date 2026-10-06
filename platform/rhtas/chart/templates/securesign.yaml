@@ -41,10 +41,6 @@ spec:
       commonName: fulcio-securesign.{{ .Values.domain }}
       organizationName: {{ .Values.organization.name | quote }}
       organizationEmail: {{ .Values.organization.email | quote }}
-  ctlog:
-    externalAccess:
-      enabled: true
-      host: ctlog-trusted-artifact-signer.{{ .Values.domain }}
   tsa:
     externalAccess:
       enabled: true

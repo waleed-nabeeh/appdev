@@ -28,3 +28,8 @@ The checked-in Pipeline and Tasks are cluster configuration and are reconciled
 by Argo CD. PipelineRuns are execution records created by webhook, Pipelines as
 Code, or an authorized operator. Secrets are materialized at runtime from Vault
 and are never stored in Git.
+
+The demo PipelineRun sets `perform-gitops-update=false` so build, scan, gate,
+and signing can be validated without repository write credentials. Customer
+runs use the default value `true`; the final task then updates the approved
+Helm repository and Argo CD performs deployment.
