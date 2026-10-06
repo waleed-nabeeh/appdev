@@ -7,7 +7,7 @@ COPY src/Customer.Sample.Api/ src/Customer.Sample.Api/
 RUN dotnet publish src/Customer.Sample.Api/Customer.Sample.Api.csproj \
     --configuration Release --no-restore --output /opt/app-root/app
 
-FROM registry.access.redhat.com/ubi9/dotnet-100-runtime
+FROM registry.access.redhat.com/ubi9/dotnet-100
 WORKDIR /opt/app-root/app
 COPY --from=build /opt/app-root/app .
 EXPOSE 8080
