@@ -26,12 +26,13 @@ For a clean installation on another cluster, follow
 
 ## Bootstrap order
 
-1. Install the OpenShift GitOps, Pipelines, RHTAS, Vault Secrets, and RHACS
-   operators through the approved catalog.
+1. Install the OpenShift GitOps, Pipelines, RHTAS, RHACS, and Quay operators
+   through the approved mirrored catalog. Vault Secrets Operator is optional.
 2. Configure repository access in Argo CD without committing credentials.
 3. Install `bootstrap/app-of-apps` using `values-demo.yaml`.
 4. Initialize and unseal Vault using an approved operational process.
-5. Configure Vault authentication and the Vault Secrets Operator.
+5. Initialize and unseal Vault. Configure Vault Secrets Operator later only if
+   pipelines will consume credentials from Vault.
 6. Deploy RHTAS and validate its Fulcio, Rekor, and TUF endpoints.
 7. Install the local Tekton catalog and run the sample pipeline.
 8. Run the promotion pipeline to verify the signed digest, update GitOps, and

@@ -9,8 +9,9 @@ The demo uses projected OpenShift service-account tokens issued by
 customer values must use the approved enterprise OIDC provider and identity
 claims.
 
-The TSA private key, password, and certificate chain are prerequisite Secrets
-created outside Git. Only their names and keys are referenced by the chart.
+TSA is optional and disabled by default. The tested pipeline uses Fulcio,
+Rekor, and TUF and therefore requires no TSA private key or certificate Secret.
+Enable TSA only after its PKI and RFC3161 response have been validated.
 
 RHTAS keyless signing and Vault Transit signing are separate patterns. Vault is
 used for pipeline secrets; RHTAS Fulcio/Rekor/TUF provides signing identity,

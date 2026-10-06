@@ -4,8 +4,7 @@
 
 - OpenShift cluster-admin access.
 - OpenShift GitOps catalog content available.
-- OpenShift Pipelines, RHTAS, RHACS, Quay, and Vault Secrets Operator catalog
-  content available.
+- OpenShift Pipelines, RHTAS, RHACS, and Quay catalog content available.
 - Cluster access to the configured Vault image or an internal mirror.
 - The configured RWO storage class.
 - Repository access from Argo CD.
@@ -40,7 +39,7 @@ from the `develop` branch. Runtime credentials remain outside Git.
 oc get applications.argoproj.io -n openshift-gitops
 oc get pods,pvc,route -n vault
 oc get route vault -n vault
-oc get securesign,timestampauthority,tuf -n trusted-artifact-signer
+oc get securesign,tuf -n trusted-artifact-signer
 oc get central,securedcluster -n stackrox
 oc get pipeline,task -n customer-cicd
 ```

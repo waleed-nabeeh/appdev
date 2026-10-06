@@ -51,3 +51,8 @@ Git write access uses a write-enabled deploy key scoped only to this demo
 repository. Its private key is stored outside Git and in the `git-credentials`
 Secret. Use the customer-approved service identity and repository controls in
 the customer environment.
+
+After changing the RHTAS desired state to omit TSA, PipelineRun
+`dotnet-sample-promotion-txqw9` also completed all three promotion tasks. This
+validated Quay digest resolution, RHTAS verification, and GitOps update behavior
+using only Fulcio, Rekor, and TUF.

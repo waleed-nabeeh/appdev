@@ -18,7 +18,7 @@ digests. The required operator packages are:
 | Red Hat Trusted Artifact Signer | `rhtas-operator` | `redhat-operators` |
 | Red Hat Advanced Cluster Security | `rhacs-operator` | `redhat-operators` |
 | Red Hat Quay | `quay-operator` | `redhat-operators` |
-| Vault Secrets Operator | `vault-secrets-operator` | approved certified catalog |
+| Vault Secrets Operator (optional) | `vault-secrets-operator` | approved certified catalog |
 
 Confirm that ImageContentSourcePolicy or ImageDigestMirrorSet resources resolve
 all referenced images through the internal registry.

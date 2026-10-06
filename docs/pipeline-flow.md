@@ -34,11 +34,11 @@ and signing can be validated without repository write credentials. Customer
 runs use the default value `true`; the final task then updates the approved
 Helm repository and Argo CD performs deployment.
 
-The current tested path uses RHTAS Fulcio, Rekor, and TUF. TSA is deployed, but
-timestamp attachment is disabled in the signing command because the demo TSA
-response is not accepted by the RHTAS Cosign v3 client. This does not weaken
-the keyless identity, signature, or Rekor transparency-log checks. Resolve and
-validate the customer PKI/TSA response before enabling timestamp attachment.
+The current tested path uses RHTAS Fulcio, Rekor, and TUF. TSA is disabled in
+the reproducible profile and timestamp attachment is not part of the signing
+command. This does not change the keyless identity, signature, or Rekor
+transparency-log checks. Validate the customer PKI/TSA response before adding
+timestamp attachment later.
 
 ## Promotion pipeline
 
