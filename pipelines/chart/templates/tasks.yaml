@@ -201,7 +201,10 @@ spec:
         /tmp/rhtas-cosign version
         /tmp/rhtas-cosign initialize --mirror="$(params.tuf-url)" --root="$(params.tuf-url)/root.json"
         /tmp/rhtas-cosign sign --yes \
+          --use-signing-config=false \
           --identity-token="$(cat /var/run/sigstore/token)" \
+          --fulcio-url="$(params.fulcio-url)" \
+          --rekor-url="$(params.rekor-url)" \
           "$(params.image)"
       volumeMounts:
         - name: oidc-token
