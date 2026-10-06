@@ -321,7 +321,14 @@ spec:
       script: |
         #!/bin/sh
         set -euo pipefail
-        cp -R "$(workspaces.git-credentials.path)"/. "$HOME"/
+        if [ -f "$(workspaces.git-credentials.path)/id_ed25519" ]; then
+          mkdir -p "$HOME/.ssh"
+          cp "$(workspaces.git-credentials.path)/id_ed25519" "$HOME/.ssh/id_ed25519"
+          cp "$(workspaces.git-credentials.path)/known_hosts" "$HOME/.ssh/known_hosts"
+          cp "$(workspaces.git-credentials.path)/ssh_config" "$HOME/.ssh/config"
+        else
+          cp -R "$(workspaces.git-credentials.path)"/. "$HOME"/
+        fi
         chmod -R go-rwx "$HOME"
         git config --global user.name "Customer Pipeline"
         git config --global user.email "pipeline@customer.invalid"

@@ -80,7 +80,8 @@ oc get pipelinerun,taskrun -n customer-cicd
 Create the workload namespace and copy a repository-scoped Quay pull secret to
 it. Create `git-credentials` in `customer-cicd` using the dedicated Git
 automation identity; the secret must provide a Git-compatible `.gitconfig` and
-credential file under the Tekton home directory.
+credential file, or the `id_ed25519`, `known_hosts`, and `ssh_config` keys for a
+repository-scoped write-enabled deploy key.
 
 ```bash
 oc apply -f bootstrap/namespaces/customer-demo.yaml

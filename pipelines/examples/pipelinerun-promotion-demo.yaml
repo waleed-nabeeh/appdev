@@ -14,7 +14,7 @@ spec:
     - name: approved-image-tag
       value: demo-test
     - name: gitops-url
-      value: https://github.com/waleed-nabeeh/appdev.git
+      value: git@github.com:waleed-nabeeh/appdev.git
     - name: gitops-revision
       value: develop
     - name: values-file

@@ -4,3 +4,4 @@ metadata:
   name: customer-demo
   labels:
     app.kubernetes.io/part-of: customer-release-engineering
+    argocd.argoproj.io/managed-by: openshift-gitops
