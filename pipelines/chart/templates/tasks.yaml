@@ -195,12 +195,12 @@ spec:
         set -euo pipefail
         curl --fail --silent --show-error --location \
           "$(params.client-url)/clients/linux/cosign-amd64.gz" \
-          --output /tmp/cosign.gz
-        gzip --decompress /tmp/cosign.gz
-        chmod +x /tmp/cosign
-        /tmp/cosign version
-        /tmp/cosign initialize --mirror="$(params.tuf-url)" --root="$(params.tuf-url)/root.json"
-        /tmp/cosign sign --yes \
+          --output /tmp/rhtas-cosign.gz
+        gzip --decompress /tmp/rhtas-cosign.gz
+        chmod +x /tmp/rhtas-cosign
+        /tmp/rhtas-cosign version
+        /tmp/rhtas-cosign initialize --mirror="$(params.tuf-url)" --root="$(params.tuf-url)/root.json"
+        /tmp/rhtas-cosign sign --yes \
           --identity-token="$(cat /var/run/sigstore/token)" \
           --fulcio-url="$(params.fulcio-url)" \
           --rekor-url="$(params.rekor-url)" \
