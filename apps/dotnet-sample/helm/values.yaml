@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: demo-registry-quay-quay-enterprise.apps.cluster-zmzbt.dyn.redhatworkshops.io/customer/dotnet-sample
   tag: develop
-  digest: sha256:99aa20c67a9357ac135a996933a1bd6891fa8b33987169e4be7b55130b44f4ac
+  digest: sha256:97d34a37e6ceda3595370920faf23c8741fad8f15783cfb14a6e5b7cd9c72d75
   pullPolicy: IfNotPresent
 
 imagePullSecrets:
