@@ -18,7 +18,8 @@ values.
 
 Start with [Customer Cluster Implementation](docs/customer-cluster-implementation.md)
 for the complete migration order and [Pipeline Flow](docs/pipeline-flow.md) for
-the task-by-task release behavior.
+the task-by-task release behavior. The tested outcome is recorded in
+[Demo Validation](docs/demo-validation.md).
 
 ## Bootstrap order
 

@@ -11,7 +11,7 @@ available.
 | 3 | `build-image` | Builds with Buildah, pushes an unsigned candidate to Quay, and returns its immutable digest. |
 | 4 | `scan-image` | Requests an RHACS image vulnerability scan for the digest. |
 | 5 | `security-gate` | Applies RHACS build-time policies and stops the run on a violation. |
-| 6 | `sign-image` | Uses a short-lived service-account OIDC token to obtain a Fulcio certificate, signs the digest, records it in Rekor, and requests a TSA timestamp. |
+| 6 | `sign-image` | Uses a short-lived service-account OIDC token to obtain a Fulcio certificate, signs the digest, and records it in Rekor. |
 | 7 | `update-helm-chart` | Writes the approved digest to Helm values and pushes a GitOps commit. |
 | 8 | Argo CD | Detects the commit and synchronizes the declared workload environment. |
 
@@ -33,3 +33,9 @@ The demo PipelineRun sets `perform-gitops-update=false` so build, scan, gate,
 and signing can be validated without repository write credentials. Customer
 runs use the default value `true`; the final task then updates the approved
 Helm repository and Argo CD performs deployment.
+
+The current tested path uses RHTAS Fulcio, Rekor, and TUF. TSA is deployed, but
+timestamp attachment is disabled in the signing command because the demo TSA
+response is not accepted by the RHTAS Cosign v3 client. This does not weaken
+the keyless identity, signature, or Rekor transparency-log checks. Resolve and
+validate the customer PKI/TSA response before enabling timestamp attachment.

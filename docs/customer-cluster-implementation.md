@@ -17,6 +17,7 @@ digests. The required operator packages are:
 | OpenShift Pipelines | `openshift-pipelines-operator-rh` | `redhat-operators` |
 | Red Hat Trusted Artifact Signer | `rhtas-operator` | `redhat-operators` |
 | Red Hat Advanced Cluster Security | `rhacs-operator` | `redhat-operators` |
+| Red Hat Quay | `quay-operator` | `redhat-operators` |
 | Vault Secrets Operator | `vault-secrets-operator` | approved certified catalog |
 
 Confirm that ImageContentSourcePolicy or ImageDigestMirrorSet resources resolve
@@ -101,7 +102,8 @@ oc get pods,pvc,route -n trusted-artifact-signer
 
 All three custom resources must report `Ready`. Fulcio uses the configured OIDC
 issuer for keyless identities; Rekor records signatures; TUF publishes trust
-material; TSA supplies trusted timestamps.
+material. Validate TSA responses with the mirrored Cosign client before adding
+timestamps to the signing task.
 
 ## 6. Deploy RHACS
 
@@ -162,3 +164,8 @@ oc get vault -n vault
 Additionally verify one end-to-end PipelineRun, the RHACS policy result, the
 Rekor transparency-log entry, the Cosign signature against private TUF roots,
 the GitOps commit, and Argo CD synchronization to the intended environment.
+
+```bash
+OC_BIN=oc ./scripts/rhtas/verify-image.sh \
+  INTERNAL_REGISTRY/ORGANIZATION/IMAGE@sha256:DIGEST
+```

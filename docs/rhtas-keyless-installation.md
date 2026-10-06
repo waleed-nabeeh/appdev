@@ -49,6 +49,24 @@ export TUF_URL=https://tuf-trusted-artifact-signer.APPS_DOMAIN
 cosign initialize --mirror="$TUF_URL" --root="$TUF_URL/root.json"
 ```
 
+The pipeline downloads the version-matched Cosign binary from the internal
+RHTAS `cli-server` service. No public download occurs during signing. For the
+disconnected environment, mirror the `client-server-rhel9` image by digest and
+set `images.rhtasClientServer` in the pipeline values file.
+
 The pipeline signing task must request a projected service-account token with
 audience `trusted-artifact-signer` and pass that identity token to Cosign. The
 image must always be signed by immutable digest, never by a mutable tag.
+
+Verify a signed image using the checked-in helper. It creates a temporary pod,
+uses the existing `registry-auth` Secret, verifies against private TUF, and
+deletes the pod afterward:
+
+```bash
+OC_BIN=oc ./scripts/rhtas/verify-image.sh \
+  REGISTRY/ORGANIZATION/IMAGE@sha256:DIGEST
+```
+
+The demo TSA is Ready, but timestamp attachment is not enabled in the pipeline
+until its RFC3161 response is validated with the deployed Cosign v3 client.
+Fulcio keyless signing and Rekor recording remain mandatory.
