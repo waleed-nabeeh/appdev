@@ -326,6 +326,7 @@ spec:
           cp "$(workspaces.git-credentials.path)/id_ed25519" "$HOME/.ssh/id_ed25519"
           cp "$(workspaces.git-credentials.path)/known_hosts" "$HOME/.ssh/known_hosts"
           cp "$(workspaces.git-credentials.path)/ssh_config" "$HOME/.ssh/config"
+          export GIT_SSH_COMMAND="ssh -F $HOME/.ssh/config -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
         else
           cp -R "$(workspaces.git-credentials.path)"/. "$HOME"/
         fi
