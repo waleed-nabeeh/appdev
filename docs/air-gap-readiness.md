@@ -3,6 +3,9 @@
 The GitOps YAML is portable, but container images and operator catalogs must be
 prepared separately for the disconnected customer environment.
 
+The complete source-image and operator-catalog inventory is maintained in
+[Air-Gap Image Inventory](air-gap-image-inventory.md).
+
 Before customer deployment:
 
 1. Pin every operator, operand, build, and runtime image by digest.

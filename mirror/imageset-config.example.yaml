@@ -1,0 +1,31 @@
+apiVersion: mirror.openshift.io/v2alpha1
+kind: ImageSetConfiguration
+mirror:
+  operators:
+    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.22
+      packages:
+        - name: openshift-gitops-operator
+          channels:
+            - name: gitops-1.22
+        - name: openshift-pipelines-operator-rh
+          channels:
+            - name: pipelines-1.24
+        - name: rhtas-operator
+          channels:
+            - name: stable-v1.4
+        - name: rhacs-operator
+          channels:
+            - name: stable
+        - name: quay-operator
+          channels:
+            - name: stable-3.17
+  additionalImages:
+    - name: docker.io/alpine/git:latest
+    - name: registry.access.redhat.com/ubi9/dotnet-100:latest
+    - name: registry.redhat.io/rhel9/buildah:latest
+    - name: registry.redhat.io/rhel9/skopeo:latest
+    - name: registry.redhat.io/advanced-cluster-security/rhacs-roxctl-rhel9:4.11
+    - name: registry.redhat.io/rhtas/client-server-rhel9@sha256:3d08a27f79bda1f19369786723cb8d1e130c3d46cbb8a7f44e30571d5a213240
+    - name: registry.connect.redhat.com/hashicorp/vault:1.20.4-ubi
+    - name: registry.access.redhat.com/ubi9/nodejs-20:latest
+    - name: registry.access.redhat.com/ubi9/nginx-124:latest

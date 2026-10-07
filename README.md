@@ -23,6 +23,8 @@ the task-by-task release behavior. The tested outcome is recorded in
 
 For a clean installation on another cluster, follow
 [New Cluster Replication](docs/new-cluster-replication.md).
+For disconnected mirroring, use
+[Air-Gap Image Inventory](docs/air-gap-image-inventory.md).
 
 ## Bootstrap order
 
