@@ -3,22 +3,24 @@ set -euo pipefail
 
 OC_BIN="${OC_BIN:-oc}"
 OUTPUT="${1:-mirror/operator-related-images.txt}"
-packages=(
+csv_prefixes=(
   openshift-gitops-operator
   openshift-pipelines-operator-rh
   rhtas-operator
   rhacs-operator
   quay-operator
+  cert-manager-operator
+  cloudnative-pg
 )
 
 csv_json="$("$OC_BIN" get csv -A -o json)"
 tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
 
-for package in "${packages[@]}"; do
-  jq -r --arg package "$package" '
+for prefix in "${csv_prefixes[@]}"; do
+  jq -r --arg prefix "$prefix" '
     .items
-    | map(select(.metadata.name | startswith($package + ".v")))
+    | map(select(.metadata.name | startswith($prefix + ".v")))
     | sort_by(.metadata.creationTimestamp)
     | last
     | .spec.relatedImages[]?.image

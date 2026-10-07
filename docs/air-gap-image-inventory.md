@@ -15,11 +15,11 @@ GitOps each reference multiple operand images.
 
 | Scope | Connected source image | Use |
 | --- | --- | --- |
-| Git tasks | `docker.io/alpine/git:latest` | Clone and GitOps commit/push |
-| .NET build and tested runtime | `registry.access.redhat.com/ubi9/dotnet-100:latest` | Restore, test, publish, and run the tested sample |
-| Image build | `registry.redhat.io/rhel9/buildah:latest` | Build and push application images |
-| Promotion lookup | `registry.redhat.io/rhel9/skopeo:latest` | Resolve an approved Quay tag to a digest |
-| ACS pipeline client | `registry.redhat.io/advanced-cluster-security/rhacs-roxctl-rhel9:4.11` | Image scan and security policy gate |
+| Git tasks | `docker.io/alpine/git@sha256:a4bb51f1...` | Clone and GitOps commit/push |
+| .NET build and tested runtime | `registry.access.redhat.com/ubi9/dotnet-100@sha256:744226d7...` | Restore, test, publish, and run the tested sample |
+| Image build | `registry.redhat.io/rhel9/buildah@sha256:ad3ac00d...` | Build and push application images |
+| Promotion lookup | `registry.redhat.io/rhel9/skopeo@sha256:4a6e11df...` | Resolve an approved Quay tag to a digest |
+| ACS pipeline client | `registry.redhat.io/advanced-cluster-security/rhacs-roxctl-rhel9@sha256:b407cb46...` | Image scan and security policy gate |
 | RHTAS client server | `registry.redhat.io/rhtas/client-server-rhel9@sha256:3d08a27f79bda1f19369786723cb8d1e130c3d46cbb8a7f44e30571d5a213240` | Supplies the matching Cosign client for sign and verify |
 | Vault | `registry.connect.redhat.com/hashicorp/vault:1.20.4-ubi` | Vault HA server |
 
@@ -33,7 +33,7 @@ in the RHTAS operator related images.
 Current .NET sample:
 
 ```text
-registry.access.redhat.com/ubi9/dotnet-100:latest
+registry.access.redhat.com/ubi9/dotnet-100@sha256:744226d7703123413cd58495e7395bf7e544dc035bd10486831bcc0ff5e808bb
 ```
 
 The current tested Containerfile uses this image for both build and runtime.
@@ -44,8 +44,8 @@ base requires another build, scan, sign, promotion, and application test.
 Planned Angular application:
 
 ```text
-registry.access.redhat.com/ubi9/nodejs-20:latest
-registry.access.redhat.com/ubi9/nginx-124:latest
+registry.access.redhat.com/ubi9/nodejs-20@sha256:74cc7b1d13592b1e425074f434b90e470ab209da85fd1fdb8e6e9e4cabaec51a
+registry.access.redhat.com/ubi9/nginx-124@sha256:da54bbccb61ef4c1229b501276e6af35878455471598426346bb3014571843ed
 ```
 
 Node.js builds the Angular static assets and Nginx serves them. Angular support
@@ -64,6 +64,8 @@ The OpenShift 4.22 example mirrors these packages from
 | RHTAS | `rhtas-operator` | `stable-v1.4` |
 | RHACS | `rhacs-operator` | `stable` |
 | Quay | `quay-operator` | `stable-3.17` |
+| Certificate Manager for RHTAS | `openshift-cert-manager-operator` | `stable-v1` |
+| CloudNativePG for RHTAS | `cloudnative-pg` | `stable-v1` from `certified-operator-index` |
 
 Review and freeze approved versions before mirroring. The supplied file is:
 
@@ -89,10 +91,10 @@ mapping resources to the disconnected cluster.
 
 ## Freeze immutable digests
 
-The example contains several floating tags because they match the connected
-demo. Before customer use, resolve each tag to a multi-architecture manifest
-digest, mirror it, and replace the customer values with internal digest-pinned
-references.
+The additional images were resolved to multi-architecture manifest-list digests
+on 2026-10-07. Vault remains tag-based because the certified registry rejected
+anonymous inspection; authenticate to `registry.connect.redhat.com`, resolve
+its approved digest, and update both mirror files before transfer.
 
 After logging into the source registry:
 
@@ -115,6 +117,7 @@ After `oc login`, export the exact `relatedImages` from the installed CSVs:
 OC_BIN=oc ./scripts/mirror/export-operator-images.sh
 ```
 
-This produces `mirror/operator-related-images.txt`. Compare it with the
-`oc-mirror` output as an audit check. The export could not be refreshed during
-the latest documentation update because the demo cluster login had expired.
+This produces `mirror/operator-related-images.txt`. The checked-in snapshot was
+exported from the demo cluster on 2026-10-07 and contains the installed
+digest-pinned related images. Compare it with the `oc-mirror` output as an audit
+check.

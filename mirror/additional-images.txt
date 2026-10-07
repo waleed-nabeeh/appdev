@@ -1,13 +1,13 @@
 # Images directly used by the current GitOps repository.
-docker.io/alpine/git:latest
-registry.access.redhat.com/ubi9/dotnet-100:latest
-registry.redhat.io/rhel9/buildah:latest
-registry.redhat.io/rhel9/skopeo:latest
-registry.redhat.io/advanced-cluster-security/rhacs-roxctl-rhel9:4.11
+docker.io/alpine/git@sha256:a4bb51f1a3553df194ce679fc1db721d8bfba2046fa1a88fe9d4ac551ffbce25
+registry.access.redhat.com/ubi9/dotnet-100@sha256:744226d7703123413cd58495e7395bf7e544dc035bd10486831bcc0ff5e808bb
+registry.redhat.io/rhel9/buildah@sha256:ad3ac00db8e39f9837e364d965d36056f740fc2a1eec0c6607da7f06b014f172
+registry.redhat.io/rhel9/skopeo@sha256:4a6e11dff9b438151056f5d3c3d3c040852d4138c7def4b56280d78a292c7ad9
+registry.redhat.io/advanced-cluster-security/rhacs-roxctl-rhel9@sha256:b407cb461e45116884598bd9c0d848388b6dd7805f7d11907a7a35958cadfcff
 registry.redhat.io/rhtas/client-server-rhel9@sha256:3d08a27f79bda1f19369786723cb8d1e130c3d46cbb8a7f44e30571d5a213240
 registry.connect.redhat.com/hashicorp/vault:1.20.4-ubi
 
 # Planned Angular build and runtime bases. Angular is not yet implemented in
 # the tested pipeline; confirm the application's supported Node.js version.
-registry.access.redhat.com/ubi9/nodejs-20:latest
-registry.access.redhat.com/ubi9/nginx-124:latest
+registry.access.redhat.com/ubi9/nodejs-20@sha256:74cc7b1d13592b1e425074f434b90e470ab209da85fd1fdb8e6e9e4cabaec51a
+registry.access.redhat.com/ubi9/nginx-124@sha256:da54bbccb61ef4c1229b501276e6af35878455471598426346bb3014571843ed
