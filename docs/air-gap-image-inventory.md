@@ -11,6 +11,24 @@ Use two mechanisms for mirroring:
 Do not copy only the five operator images. RHTAS, RHACS, Quay, Pipelines, and
 GitOps each reference multiple operand images.
 
+For manual `pull`, `tag`, and `push`, use
+`mirror/manual-image-mapping.csv`. It contains only the images directly needed
+by the pipelines, application bases, Vault, and the no-TSA RHTAS deployment,
+with suggested human-readable target repositories and tags.
+
+The suggested tags are labels for the target Quay. The source digest remains
+the integrity reference. Configure Quay to prevent tag overwrite, record the
+source-to-target digest mapping, and pin production GitOps values to the target
+digest where the consuming chart supports it.
+
+Pipeline and Vault values can directly reference the target Quay repositories
+and readable tags. RHTAS is different: the RHTAS Operator generates operand
+pods with Red Hat source repositories and digests. After manually pushing those
+images, the infrastructure team must configure an `ImageDigestMirrorSet` that
+maps the source RHTAS, UBI, and OpenShift repositories to their internal Quay
+locations. A readable tag can coexist in Quay for operators, but the cluster
+pull is resolved by digest through that mapping.
+
 ## Directly used images
 
 | Scope | Connected source image | Use |
