@@ -12,9 +12,12 @@ Do not copy only the five operator images. RHTAS, RHACS, Quay, Pipelines, and
 GitOps each reference multiple operand images.
 
 For manual `pull`, `tag`, and `push`, use
-`mirror/manual-image-mapping.csv`. It contains only the images directly needed
-by the pipelines, application bases, Vault, and the no-TSA RHTAS deployment,
-with suggested human-readable target repositories and tags.
+`mirror/manual-image-mapping.csv`. This is the authoritative, readable workload
+list for the agreed scope: both pipelines, .NET and Angular bases, Vault HA,
+ACS, Quay, and the no-TSA RHTAS deployment. Combine it with
+`mirror/operator-related-images.txt` when the target environment does not
+already contain the approved GitOps, Pipelines, RHTAS, RHACS, and Quay operator
+content.
 
 The suggested tags are labels for the target Quay. The source digest remains
 the integrity reference. Configure Quay to prevent tag overwrite, record the
@@ -59,16 +62,38 @@ For a later optimization, the ASP.NET runtime-specific image is
 `registry.access.redhat.com/ubi9/dotnet-100-aspnet`, but changing the runtime
 base requires another build, scan, sign, promotion, and application test.
 
-Planned Angular application:
+Angular application bases required by the agreed scope:
 
 ```text
 registry.access.redhat.com/ubi9/nodejs-20@sha256:74cc7b1d13592b1e425074f434b90e470ab209da85fd1fdb8e6e9e4cabaec51a
 registry.access.redhat.com/ubi9/nginx-124@sha256:da54bbccb61ef4c1229b501276e6af35878455471598426346bb3014571843ed
 ```
 
-Node.js builds the Angular static assets and Nginx serves them. Angular support
-has not yet been added to the tested Tekton pipeline. Confirm the actual
+Node.js builds the Angular static assets and Nginx serves them. The images are
+required in the air-gap inventory, but the repository currently has no Angular
+sample or Angular-specific Tekton task to validate them. Confirm the actual
 frontend's Angular/Node compatibility before freezing the Node.js stream.
+
+## Scope coverage
+
+| Scope item | Image coverage |
+| --- | --- |
+| Clone and GitOps update | Alpine Git |
+| .NET test, build, and runtime | UBI 9 .NET 10 SDK/runtime |
+| Angular build and runtime | UBI 9 Node.js 20 and Nginx 1.24 |
+| Build and push | Buildah |
+| ACS scan and security gate | `roxctl` plus ACS Central, database, collector, scanner, and scanner database |
+| RHTAS keyless sign and verify | Client-server plus Fulcio, Rekor, Trillian, CT log, TUF, Redis, and database operands |
+| Promotion image lookup | Skopeo |
+| Registry | Quay, Clair, PostgreSQL, and Redis operands |
+| Secrets platform | Vault 1.20.4 UBI HA server |
+
+There is no separate Cosign container image in this implementation. The sign
+and verify tasks run in the RHTAS client-server image and fetch the matching
+`cosign-amd64.gz` from the in-cluster `cli-server` service. This works offline.
+The application image produced by Buildah is an output, not a prerequisite
+image. NuGet and npm packages are artifacts and require an internal package
+source; they are not container images.
 
 ## Operator content
 

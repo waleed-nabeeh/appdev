@@ -7,7 +7,7 @@ registry.redhat.io/advanced-cluster-security/rhacs-roxctl-rhel9@sha256:b407cb461
 registry.redhat.io/rhtas/client-server-rhel9@sha256:3d08a27f79bda1f19369786723cb8d1e130c3d46cbb8a7f44e30571d5a213240
 registry.connect.redhat.com/hashicorp/vault:1.20.4-ubi
 
-# Planned Angular build and runtime bases. Angular is not yet implemented in
-# the tested pipeline; confirm the application's supported Node.js version.
+# Required Angular build and runtime bases. Confirm that the real application's
+# Angular version supports Node.js 20 before freezing the customer release.
 registry.access.redhat.com/ubi9/nodejs-20@sha256:74cc7b1d13592b1e425074f434b90e470ab209da85fd1fdb8e6e9e4cabaec51a
 registry.access.redhat.com/ubi9/nginx-124@sha256:da54bbccb61ef4c1229b501276e6af35878455471598426346bb3014571843ed
