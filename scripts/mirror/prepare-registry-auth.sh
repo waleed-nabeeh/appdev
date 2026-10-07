@@ -10,8 +10,12 @@ command -v podman >/dev/null || {
   exit 1
 }
 
+umask 077
 mkdir -p "$(dirname "${AUTH_FILE}")"
-touch "${AUTH_FILE}"
+# Podman requires valid JSON, including on the first login.
+if [[ ! -s "${AUTH_FILE}" ]]; then
+  printf '{"auths":{}}\n' > "${AUTH_FILE}"
+fi
 chmod 600 "${AUTH_FILE}"
 
 read -r -p "Red Hat registry username: " REDHAT_USERNAME
