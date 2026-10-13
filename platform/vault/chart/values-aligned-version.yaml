@@ -1,0 +1,9 @@
+# Apply after the environment values file. Injector and CSI remain disabled;
+# secret synchronization is owned by External Secrets Operator.
+server:
+  image:
+    tag: 1.21.2-ubi
+injector:
+  enabled: false
+csi:
+  enabled: false

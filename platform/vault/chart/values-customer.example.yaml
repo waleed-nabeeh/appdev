@@ -7,7 +7,7 @@ injector:
 server:
   image:
     repository: INTERNAL_REGISTRY/hashicorp/vault
-    tag: APPROVED_TAG
+    tag: 1.21.2-ubi
     pullPolicy: IfNotPresent
   route:
     enabled: true
