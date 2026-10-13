@@ -1,0 +1,5 @@
+apiVersion: v2
+name: customer-platform-apps
+description: Vault and RHTAS child Applications and their Argo CD project
+type: application
+version: 0.1.0

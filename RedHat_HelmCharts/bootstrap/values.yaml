@@ -1,0 +1,17 @@
+repository: REPLACE_INTERNAL_GIT_URL
+revision: REPLACE_BRANCH
+project: customer-platform
+destinationServer: https://kubernetes.default.svc
+applications:
+  vault:
+    namespace: vault
+    path: charts/vault
+    releaseName: vault
+    valueFiles:
+      - values-customer.yaml
+  rhtas:
+    namespace: trusted-artifact-signer
+    path: charts/rhtas
+    releaseName: rhtas
+    valueFiles:
+      - values.yaml

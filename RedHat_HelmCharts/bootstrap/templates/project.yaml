@@ -1,0 +1,19 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: {{ .Values.project }}
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  description: Vault and keyless RHTAS platform services
+  sourceRepos:
+    - {{ .Values.repository | quote }}
+  destinations:
+    {{- range .Values.applications }}
+    - namespace: {{ .namespace | quote }}
+      server: {{ $.Values.destinationServer | quote }}
+    {{- end }}
+  clusterResourceWhitelist:
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding

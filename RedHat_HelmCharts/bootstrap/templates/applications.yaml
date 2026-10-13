@@ -1,0 +1,24 @@
+{{- range $name, $app := .Values.applications }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
+spec:
+  project: {{ $.Values.project }}
+  source:
+    repoURL: {{ $.Values.repository | quote }}
+    targetRevision: {{ $.Values.revision | quote }}
+    path: {{ $app.path | quote }}
+    helm:
+      releaseName: {{ $app.releaseName | quote }}
+      valueFiles:
+        {{- toYaml $app.valueFiles | nindent 8 }}
+  destination:
+    server: {{ $.Values.destinationServer | quote }}
+    namespace: {{ $app.namespace | quote }}
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+{{- end }}

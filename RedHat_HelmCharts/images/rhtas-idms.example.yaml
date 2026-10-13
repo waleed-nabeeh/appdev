@@ -1,0 +1,62 @@
+apiVersion: config.openshift.io/v1
+kind: ImageDigestMirrorSet
+metadata:
+  name: customer-rhtas
+spec:
+  imageDigestMirrors:
+    - source: registry.redhat.io/rhtas/client-server-rhel9
+      mirrors:
+        - quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/rhtas-client-server
+      mirrorSourcePolicy: NeverContactSource
+    - source: registry.redhat.io/rhtas/certificate-transparency-rhel9
+      mirrors:
+        - quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/rhtas-certificate-transparency
+      mirrorSourcePolicy: NeverContactSource
+    - source: registry.redhat.io/rhtas/createtree-rhel9
+      mirrors:
+        - quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/rhtas-createtree
+      mirrorSourcePolicy: NeverContactSource
+    - source: registry.redhat.io/rhtas/fulcio-rhel9
+      mirrors:
+        - quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/rhtas-fulcio
+      mirrorSourcePolicy: NeverContactSource
+    - source: registry.redhat.io/rhtas/rekor-backfill-redis-rhel9
+      mirrors:
+        - quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/rhtas-rekor-backfill
+      mirrorSourcePolicy: NeverContactSource
+    - source: registry.redhat.io/rhtas/rekor-search-ui-rhel9
+      mirrors:
+        - quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/rhtas-rekor-search-ui
+      mirrorSourcePolicy: NeverContactSource
+    - source: registry.redhat.io/rhtas/rekor-server-rhel9
+      mirrors:
+        - quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/rhtas-rekor-server
+      mirrorSourcePolicy: NeverContactSource
+    - source: registry.redhat.io/rhtas/trillian-database-rhel9
+      mirrors:
+        - quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/rhtas-trillian-database
+      mirrorSourcePolicy: NeverContactSource
+    - source: registry.redhat.io/rhtas/trillian-logserver-rhel9
+      mirrors:
+        - quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/rhtas-trillian-logserver
+      mirrorSourcePolicy: NeverContactSource
+    - source: registry.redhat.io/rhtas/trillian-logsigner-rhel9
+      mirrors:
+        - quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/rhtas-trillian-logsigner
+      mirrorSourcePolicy: NeverContactSource
+    - source: registry.redhat.io/rhtas/trillian-redis-rhel9
+      mirrors:
+        - quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/rhtas-trillian-redis
+      mirrorSourcePolicy: NeverContactSource
+    - source: registry.redhat.io/rhtas/tuffer-rhel9
+      mirrors:
+        - quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/rhtas-tuffer
+      mirrorSourcePolicy: NeverContactSource
+    - source: registry.redhat.io/ubi9/httpd-24
+      mirrors:
+        - quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/rhtas-tuf-httpd
+      mirrorSourcePolicy: NeverContactSource
+    - source: registry.redhat.io/openshift4/ose-tools-rhel9
+      mirrors:
+        - quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/ose-tools
+      mirrorSourcePolicy: NeverContactSource
