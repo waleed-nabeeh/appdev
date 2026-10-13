@@ -5,13 +5,13 @@ destinationServer: https://kubernetes.default.svc
 applications:
   vault:
     namespace: infra-platforms
-    path: charts/vault
+    path: RedHat_HelmCharts/charts/vault
     releaseName: vault
     valueFiles:
       - values-customer.yaml
   rhtas:
     namespace: infra-platforms
-    path: charts/rhtas
+    path: RedHat_HelmCharts/charts/rhtas
     releaseName: rhtas
     valueFiles:
       - values.yaml
