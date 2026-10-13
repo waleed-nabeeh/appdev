@@ -8,7 +8,7 @@ applications:
     path: RedHat_HelmCharts/charts/vault
     releaseName: vault
     valueFiles:
-      - values-customer.yaml
+      - values-demo.yaml
   rhtas:
     namespace: infra-platforms
     path: RedHat_HelmCharts/charts/rhtas
