@@ -1,5 +1,5 @@
-repository: REPLACE_INTERNAL_GIT_URL
-revision: REPLACE_BRANCH
+repository: https://github.com/waleed-nabeeh/appdev.git
+revision: develop
 project: customer-platform
 destinationServer: https://kubernetes.default.svc
 applications:
