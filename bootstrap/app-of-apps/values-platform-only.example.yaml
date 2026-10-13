@@ -1,0 +1,44 @@
+# Use by itself with chart defaults, not merged with values-demo.yaml.
+default:
+  app:
+    project: customer-platform
+    source:
+      repoURL: CUSTOMER_GITOPS_REPOSITORY_URL
+      targetRevision: CUSTOMER_GITOPS_BRANCH
+    enableAutoSync: false
+    autoSyncPrune: false
+    syncOptions:
+      - CreateNamespace=true
+projects:
+  customer-platform:
+    description: Vault and RHTAS platform services
+    sourceRepos:
+      - CUSTOMER_GITOPS_REPOSITORY_URL
+    destinations: |
+      - namespace: vault
+        server: https://kubernetes.default.svc
+      - namespace: trusted-artifact-signer
+        server: https://kubernetes.default.svc
+    extraFields: |
+      clusterResourceWhitelist:
+        - group: rbac.authorization.k8s.io
+          kind: ClusterRoleBinding
+applications:
+  vault:
+    destination:
+      namespace: vault
+    source:
+      path: platform/vault/chart
+      extraSourceFields: |
+        helm:
+          valueFiles:
+            - values-customer.yaml
+  rhtas:
+    destination:
+      namespace: trusted-artifact-signer
+    source:
+      path: platform/rhtas/chart
+      extraSourceFields: |
+        helm:
+          valueFiles:
+            - values-customer.yaml
