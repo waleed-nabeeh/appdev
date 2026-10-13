@@ -18,11 +18,11 @@ server:
   dataStorage:
     enabled: true
     size: 20Gi
-    storageClass: APPROVED_RWO_STORAGE_CLASS
+    storageClass: ocs-external-storagecluster-ceph-rbd
   auditStorage:
     enabled: true
     size: 10Gi
-    storageClass: APPROVED_RWO_STORAGE_CLASS
+    storageClass: ocs-external-storagecluster-ceph-rbd
   standalone:
     enabled: false
   ha:
