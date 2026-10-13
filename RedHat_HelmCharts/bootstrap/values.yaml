@@ -4,13 +4,13 @@ project: customer-platform
 destinationServer: https://kubernetes.default.svc
 applications:
   vault:
-    namespace: vault
+    namespace: infra-platforms
     path: charts/vault
     releaseName: vault
     valueFiles:
       - values-customer.yaml
   rhtas:
-    namespace: trusted-artifact-signer
+    namespace: infra-platforms
     path: charts/rhtas
     releaseName: rhtas
     valueFiles:
