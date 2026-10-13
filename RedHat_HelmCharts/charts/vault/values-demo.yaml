@@ -5,6 +5,7 @@ injector:
   enabled: false
 
 server:
+  affinity: {}
   image:
     repository: registry.connect.redhat.com/hashicorp/vault
     tag: 1.21.2-ubi
