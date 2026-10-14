@@ -13,6 +13,18 @@ spec:
       default: develop
     - name: dotnet-project
       type: string
+    - name: http-proxy
+      type: string
+      default: ""
+    - name: https-proxy
+      type: string
+      default: ""
+    - name: no-proxy
+      type: string
+      default: ""
+    - name: build-args
+      type: array
+      default: []
     - name: image
       type: string
     - name: build-context
@@ -62,6 +74,9 @@ spec:
       taskRef: {name: unit-test}
       params:
         - {name: project, value: $(params.dotnet-project)}
+        - {name: http-proxy, value: $(params.http-proxy)}
+        - {name: https-proxy, value: $(params.https-proxy)}
+        - {name: no-proxy, value: $(params.no-proxy)}
       workspaces:
         - {name: source, workspace: source}
     - name: build-image
@@ -71,6 +86,8 @@ spec:
         - {name: image, value: $(params.image)}
         - {name: context, value: $(params.build-context)}
         - {name: containerfile, value: $(params.containerfile)}
+        - name: build-args
+          value: ["$(params.build-args[*])"]
       workspaces:
         - {name: source, workspace: source}
         - {name: registry-auth, workspace: registry-auth}

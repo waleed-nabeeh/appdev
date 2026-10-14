@@ -41,17 +41,33 @@ spec:
   params:
     - name: project
       type: string
+    - name: http-proxy
+      type: string
+      default: ""
+    - name: https-proxy
+      type: string
+      default: ""
+    - name: no-proxy
+      type: string
+      default: ""
   workspaces:
     - name: source
   steps:
     - name: test
       image: {{ .Values.images.dotnet }}
       workingDir: $(workspaces.source.path)/source
+      env:
+        - name: HTTP_PROXY
+          value: $(params.http-proxy)
+        - name: HTTPS_PROXY
+          value: $(params.https-proxy)
+        - name: NO_PROXY
+          value: $(params.no-proxy)
       script: |
         #!/usr/bin/env bash
         set -euo pipefail
         echo "Starting NuGet restore for $(params.project)"
-        dotnet restore "$(params.project)" --verbosity normal
+        dotnet restore "$(params.project)" --disable-parallel --verbosity normal
         echo "Starting tests for $(params.project)"
         dotnet test "$(params.project)" --no-restore --configuration Release --logger "console;verbosity=normal"
 ---
