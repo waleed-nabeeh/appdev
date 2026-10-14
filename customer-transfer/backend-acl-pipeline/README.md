@@ -24,7 +24,7 @@ PVC name, source repository URL, and GitOps repository/revision. Keep the
 pipeline run in the namespace where the centralized pipeline is installed.
 The namespace must contain these existing secret contracts:
 
-- `git-credentials`: `id_ed25519`, `known_hosts`, and `ssh_config`
+- `git-credentials`: `.git-credentials` for Azure DevOps HTTPS access
 - `registry-auth`: Docker `config.json` for the target Quay registry
 - `rhacs-auth`: RHACS `endpoint` and `token`
 
