@@ -38,6 +38,7 @@ kind: Task
 metadata:
   name: unit-test
 spec:
+  timeout: 30m
   params:
     - name: project
       type: string
@@ -50,8 +51,10 @@ spec:
       script: |
         #!/usr/bin/env bash
         set -euo pipefail
-        dotnet restore "$(params.project)"
-        dotnet test "$(params.project)" --no-restore --configuration Release
+        echo "Starting NuGet restore for $(params.project)"
+        dotnet restore "$(params.project)" --verbosity normal
+        echo "Starting tests for $(params.project)"
+        dotnet test "$(params.project)" --no-restore --configuration Release --logger "console;verbosity=normal"
 ---
 apiVersion: tekton.dev/v1
 kind: Task
