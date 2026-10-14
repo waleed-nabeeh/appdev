@@ -35,7 +35,7 @@ spec:
   workspaces:
     - name: source
       persistentVolumeClaim:
-        claimName: <source-pvc-name>
+        claimName: pipeline
     - name: git-credentials
       secret:
         secretName: git-credentials
