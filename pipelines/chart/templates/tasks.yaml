@@ -38,7 +38,6 @@ kind: Task
 metadata:
   name: unit-test
 spec:
-  timeout: 30m
   params:
     - name: project
       type: string
