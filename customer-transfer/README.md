@@ -14,7 +14,7 @@ All Git operations use Azure DevOps. No credentials belong in this folder.
 ## 1. Check the pipeline namespace
 
 ```bash
-oc project customer-cicd
+oc project devops
 oc get pipeline application-release
 oc get sa pipeline
 ```
@@ -32,7 +32,7 @@ ssh-keyscan azuredevops.mofa.gov.sa > known_hosts
 Create or update the OpenShift secret securely:
 
 ```bash
-oc -n customer-cicd create secret generic git-credentials \
+oc -n devops create secret generic git-credentials \
   --from-file=id_ed25519=redhat-azuredevops \
   --from-file=known_hosts=known_hosts \
   --from-file=ssh_config=ssh_config \
@@ -53,7 +53,7 @@ Create an approved Quay robot account with push/pull permission, then create
 the secret without committing the token:
 
 ```bash
-oc -n customer-cicd create secret docker-registry registry-auth \
+oc -n devops create secret docker-registry registry-auth \
   --docker-server=<quay-host> \
   --docker-username='<robot-user>' \
   --docker-password='<robot-token>' \
@@ -66,7 +66,7 @@ In RHACS open **Platform Configuration > Integrations > Authentication
 Tokens**, create a minimum-permission CI/CD token, and store it securely.
 
 ```bash
-oc -n customer-cicd create secret generic rhacs-auth \
+oc -n devops create secret generic rhacs-auth \
   --from-literal=endpoint='<acs-endpoint>' \
   --from-literal=token='<acs-token>' \
   --dry-run=client -o yaml | oc apply -f -
@@ -80,8 +80,8 @@ The ready example is in `backend-acl-pipeline/`:
 
 ```bash
 oc create -f backend-acl-pipeline/pipelinerun-acl-validation.yaml
-oc get pipelineruns -n customer-cicd
-oc describe pipelinerun -n customer-cicd <run-name>
+oc get pipelineruns -n devops
+oc describe pipelinerun -n devops <run-name>
 ```
 
 Source repository:

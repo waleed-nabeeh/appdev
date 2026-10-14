@@ -1,23 +1,23 @@
 # ACL service full pipeline validation
 
-This bundle runs the existing `application-release` Tekton pipeline for the
+This bundle runs the existing `application-release` Tekton pipeline in the
 `RedHat_UnifiedVisaPlatform.Backend` ACL service. It executes clone, .NET unit test, Buildah image build,
 RHACS scan, security gate, RHTAS signing, and stops before GitOps write-back.
 
 ## Apply
 
 ```bash
-oc apply -f pipelinerun-acl-validation.yaml
-oc get pipelineruns -n customer-cicd --sort-by=.metadata.creationTimestamp
-oc describe pipelinerun -n customer-cicd <run-name>
-oc logs -n customer-cicd -l tekton.dev/pipelineRun=<run-name> --all-containers=true -f
+oc create -f pipelinerun-acl-validation.yaml
+oc get pipelineruns -n devops --sort-by=.metadata.creationTimestamp
+oc describe pipelinerun -n devops <run-name>
+oc logs -n devops -l tekton.dev/pipelineRun=<run-name> --all-containers=true -f
 ```
 
 The source revision is `test`. The target image is pushed to the demo Quay
 route using the existing `registry-auth` secret. GitOps update is deliberately
 disabled for validation.
 
-## Required customer-side adjustments
+## Required target-environment adjustments
 
 Before applying in the customer environment, replace the demo image route,
 PVC name, source repository URL, and GitOps repository/revision. Keep the
@@ -33,7 +33,7 @@ existing pipeline service account must be authorized to use these secrets.
 
 ## Demo validation result
 
-The run `acl-service-full-vd6df` was created successfully in the demo cluster,
+The earlier demo run `acl-service-full-vd6df` was created successfully,
 but the clone task stopped with exit code 128 because the demo cluster could
 not resolve `azuredevops.mofa.gov.sa`. No unit-test, build, scan, gate, or
 signing task was executed after that dependency failure. Run this same manifest
