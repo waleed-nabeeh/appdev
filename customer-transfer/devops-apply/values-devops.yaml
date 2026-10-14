@@ -1,9 +1,9 @@
 # Target-environment Helm values for the centralized pipeline chart.
 images:
-  git: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/alpine-git:pipeline-a4bb51f1
+  git: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/alpine-git:2026-10-07
   dotnet: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/dotnet-100:10.0
-  buildah: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/buildah:tested-ad3ac00d
-  skopeo: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/skopeo:tested-4a6e11df
+  buildah: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/buildah:ocp4.22
+  skopeo: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/skopeo:ocp4.22
   rhacs: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/rhacs-roxctl:4.11.4
   rhtasClientServer: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/rhtas-client-server:1.4.3
 
