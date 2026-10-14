@@ -23,8 +23,7 @@ Use minimum approved permissions. Do not commit these values.
 
 ## 2. Install the pipeline and tasks
 
-From the `appdev` repository root, first replace the image placeholders in
-`values-devops.yaml` with approved mirrored image references. Then run:
+From the `appdev` repository root, run:
 
 ```bash
 oc project devops

@@ -1,12 +1,11 @@
 # Target-environment Helm values for the centralized pipeline chart.
-# Replace image digests with the approved mirrored images before applying.
 images:
-  git: docker.io/alpine/git:latest
-  dotnet: registry.access.redhat.com/ubi9/dotnet-100:latest
-  buildah: registry.redhat.io/rhel9/buildah:latest
-  skopeo: registry.redhat.io/rhel9/skopeo:latest
-  rhacs: registry.redhat.io/advanced-cluster-security/rhacs-roxctl-rhel9:4.11
-  rhtasClientServer: registry.redhat.io/rhtas/client-server-rhel9@sha256:3d08a27f79bda1f19369786723cb8d1e130c3d46cbb8a7f44e30571d5a213240
+  git: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/alpine-git:pipeline-a4bb51f1
+  dotnet: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/dotnet-100:10.0
+  buildah: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/buildah:tested-ad3ac00d
+  skopeo: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/skopeo:tested-4a6e11df
+  rhacs: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/rhacs-roxctl:4.11.4
+  rhtasClientServer: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/rhtas-client-server:1.4.3
 
 rhtas:
   audience: trusted-artifact-signer
