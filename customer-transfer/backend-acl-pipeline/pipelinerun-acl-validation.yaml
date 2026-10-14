@@ -1,0 +1,44 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: acl-service-full-
+  namespace: customer-cicd
+  labels:
+    app.kubernetes.io/part-of: customer-application-validation
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/name: acl-service
+spec:
+  pipelineRef:
+    name: application-release
+  serviceAccountName: pipeline
+  params:
+    - name: source-url
+      value: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Backend
+    - name: source-revision
+      value: test
+    - name: dotnet-project
+      value: services/acl/MOFA.UnifiedVisaPlatform.ACL/MOFA.UnifiedVisaPlatform.ACL.csproj
+    - name: image
+      value: demo-registry-quay-quay-enterprise.apps.cluster-zmzbt.dyn.redhatworkshops.io/customer/acl-service:validation
+    - name: build-context
+      value: .
+    - name: containerfile
+      value: services/acl/MOFA.UnifiedVisaPlatform.ACL/Dockerfile
+    - name: gitops-url
+      value: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_HelmCharts
+    - name: gitops-revision
+      value: test-repo
+    - name: values-file
+      value: development/apps/core-apps.yaml
+    - name: perform-gitops-update
+      value: "false"
+  workspaces:
+    - name: source
+      persistentVolumeClaim:
+        claimName: pvc-0412592e3a
+    - name: git-credentials
+      secret:
+        secretName: git-credentials
+    - name: registry-auth
+      secret:
+        secretName: registry-auth
