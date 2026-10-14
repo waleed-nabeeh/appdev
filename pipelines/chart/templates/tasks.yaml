@@ -26,6 +26,9 @@ spec:
         if [ "$(workspaces.git-credentials.bound)" = "true" ]; then
           cp -R "$(workspaces.git-credentials.path)"/. "$HOME"/
           chmod -R go-rwx "$HOME"
+          if [ -f "$HOME/.git-credentials" ]; then
+            git config --global credential.helper store
+          fi
         fi
         git clone --branch "$(params.revision)" --single-branch \
           "$(params.url)" "$(workspaces.source.path)/source"
@@ -64,6 +67,9 @@ spec:
     - name: containerfile
       type: string
       default: Containerfile
+    - name: build-args
+      type: array
+      default: []
   results:
     - name: image-digest
     - name: image-url
@@ -77,10 +83,17 @@ spec:
         capabilities:
           add: [SETFCAP]
       workingDir: $(workspaces.source.path)/source
+      args: ["$(params.build-args[*])"]
       script: |
         #!/usr/bin/env bash
         set -euo pipefail
+        build_args=()
+        for argument in "$@"; do
+          build_args+=(--build-arg "$argument")
+        done
         buildah --storage-driver=vfs bud \
+          --authfile "$(workspaces.registry-auth.path)/config.json" \
+          "${build_args[@]}" \
           -f "$(params.containerfile)" -t "$(params.image)" "$(params.context)"
         digest=$(buildah --storage-driver=vfs push \
           --authfile "$(workspaces.registry-auth.path)/config.json" \
@@ -327,6 +340,9 @@ spec:
           export GIT_SSH_COMMAND="ssh -F $HOME/.ssh/config -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
         else
           cp -R "$(workspaces.git-credentials.path)"/. "$HOME"/
+          if [ -f "$HOME/.git-credentials" ]; then
+            git config --global credential.helper store
+          fi
         fi
         chmod -R go-rwx "$HOME"
         git config --global user.name "Customer Pipeline"

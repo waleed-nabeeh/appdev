@@ -21,31 +21,31 @@ oc get sa pipeline
 
 ## 2. Prepare Azure DevOps credentials
 
-Create an approved service-account SSH key, add its public key to Azure DevOps,
-and prepare the known-hosts file:
+Create an approved Azure DevOps service identity and PAT with minimum Code read
+permission. Do not commit the PAT or place it in YAML:
 
 ```bash
-ssh-keygen -t ed25519 -f redhat-azuredevops -C redhat-pipeline
-ssh-keyscan azuredevops.mofa.gov.sa > known_hosts
+printf 'https://<user>:<pat>@azuredevops.mofa.gov.sa\n' > .git-credentials
+chmod 600 .git-credentials
 ```
 
-Create or update the OpenShift secret securely:
+Create or update the OpenShift secret securely, then remove the local file:
 
 ```bash
 oc -n devops create secret generic git-credentials \
-  --from-file=id_ed25519=redhat-azuredevops \
-  --from-file=known_hosts=known_hosts \
-  --from-file=ssh_config=ssh_config \
+  --from-file=.git-credentials=.git-credentials \
   --dry-run=client -o yaml | oc apply -f -
+rm -f .git-credentials
 ```
 
-Required keys:
+Required key:
 
 ```text
-id_ed25519
-known_hosts
-ssh_config
+.git-credentials
 ```
+
+The pipeline configures Git's credential-store helper for Azure DevOps clone
+and Helm values write-back.
 
 ## 3. Prepare the Quay secret
 
