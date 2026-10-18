@@ -20,6 +20,15 @@ spec:
     - name: build-args
       type: array
       default: []
+    - name: http-proxy
+      type: string
+      default: ""
+    - name: https-proxy
+      type: string
+      default: ""
+    - name: no-proxy
+      type: string
+      default: ""
     - name: fulcio-url
       type: string
     - name: rekor-url
