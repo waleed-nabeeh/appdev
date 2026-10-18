@@ -88,6 +88,15 @@ spec:
     - name: build-args
       type: array
       default: []
+    - name: http-proxy
+      type: string
+      default: ""
+    - name: https-proxy
+      type: string
+      default: ""
+    - name: no-proxy
+      type: string
+      default: ""
   results:
     - name: image-digest
     - name: image-url
@@ -101,6 +110,19 @@ spec:
         capabilities:
           add: [SETFCAP]
       workingDir: $(workspaces.source.path)/source
+      env:
+        - name: HTTP_PROXY
+          value: $(params.http-proxy)
+        - name: HTTPS_PROXY
+          value: $(params.https-proxy)
+        - name: NO_PROXY
+          value: $(params.no-proxy)
+        - name: http_proxy
+          value: $(params.http-proxy)
+        - name: https_proxy
+          value: $(params.https-proxy)
+        - name: no_proxy
+          value: $(params.no-proxy)
       args: ["$(params.build-args[*])"]
       script: |
         #!/usr/bin/env bash

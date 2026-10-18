@@ -59,6 +59,12 @@ spec:
           value: $(params.containerfile)
         - name: build-args
           value: ["$(params.build-args[*])"]
+        - name: http-proxy
+          value: $(params.http-proxy)
+        - name: https-proxy
+          value: $(params.https-proxy)
+        - name: no-proxy
+          value: $(params.no-proxy)
       workspaces:
         - name: source
           workspace: source
@@ -127,6 +133,12 @@ spec:
         - HTTPS_PROXY=http://172.24.223.254:8080
         - NO_PROXY=.mofa.gov.sa
         - CERT_KEYWORD=dev
+    - name: http-proxy
+      value: http://172.24.223.254:8080
+    - name: https-proxy
+      value: http://172.24.223.254:8080
+    - name: no-proxy
+      value: .mofa.gov.sa
     - name: fulcio-url
       value: https://fulcio-server-trusted-artifact-signer.apps.hub-visa-ocp.mofa.gov.sa
     - name: rekor-url

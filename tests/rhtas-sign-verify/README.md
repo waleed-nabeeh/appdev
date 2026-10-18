@@ -37,7 +37,22 @@ Then update backend Dockerfiles to use:
 ```dockerfile
 FROM quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/ubi-aspnet:10.0 AS base
 FROM quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/ubi-sdk:10.0 AS build
+
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ENV HTTP_PROXY=${HTTP_PROXY}
+ENV HTTPS_PROXY=${HTTPS_PROXY}
+ENV NO_PROXY=${NO_PROXY}
+ENV http_proxy=${HTTP_PROXY}
+ENV https_proxy=${HTTPS_PROXY}
+ENV no_proxy=${NO_PROXY}
+USER 0
 ```
+
+The pipeline passes these proxy parameters to the build task and as Docker build
+arguments. Keep the `ARG` and `ENV` lines before `dotnet restore` so NuGet can
+reach Azure Artifacts and `nuget.org`.
 
 ## 2. Run the signing test
 

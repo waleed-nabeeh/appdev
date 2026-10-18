@@ -25,6 +25,15 @@ spec:
     - name: build-args
       type: array
       default: []
+    - name: http-proxy
+      type: string
+      default: ""
+    - name: https-proxy
+      type: string
+      default: ""
+    - name: no-proxy
+      type: string
+      default: ""
     - name: image
       type: string
     - name: build-context
@@ -88,6 +97,9 @@ spec:
         - {name: containerfile, value: $(params.containerfile)}
         - name: build-args
           value: ["$(params.build-args[*])"]
+        - {name: http-proxy, value: $(params.http-proxy)}
+        - {name: https-proxy, value: $(params.https-proxy)}
+        - {name: no-proxy, value: $(params.no-proxy)}
       workspaces:
         - {name: source, workspace: source}
         - {name: registry-auth, workspace: registry-auth}
