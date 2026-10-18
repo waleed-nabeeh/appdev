@@ -39,6 +39,12 @@ spec:
       type: string
     - name: client-url
       type: string
+    - name: certificate-identity-regexp
+      type: string
+      default: ^https://kubernetes.io/namespaces/devops/serviceaccounts/pipeline$
+    - name: certificate-oidc-issuer
+      type: string
+      default: https://kubernetes.default.svc
   workspaces:
     - name: source
     - name: git-credentials
@@ -112,6 +118,24 @@ spec:
           value: $(params.tuf-url)
         - name: client-url
           value: $(params.client-url)
+      workspaces:
+        - name: registry-auth
+          workspace: registry-auth
+    - name: verify-image
+      runAfter: [sign-image]
+      taskRef:
+        name: verify-image
+      params:
+        - name: image
+          value: $(tasks.build-image.results.image-url)
+        - name: tuf-url
+          value: $(params.tuf-url)
+        - name: client-url
+          value: $(params.client-url)
+        - name: certificate-identity-regexp
+          value: $(params.certificate-identity-regexp)
+        - name: certificate-oidc-issuer
+          value: $(params.certificate-oidc-issuer)
       workspaces:
         - name: registry-auth
           workspace: registry-auth

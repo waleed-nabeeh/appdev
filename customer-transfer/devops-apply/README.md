@@ -59,12 +59,20 @@ gate, and RHTAS signing. GitOps write-back is disabled.
 
 ## 5. Temporary build-only diagnostic
 
-To test clone, unit tests, image build, and signing without RHACS scan or GitOps
-write-back, create the separate diagnostic PipelineRun:
+To test clone, unit tests, image build, signing, and signature verification
+without RHACS scan or GitOps write-back, apply the diagnostic Pipeline and
+create a fresh PipelineRun from the two documents in the manifest (`yq` is
+required):
 
 ```bash
-oc create -f customer-transfer/devops-apply/build-only-validation.yaml
+yq eval 'select(.kind == "Pipeline")' customer-transfer/devops-apply/build-only-validation.yaml | oc apply -f -
+yq eval 'select(.kind == "PipelineRun")' customer-transfer/devops-apply/build-only-validation.yaml | oc create -f -
 ```
+
+The verification Task checks the image digest produced by this run against the
+signature from the preceding signing Task. Its expected certificate identity
+defaults to the `pipeline` service account in `devops`; adjust the Pipeline
+parameters if a different service account or issuer is used.
 
 The `sign-image` and `verify-image` Tasks accept either `config.json` or
 `.dockerconfigjson` in the `registry-auth` Secret. Buildah uses this Secret to
