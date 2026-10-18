@@ -109,12 +109,17 @@ spec:
         for argument in "$@"; do
           build_args+=(--build-arg "$argument")
         done
+        authfile="$(workspaces.registry-auth.path)/config.json"
+        if [ ! -f "$authfile" ] && [ -f "$(workspaces.registry-auth.path)/.dockerconfigjson" ]; then
+          authfile="$(workspaces.registry-auth.path)/.dockerconfigjson"
+        fi
+        test -f "$authfile"
         buildah --storage-driver=vfs bud \
-          --authfile "$(workspaces.registry-auth.path)/config.json" \
+          --authfile "$authfile" \
           "${build_args[@]}" \
           -f "$(params.containerfile)" -t "$(params.image)" "$(params.context)"
         digest=$(buildah --storage-driver=vfs push \
-          --authfile "$(workspaces.registry-auth.path)/config.json" \
+          --authfile "$authfile" \
           --digestfile /tmp/digest \
           "$(params.image)" "docker://$(params.image)" && cat /tmp/digest)
         printf '%s' "$digest" > "$(results.image-digest.path)"
@@ -272,8 +277,13 @@ spec:
         #!/usr/bin/env bash
         set -euo pipefail
         image="$(params.repository):$(params.tag)"
+        authfile="$(workspaces.registry-auth.path)/config.json"
+        if [ ! -f "$authfile" ] && [ -f "$(workspaces.registry-auth.path)/.dockerconfigjson" ]; then
+          authfile="$(workspaces.registry-auth.path)/.dockerconfigjson"
+        fi
+        test -f "$authfile"
         digest="$(skopeo inspect \
-          --authfile "$(workspaces.registry-auth.path)/config.json" \
+          --authfile "$authfile" \
           --format '{{`{{.Digest}}`}}' "docker://${image}")"
         test -n "$digest"
         printf '%s' "$digest" > "$(results.image-digest.path)"

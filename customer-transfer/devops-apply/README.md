@@ -9,7 +9,7 @@ Create these secrets in namespace `devops`:
 
 ```text
 git-credentials: key `.git-credentials`
-registry-auth:   key `config.json`
+registry-auth:   key `config.json` or `.dockerconfigjson`
 rhacs-auth:      keys `endpoint`, `token`
 ```
 
