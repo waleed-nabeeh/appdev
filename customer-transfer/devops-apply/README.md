@@ -57,19 +57,23 @@ oc describe pipelinerun -n devops <run-name>
 The first run performs clone, .NET test, image build, RHACS scan, security
 gate, and RHTAS signing. GitOps write-back is disabled.
 
-## 5. Image tag location
+## 5. Temporary build-only diagnostic
 
-## Temporary build-only diagnostic
-
-To test the build while the NuGet unit-test task is being investigated, create
-the separate build-only manifest:
+To test clone, unit tests, image build, and signing without RHACS scan or GitOps
+write-back, create the separate diagnostic PipelineRun:
 
 ```bash
 oc create -f customer-transfer/devops-apply/build-only-validation.yaml
 ```
 
-The build-only run does not execute unit tests and does not update Helm or
-deploy through ArgoCD. Remove the temporary Pipeline after validation:
+The `sign-image` and `verify-image` Tasks accept either `config.json` or
+`.dockerconfigjson` in the `registry-auth` Secret. Buildah uses this Secret to
+push; Cosign needs the same credentials to read the image manifest from Quay
+before signing. After updating the chart, rerun the Helm command in section 2
+and create a new PipelineRun. Existing TaskRuns do not use the updated Task.
+
+The diagnostic run does not update Helm or deploy through ArgoCD. Remove the
+temporary Pipeline after validation:
 
 ```bash
 oc delete pipeline application-build-only-validation -n devops

@@ -243,12 +243,21 @@ spec:
       env:
         - name: HOME
           value: /tekton/home
-        - name: DOCKER_CONFIG
-          value: $(workspaces.registry-auth.path)
       computeResources: {}
       script: |
         #!/usr/bin/env bash
         set -euo pipefail
+        authfile="$(workspaces.registry-auth.path)/config.json"
+        if [ ! -f "$authfile" ] && [ -f "$(workspaces.registry-auth.path)/.dockerconfigjson" ]; then
+          authfile="$(workspaces.registry-auth.path)/.dockerconfigjson"
+        fi
+        if [ ! -s "$authfile" ]; then
+          echo "registry-auth must contain config.json or .dockerconfigjson" >&2
+          exit 1
+        fi
+        export DOCKER_CONFIG="$(mktemp -d)"
+        cp "$authfile" "$DOCKER_CONFIG/config.json"
+        chmod 600 "$DOCKER_CONFIG/config.json"
         curl --fail --silent --show-error --location \
           "$(params.client-url)/clients/linux/cosign-amd64.gz" \
           --output /tmp/rhtas-cosign.gz
@@ -335,11 +344,20 @@ spec:
       env:
         - name: HOME
           value: /tekton/home
-        - name: DOCKER_CONFIG
-          value: $(workspaces.registry-auth.path)
       script: |
         #!/usr/bin/env bash
         set -euo pipefail
+        authfile="$(workspaces.registry-auth.path)/config.json"
+        if [ ! -f "$authfile" ] && [ -f "$(workspaces.registry-auth.path)/.dockerconfigjson" ]; then
+          authfile="$(workspaces.registry-auth.path)/.dockerconfigjson"
+        fi
+        if [ ! -s "$authfile" ]; then
+          echo "registry-auth must contain config.json or .dockerconfigjson" >&2
+          exit 1
+        fi
+        export DOCKER_CONFIG="$(mktemp -d)"
+        cp "$authfile" "$DOCKER_CONFIG/config.json"
+        chmod 600 "$DOCKER_CONFIG/config.json"
         curl --fail --silent --show-error --location \
           "$(params.client-url)/clients/linux/cosign-amd64.gz" \
           --output /tmp/rhtas-cosign-verify.gz
