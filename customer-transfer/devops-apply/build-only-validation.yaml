@@ -1,0 +1,147 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: application-build-only-validation
+  namespace: devops
+spec:
+  params:
+    - name: source-url
+      type: string
+    - name: source-revision
+      type: string
+    - name: image
+      type: string
+    - name: build-context
+      type: string
+      default: .
+    - name: containerfile
+      type: string
+      default: Containerfile
+    - name: build-args
+      type: array
+      default: []
+    - name: fulcio-url
+      type: string
+    - name: rekor-url
+      type: string
+    - name: tuf-url
+      type: string
+    - name: client-url
+      type: string
+  workspaces:
+    - name: source
+    - name: git-credentials
+    - name: registry-auth
+  tasks:
+    - name: clone
+      taskRef:
+        name: clone
+      params:
+        - name: url
+          value: $(params.source-url)
+        - name: revision
+          value: $(params.source-revision)
+      workspaces:
+        - name: source
+          workspace: source
+        - name: git-credentials
+          workspace: git-credentials
+    - name: build-image
+      runAfter: [clone]
+      taskRef:
+        name: build-image
+      params:
+        - name: image
+          value: $(params.image)
+        - name: context
+          value: $(params.build-context)
+        - name: containerfile
+          value: $(params.containerfile)
+        - name: build-args
+          value: ["$(params.build-args[*])"]
+      workspaces:
+        - name: source
+          workspace: source
+        - name: registry-auth
+          workspace: registry-auth
+    - name: scan-image
+      runAfter: [build-image]
+      taskRef:
+        name: scan-image
+      params:
+        - name: image
+          value: $(tasks.build-image.results.image-url)
+        - name: fulcio-url
+          value: $(params.fulcio-url)
+        - name: rekor-url
+          value: $(params.rekor-url)
+        - name: tuf-url
+          value: $(params.tuf-url)
+        - name: client-url
+          value: $(params.client-url)
+    - name: security-gate
+      runAfter: [scan-image]
+      taskRef:
+        name: security-gate
+      params:
+        - name: image
+          value: $(tasks.build-image.results.image-url)
+    - name: sign-image
+      runAfter: [security-gate]
+      taskRef:
+        name: sign-image
+      params:
+        - name: image
+          value: $(tasks.build-image.results.image-url)
+      workspaces:
+        - name: registry-auth
+          workspace: registry-auth
+---
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: acl-build-only-
+  namespace: devops
+  labels:
+    app.kubernetes.io/part-of: customer-application-validation
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/name: acl-service
+spec:
+  pipelineRef:
+    name: application-build-only-validation
+  serviceAccountName: pipeline
+  params:
+    - name: source-url
+      value: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Backend
+    - name: source-revision
+      value: test
+    - name: image
+      value: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/acl-service:build-only
+    - name: build-context
+      value: .
+    - name: containerfile
+      value: services/acl/MOFA.UnifiedVisaPlatform.ACL/Dockerfile
+    - name: build-args
+      value:
+        - HTTP_PROXY=http://172.24.223.254:8080
+        - HTTPS_PROXY=http://172.24.223.254:8080
+        - NO_PROXY=.mofa.gov.sa
+        - CERT_KEYWORD=dev
+    - name: fulcio-url
+      value: https://fulcio-server-trusted-artifact-signer.apps.hub-visa-ocp.mofa.gov.sa
+    - name: rekor-url
+      value: https://rekor-server-trusted-artifact-signer.apps.hub-visa-ocp.mofa.gov.sa
+    - name: tuf-url
+      value: https://tuf-trusted-artifact-signer.apps.hub-visa-ocp.mofa.gov.sa
+    - name: client-url
+      value: http://cli-server.trusted-artifact-signer.svc:8080
+  workspaces:
+    - name: source
+      persistentVolumeClaim:
+        claimName: pipeline
+    - name: git-credentials
+      secret:
+        secretName: git-credentials
+    - name: registry-auth
+      secret:
+        secretName: registry-auth

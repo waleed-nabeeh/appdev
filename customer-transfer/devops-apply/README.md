@@ -59,6 +59,24 @@ gate, and RHTAS signing. GitOps write-back is disabled.
 
 ## 5. Image tag location
 
+## Temporary build-only diagnostic
+
+To test the build while the NuGet unit-test task is being investigated, create
+the separate build-only manifest:
+
+```bash
+oc create -f customer-transfer/devops-apply/build-only-validation.yaml
+```
+
+The build-only run does not execute unit tests and does not update Helm or
+deploy through ArgoCD. Remove the temporary Pipeline after validation:
+
+```bash
+oc delete pipeline application-build-only-validation -n devops
+```
+
+## 6. Image tag location
+
 After approval, enable GitOps write-back and use this values file in the
 `RedHat_HelmCharts` repository:
 
