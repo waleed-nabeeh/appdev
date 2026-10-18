@@ -19,15 +19,15 @@ spec:
     - name: dotnet-project
       value: services/acl/MOFA.UnifiedVisaPlatform.ACL/MOFA.UnifiedVisaPlatform.ACL.csproj
     - name: http-proxy
-      value: http://172.24.223.254:8080
+      value: http://100.64.255.227:3128
     - name: https-proxy
-      value: http://172.24.223.254:8080
+      value: http://100.64.255.227:3128
     - name: no-proxy
       value: .mofa.gov.sa
     - name: build-args
       value:
-        - HTTP_PROXY=http://172.24.223.254:8080
-        - HTTPS_PROXY=http://172.24.223.254:8080
+        - HTTP_PROXY=http://100.64.255.227:3128
+        - HTTPS_PROXY=http://100.64.255.227:3128
         - NO_PROXY=.mofa.gov.sa
         - CERT_KEYWORD=dev
     - name: image
