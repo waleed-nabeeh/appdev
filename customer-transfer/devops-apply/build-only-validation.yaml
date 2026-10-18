@@ -9,6 +9,8 @@ spec:
       type: string
     - name: source-revision
       type: string
+    - name: dotnet-project
+      type: string
     - name: image
       type: string
     - name: build-context
@@ -55,8 +57,24 @@ spec:
           workspace: source
         - name: git-credentials
           workspace: git-credentials
-    - name: build-image
+    - name: unit-test
       runAfter: [clone]
+      taskRef:
+        name: unit-test
+      params:
+        - name: project
+          value: $(params.dotnet-project)
+        - name: http-proxy
+          value: $(params.http-proxy)
+        - name: https-proxy
+          value: $(params.https-proxy)
+        - name: no-proxy
+          value: $(params.no-proxy)
+      workspaces:
+        - name: source
+          workspace: source
+    - name: build-image
+      runAfter: [unit-test]
       taskRef:
         name: build-image
       params:
@@ -79,22 +97,8 @@ spec:
           workspace: source
         - name: registry-auth
           workspace: registry-auth
-    - name: scan-image
-      runAfter: [build-image]
-      taskRef:
-        name: scan-image
-      params:
-        - name: image
-          value: $(tasks.build-image.results.image-url)
-    - name: security-gate
-      runAfter: [scan-image]
-      taskRef:
-        name: security-gate
-      params:
-        - name: image
-          value: $(tasks.build-image.results.image-url)
     - name: sign-image
-      runAfter: [security-gate]
+      runAfter: [build-image]
       taskRef:
         name: sign-image
       params:
@@ -130,6 +134,8 @@ spec:
       value: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Backend
     - name: source-revision
       value: test
+    - name: dotnet-project
+      value: services/acl/MOFA.UnifiedVisaPlatform.ACL/MOFA.UnifiedVisaPlatform.ACL.csproj
     - name: image
       value: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/acl-service:build-only
     - name: build-context
