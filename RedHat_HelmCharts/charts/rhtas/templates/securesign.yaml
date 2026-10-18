@@ -17,6 +17,13 @@ spec:
       size: {{ .Values.storage.rekorSize }}
       storageClass: {{ .Values.storage.className }}
   tuf:
+    keys:
+      - name: rekor.pub
+      - name: ctfe.pub
+      - name: fulcio_v1.crt.pem
+      {{- if .Values.tsa.enabled }}
+      - name: tsa.certchain.pem
+      {{- end }}
     externalAccess:
       enabled: true
       host: tuf-trusted-artifact-signer.{{ .Values.domain }}

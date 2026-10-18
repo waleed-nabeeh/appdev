@@ -20,7 +20,8 @@ values-customer.yaml; upstream defaults alone are not the deployment profile.
 
 ## 1. Confirm prerequisites
 
-OpenShift GitOps and the approved RHTAS operator (demo baseline 1.4.3) must be
+OpenShift GitOps and the approved RHTAS operator (demo: 1.4.4, checked
+2026-10-18) must be
 installed with their matching dependencies mirrored. Operator/catalog images
 are not part of the 15-image list. Configure internal Git credentials, Quay pull
 credentials and CA trust outside this repository. Confirm RWO storage and
@@ -41,6 +42,9 @@ Edit before committing:
 - charts/vault/values-customer.yaml: both storage classes; confirm route hostname.
 - charts/rhtas/values.yaml: storage class, organization name/email; confirm domain
   and actual service-account OIDC issuer and discovery access.
+
+For the no-TSA RHTAS profile, follow
+`charts/rhtas/APPLY-NO-TSA.md` before syncing or installing the chart.
 
 The Hub domain and internal Vault repository are prefilled from the supplied
 Quay endpoint. Confirm them. Keep the Vault image tag 1.21.2-ubi. Disable injector
@@ -100,7 +104,7 @@ intended pipeline service account. Keyless signing does not require Vault keys.
 
 On 2026-10-13 the demo's three Vault nodes were upgraded to 1.21.2, unsealed,
 and confirmed as three Raft voters. A temporary KV v2 read/write test passed.
-Fresh RHTAS keyless signing and signature verification passed. The demo retains
-an older TSA deployment and a false CTLogAvailable condition despite successful
-signing. This is not proof of a clean no-TSA install or customer air-gap readiness.
+Fresh RHTAS keyless signing and signature verification passed in the working
+`trusted-artifact-signer` instance. It retains an older TSA deployment. This
+is not proof of a clean no-TSA install or customer air-gap readiness.
 The clean folder has been rendered/linted locally, not applied to the customer.
