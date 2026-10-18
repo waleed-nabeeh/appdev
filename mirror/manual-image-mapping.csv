@@ -4,8 +4,8 @@ pipeline,registry.redhat.io/rhel9/buildah@sha256:ad3ac00db8e39f9837e364d965d3605
 pipeline,registry.redhat.io/rhel9/skopeo@sha256:4a6e11dff9b438151056f5d3c3d3c040852d4138c7def4b56280d78a292c7ad9,release-engineering/skopeo,ocp4.22,yes
 pipeline,registry.redhat.io/advanced-cluster-security/rhacs-roxctl-rhel9@sha256:b407cb461e45116884598bd9c0d848388b6dd7805f7d11907a7a35958cadfcff,release-engineering/rhacs-roxctl,4.11.4,yes
 dotnet,registry.access.redhat.com/ubi9/dotnet-100@sha256:744226d7703123413cd58495e7395bf7e544dc035bd10486831bcc0ff5e808bb,base-images/dotnet-100,10.0,yes
-backend,central-quay-quay-enterprise.apps.visa-ocp-test-dev.mofa.gov.sa/s-sa-mofapipeline/uvp-nonprod/aspnet:10.0,devops/uvp-aspnet,10.0,yes
-backend,central-quay-quay-enterprise.apps.visa-ocp-test-dev.mofa.gov.sa/s-sa-mofapipeline/uvp-nonprod/sdk:10.0,devops/uvp-sdk,10.0,yes
+backend,registry.access.redhat.com/ubi9/dotnet-100-aspnet:10.0,devops/ubi-aspnet,10.0,yes
+backend,registry.access.redhat.com/ubi9/dotnet-100:10.0,devops/ubi-sdk,10.0,yes
 angular,registry.access.redhat.com/ubi9/nodejs-20@sha256:74cc7b1d13592b1e425074f434b90e470ab209da85fd1fdb8e6e9e4cabaec51a,base-images/nodejs,20,yes
 angular,registry.access.redhat.com/ubi9/nginx-124@sha256:da54bbccb61ef4c1229b501276e6af35878455471598426346bb3014571843ed,base-images/nginx,1.24,yes
 vault,registry.connect.redhat.com/hashicorp/vault:1.20.4-ubi,platform/vault,1.20.4-ubi,yes
