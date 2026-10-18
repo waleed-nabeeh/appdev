@@ -78,6 +78,13 @@ spec:
       params:
         - name: image
           value: $(tasks.build-image.results.image-url)
+    - name: sign-image
+      runAfter: [security-gate]
+      taskRef:
+        name: sign-image
+      params:
+        - name: image
+          value: $(tasks.build-image.results.image-url)
         - name: fulcio-url
           value: $(params.fulcio-url)
         - name: rekor-url
@@ -86,13 +93,6 @@ spec:
           value: $(params.tuf-url)
         - name: client-url
           value: $(params.client-url)
-    - name: sign-image
-      runAfter: [security-gate]
-      taskRef:
-        name: sign-image
-      params:
-        - name: image
-          value: $(tasks.build-image.results.image-url)
       workspaces:
         - name: registry-auth
           workspace: registry-auth
