@@ -23,6 +23,16 @@ skopeo inspect --authfile /secure/path/pullsecret.txt-quay \
   docker://quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/ubi9-ubi-minimal:rhtas-test-2026-10-14
 ```
 
+Mirror the backend runtime images with the same script and existing Quay auth file:
+
+```bash
+./mirror-image.sh central-quay-quay-enterprise.apps.visa-ocp-test-dev.mofa.gov.sa/s-sa-mofapipeline/uvp-nonprod/aspnet:10.0 quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/uvp-aspnet:10.0 /secure/path/pullsecret.txt-quay
+./mirror-image.sh central-quay-quay-enterprise.apps.visa-ocp-test-dev.mofa.gov.sa/s-sa-mofapipeline/uvp-nonprod/sdk:10.0 quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/uvp-sdk:10.0 /secure/path/pullsecret.txt-quay
+```
+
+Then update backend Dockerfiles to use `devops/uvp-aspnet:10.0` and
+`devops/uvp-sdk:10.0` before starting the build pipeline.
+
 ## 2. Run the signing test
 
 Run the direct signing test without executing the full application pipeline:
