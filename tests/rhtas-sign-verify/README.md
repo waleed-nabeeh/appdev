@@ -12,14 +12,14 @@ approved source and internal Quay credentials:
 ./mirror-image.sh \
   registry.redhat.io/ubi9/ubi-minimal@sha256:8eb2830d0936237fc13a1f2f7e45aecf90d69043380ad167fad0343632937f41 \
   quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/ubi9-ubi-minimal:rhtas-test-2026-10-14 \
-  /secure/path/pullsecret.txt-quay
+  ../../../pullsecret.txt-quay
 ```
 
 The target repository and tag can be changed, but signing must always use the
 immutable digest after the push. Confirm it with:
 
 ```bash
-skopeo inspect --authfile /secure/path/pullsecret.txt-quay \
+skopeo inspect --authfile ../../../pullsecret.txt-quay \
   docker://quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/ubi9-ubi-minimal:rhtas-test-2026-10-14
 ```
 
@@ -28,18 +28,18 @@ Quay auth file. These names are intentionally different from the old private
 `uvp-*` images:
 
 ```bash
-./mirror-image.sh registry.access.redhat.com/ubi9/dotnet-100-aspnet:10.0 quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/ubi-aspnet:10.0 /secure/path/pullsecret.txt-quay
-./mirror-image.sh registry.access.redhat.com/ubi9/dotnet-100:10.0 quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/ubi-sdk:10.0 /secure/path/pullsecret.txt-quay
-./mirror-image.sh registry.access.redhat.com/ubi9/nodejs-24:latest quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nodejs-24:ubi9 /secure/path/pullsecret.txt-quay
-./mirror-image.sh registry.access.redhat.com/ubi9/nginx-126:latest quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx-126:ubi9 /secure/path/pullsecret.txt-quay
+./mirror-image.sh registry.access.redhat.com/ubi9/dotnet-100-aspnet:10.0 quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/ubi-aspnet:10.0 ../../../pullsecret.txt-quay
+./mirror-image.sh registry.access.redhat.com/ubi9/dotnet-100:10.0 quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/ubi-sdk:10.0 ../../../pullsecret.txt-quay
+./mirror-image.sh registry.access.redhat.com/ubi9/nodejs-24:latest quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nodejs-24:ubi9 ../../../pullsecret.txt-quay
+./mirror-image.sh registry.access.redhat.com/ubi9/nginx-126:latest quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx-126:ubi9 ../../../pullsecret.txt-quay
 ```
 
 For closer version matching to the existing frontend bases, these public Docker
 Hub alternatives can also be mirrored:
 
 ```bash
-./mirror-image.sh docker.io/library/node:24-bookworm-slim quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nodejs:24-bookworm-slim /secure/path/pullsecret.txt-quay
-./mirror-image.sh docker.io/library/nginx:1.30.6 quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx:1.30.6 /secure/path/pullsecret.txt-quay
+./mirror-image.sh docker.io/library/node:24-bookworm-slim quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nodejs:24-bookworm-slim ../../../pullsecret.txt-quay
+./mirror-image.sh docker.io/library/nginx:1.30.6 quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx:1.30.6 ../../../pullsecret.txt-quay
 ```
 
 The Docker Hub Nginx tag is closer in version to the existing 1.30.3 image but
