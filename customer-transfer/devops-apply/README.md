@@ -12,6 +12,7 @@ git-credentials: key `.git-credentials`
 registry-auth:   key `config.json` or `.dockerconfigjson`
 rhacs-auth:      keys `endpoint`, `token`
 npm-auth:        key `NPM_TOKEN` (raw Azure Artifacts PAT for frontend builds)
+pipeline-proxy:  keys `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`
 ```
 
 The `.git-credentials` value is:
@@ -21,6 +22,19 @@ https://<azure-user>:<azure-pat>@azuredevops.mofa.gov.sa
 ```
 
 Use minimum approved permissions. Do not commit these values.
+
+The `pipeline-proxy` Secret is the single proxy configuration used by both
+backend and frontend test/build Tasks. Add the approved proxy endpoint(s) and
+the internal bypass list there; PipelineRuns do not take proxy parameters.
+RHTAS Fulcio, Rekor, TUF, client, and verification identity values are set once
+in `values-devops.yaml` and rendered into the shared signing Tasks.
+
+In the OpenShift console, select project `devops`, open **Workloads → Secrets**,
+choose **Create → Key/value secret**, name it `pipeline-proxy`, and add the three
+keys above with the platform-approved values. Save it before launching a run.
+Do not put proxy values in Git or PipelineRun YAML. Secret values are hidden from
+PipelineRun parameters, but remain readable to principals permitted to read
+Secrets in the namespace.
 
 ## 2. Install the pipeline and tasks
 
@@ -73,7 +87,7 @@ yq eval 'select(.kind == "PipelineRun")' customer-transfer/devops-apply/build-on
 The verification Task checks the image digest produced by this run against the
 signature from the preceding signing Task. Its expected certificate identity
 defaults to the `pipeline` service account in `devops`; adjust the Pipeline
-parameters if a different service account or issuer is used.
+chart values if a different service account or issuer is used.
 
 The `sign-image` and `verify-image` Tasks accept either `config.json` or
 `.dockerconfigjson` in the `registry-auth` Secret. Buildah uses this Secret to
@@ -111,8 +125,8 @@ WORKDIR /app
 # Keep the existing COPY and npm install steps below this point.
 ```
 
-The pipeline passes the proxy arguments and sets the proxy environment for
-Buildah. With `NO_PROXY=.mofa.gov.sa`, the internal Azure Artifacts npm feed
+The shared Tasks read the proxy values from `pipeline-proxy` and pass them as
+Buildah proxy build args. With `NO_PROXY=.mofa.gov.sa`, the internal Azure Artifacts npm feed
 (`azuredevops.mofa.gov.sa`) is reached directly; public npm registry requests
 use the proxy. Keep the feed URL and scoped package mappings in the Dockerfile's
 existing temporary `.npmrc` creation, and continue mounting `NPM_TOKEN` as
@@ -164,7 +178,11 @@ yq eval 'select(.kind == "PipelineRun")' customer-transfer/devops-apply/frontend
 
 This diagnostic runs the admin-portal unit tests, then the Dockerfile's `npm i`
 and `nx run admin-portal:build --configuration=dev`, and finally pushes, signs,
-and verifies the image. It does not run RHACS scan or GitOps write-back.
+and verifies the image. For this diagnostic, a frontend unit-test failure is
+non-blocking so the remaining stages can be tested; remove `onError: continue`
+from the frontend Pipeline after investigating/fixing the current test failure.
+The backend unit-test task remains blocking. This run does not run RHACS scan or
+GitOps write-back.
 
 ## 7. Image tag location
 

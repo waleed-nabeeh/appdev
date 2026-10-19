@@ -17,18 +17,6 @@ spec:
       default: develop
     - name: values-file
       type: string
-    - name: tuf-url
-      type: string
-      default: {{ .Values.rhtas.tufUrl | quote }}
-    - name: rhtas-client-url
-      type: string
-      default: {{ .Values.rhtas.clientUrl | quote }}
-    - name: certificate-identity-regexp
-      type: string
-      default: {{ .Values.rhtas.certificateIdentityRegexp | quote }}
-    - name: certificate-oidc-issuer
-      type: string
-      default: {{ .Values.rhtas.certificateOidcIssuer | quote }}
   workspaces:
     - name: registry-auth
     - name: git-credentials
@@ -47,10 +35,6 @@ spec:
         name: verify-image
       params:
         - {name: image, value: $(tasks.get-approved-image.results.image-url)}
-        - {name: tuf-url, value: $(params.tuf-url)}
-        - {name: client-url, value: $(params.rhtas-client-url)}
-        - {name: certificate-identity-regexp, value: $(params.certificate-identity-regexp)}
-        - {name: certificate-oidc-issuer, value: $(params.certificate-oidc-issuer)}
       workspaces:
         - {name: registry-auth, workspace: registry-auth}
     - name: update-helm-chart

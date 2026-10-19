@@ -18,17 +18,8 @@ spec:
       value: test
     - name: dotnet-project
       value: services/acl/MOFA.UnifiedVisaPlatform.ACL/MOFA.UnifiedVisaPlatform.ACL.csproj
-    - name: http-proxy
-      value: http://100.64.255.227:3128
-    - name: https-proxy
-      value: http://100.64.255.227:3128
-    - name: no-proxy
-      value: .mofa.gov.sa
     - name: build-args
       value:
-        - HTTP_PROXY=http://100.64.255.227:3128
-        - HTTPS_PROXY=http://100.64.255.227:3128
-        - NO_PROXY=.mofa.gov.sa
         - CERT_KEYWORD=dev
     - name: image
       value: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/acl-service:validation

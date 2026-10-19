@@ -1,6 +1,9 @@
 serviceAccount:
   name: pipeline
 
+proxy:
+  secretName: pipeline-proxy
+
 images:
   git: docker.io/alpine/git:latest
   dotnet: registry.access.redhat.com/ubi9/dotnet-100:latest

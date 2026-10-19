@@ -13,15 +13,6 @@ spec:
       default: develop
     - name: dotnet-project
       type: string
-    - name: http-proxy
-      type: string
-      default: ""
-    - name: https-proxy
-      type: string
-      default: ""
-    - name: no-proxy
-      type: string
-      default: ""
     - name: build-args
       type: array
       default: []
@@ -43,18 +34,6 @@ spec:
     - name: perform-gitops-update
       type: string
       default: "true"
-    - name: fulcio-url
-      type: string
-      default: {{ .Values.rhtas.fulcioUrl | quote }}
-    - name: rekor-url
-      type: string
-      default: {{ .Values.rhtas.rekorUrl | quote }}
-    - name: tuf-url
-      type: string
-      default: {{ .Values.rhtas.tufUrl | quote }}
-    - name: rhtas-client-url
-      type: string
-      default: {{ .Values.rhtas.clientUrl | quote }}
   workspaces:
     - name: source
     - name: git-credentials
@@ -74,9 +53,6 @@ spec:
       taskRef: {name: unit-test}
       params:
         - {name: project, value: $(params.dotnet-project)}
-        - {name: http-proxy, value: $(params.http-proxy)}
-        - {name: https-proxy, value: $(params.https-proxy)}
-        - {name: no-proxy, value: $(params.no-proxy)}
       workspaces:
         - {name: source, workspace: source}
     - name: build-image
@@ -88,9 +64,6 @@ spec:
         - {name: containerfile, value: $(params.containerfile)}
         - name: build-args
           value: ["$(params.build-args[*])"]
-        - {name: http-proxy, value: $(params.http-proxy)}
-        - {name: https-proxy, value: $(params.https-proxy)}
-        - {name: no-proxy, value: $(params.no-proxy)}
       workspaces:
         - {name: source, workspace: source}
         - {name: registry-auth, workspace: registry-auth}
@@ -109,10 +82,6 @@ spec:
       taskRef: {name: sign-image}
       params:
         - {name: image, value: $(tasks.build-image.results.image-url)}
-        - {name: fulcio-url, value: $(params.fulcio-url)}
-        - {name: rekor-url, value: $(params.rekor-url)}
-        - {name: tuf-url, value: $(params.tuf-url)}
-        - {name: client-url, value: $(params.rhtas-client-url)}
       workspaces:
         - {name: registry-auth, workspace: registry-auth}
     - name: update-helm-chart

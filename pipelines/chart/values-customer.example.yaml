@@ -15,3 +15,6 @@ rhtas:
   fulcioUrl: https://fulcio-server-trusted-artifact-signer.apps.CUSTOMER_DOMAIN
   rekorUrl: https://rekor-server-trusted-artifact-signer.apps.CUSTOMER_DOMAIN
   tufUrl: https://tuf-trusted-artifact-signer.apps.CUSTOMER_DOMAIN
+
+proxy:
+  secretName: pipeline-proxy

@@ -64,9 +64,11 @@ ENV no_proxy=${NO_PROXY}
 USER 0
 ```
 
-The pipeline passes these proxy parameters to the build task and as Docker build
+The backend build Task reads `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` from
+the `pipeline-proxy` Secret and passes them to Buildah as Docker build
 arguments. Keep the `ARG` and `ENV` lines before `dotnet restore` so NuGet can
-reach Azure Artifacts and `nuget.org`.
+reach Azure Artifacts and `nuget.org`. Do not add proxy settings to PipelineRun
+parameters.
 
 ## 2. Run the signing test
 

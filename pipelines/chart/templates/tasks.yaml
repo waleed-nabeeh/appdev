@@ -41,15 +41,6 @@ spec:
   params:
     - name: project
       type: string
-    - name: http-proxy
-      type: string
-      default: ""
-    - name: https-proxy
-      type: string
-      default: ""
-    - name: no-proxy
-      type: string
-      default: ""
   workspaces:
     - name: source
   steps:
@@ -58,11 +49,20 @@ spec:
       workingDir: $(workspaces.source.path)/source
       env:
         - name: HTTP_PROXY
-          value: $(params.http-proxy)
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.proxy.secretName }}
+              key: HTTP_PROXY
         - name: HTTPS_PROXY
-          value: $(params.https-proxy)
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.proxy.secretName }}
+              key: HTTPS_PROXY
         - name: NO_PROXY
-          value: $(params.no-proxy)
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.proxy.secretName }}
+              key: NO_PROXY
       script: |
         #!/usr/bin/env bash
         set -euo pipefail
@@ -80,15 +80,6 @@ spec:
     - name: project
       type: string
       default: admin-portal
-    - name: http-proxy
-      type: string
-      default: ""
-    - name: https-proxy
-      type: string
-      default: ""
-    - name: no-proxy
-      type: string
-      default: ""
   workspaces:
     - name: source
     - name: npm-auth
@@ -98,17 +89,35 @@ spec:
       workingDir: $(workspaces.source.path)/source
       env:
         - name: HTTP_PROXY
-          value: $(params.http-proxy)
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.proxy.secretName }}
+              key: HTTP_PROXY
         - name: HTTPS_PROXY
-          value: $(params.https-proxy)
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.proxy.secretName }}
+              key: HTTPS_PROXY
         - name: NO_PROXY
-          value: $(params.no-proxy)
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.proxy.secretName }}
+              key: NO_PROXY
         - name: http_proxy
-          value: $(params.http-proxy)
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.proxy.secretName }}
+              key: HTTP_PROXY
         - name: https_proxy
-          value: $(params.https-proxy)
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.proxy.secretName }}
+              key: HTTPS_PROXY
         - name: no_proxy
-          value: $(params.no-proxy)
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.proxy.secretName }}
+              key: NO_PROXY
         - name: CI
           value: "true"
       script: |
@@ -164,15 +173,6 @@ spec:
     - name: build-args
       type: array
       default: []
-    - name: http-proxy
-      type: string
-      default: ""
-    - name: https-proxy
-      type: string
-      default: ""
-    - name: no-proxy
-      type: string
-      default: ""
   results:
     - name: image-digest
     - name: image-url
@@ -190,17 +190,35 @@ spec:
       workingDir: $(workspaces.source.path)/source
       env:
         - name: HTTP_PROXY
-          value: $(params.http-proxy)
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.proxy.secretName }}
+              key: HTTP_PROXY
         - name: HTTPS_PROXY
-          value: $(params.https-proxy)
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.proxy.secretName }}
+              key: HTTPS_PROXY
         - name: NO_PROXY
-          value: $(params.no-proxy)
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.proxy.secretName }}
+              key: NO_PROXY
         - name: http_proxy
-          value: $(params.http-proxy)
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.proxy.secretName }}
+              key: HTTP_PROXY
         - name: https_proxy
-          value: $(params.https-proxy)
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.proxy.secretName }}
+              key: HTTPS_PROXY
         - name: no_proxy
-          value: $(params.no-proxy)
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.proxy.secretName }}
+              key: NO_PROXY
       args: ["$(params.build-args[*])"]
       script: |
         #!/usr/bin/env bash
@@ -209,6 +227,9 @@ spec:
         for argument in "$@"; do
           build_args+=(--build-arg "$argument")
         done
+        build_args+=(--build-arg "HTTP_PROXY=$HTTP_PROXY")
+        build_args+=(--build-arg "HTTPS_PROXY=$HTTPS_PROXY")
+        build_args+=(--build-arg "NO_PROXY=$NO_PROXY")
         build_secrets=()
         if [ "$(workspaces.npm-auth.bound)" = "true" ]; then
           npm_token="$(workspaces.npm-auth.path)/NPM_TOKEN"
@@ -317,14 +338,6 @@ spec:
   params:
     - name: image
       type: string
-    - name: fulcio-url
-      type: string
-    - name: rekor-url
-      type: string
-    - name: tuf-url
-      type: string
-    - name: client-url
-      type: string
   steps:
     - name: sign
       image: {{ .Values.images.rhtasClientServer }}
@@ -347,17 +360,17 @@ spec:
         cp "$authfile" "$DOCKER_CONFIG/config.json"
         chmod 600 "$DOCKER_CONFIG/config.json"
         curl --fail --silent --show-error --location \
-          "$(params.client-url)/clients/linux/cosign-amd64.gz" \
+          "{{ .Values.rhtas.clientUrl }}/clients/linux/cosign-amd64.gz" \
           --output /tmp/rhtas-cosign.gz
         gzip --decompress /tmp/rhtas-cosign.gz
         chmod +x /tmp/rhtas-cosign
         /tmp/rhtas-cosign version
-        /tmp/rhtas-cosign initialize --mirror="$(params.tuf-url)" --root="$(params.tuf-url)/root.json"
+        /tmp/rhtas-cosign initialize --mirror="{{ .Values.rhtas.tufUrl }}" --root="{{ .Values.rhtas.tufUrl }}/root.json"
         /tmp/rhtas-cosign sign --yes \
           --use-signing-config=false \
           --identity-token="$(cat /var/run/sigstore/token)" \
-          --fulcio-url="$(params.fulcio-url)" \
-          --rekor-url="$(params.rekor-url)" \
+          --fulcio-url="{{ .Values.rhtas.fulcioUrl }}" \
+          --rekor-url="{{ .Values.rhtas.rekorUrl }}" \
           "$(params.image)"
       volumeMounts:
         - name: oidc-token
@@ -416,14 +429,6 @@ spec:
   params:
     - name: image
       type: string
-    - name: tuf-url
-      type: string
-    - name: client-url
-      type: string
-    - name: certificate-identity-regexp
-      type: string
-    - name: certificate-oidc-issuer
-      type: string
   workspaces:
     - name: registry-auth
   steps:
@@ -447,16 +452,16 @@ spec:
         cp "$authfile" "$DOCKER_CONFIG/config.json"
         chmod 600 "$DOCKER_CONFIG/config.json"
         curl --fail --silent --show-error --location \
-          "$(params.client-url)/clients/linux/cosign-amd64.gz" \
+          "{{ .Values.rhtas.clientUrl }}/clients/linux/cosign-amd64.gz" \
           --output /tmp/rhtas-cosign-verify.gz
         gzip --decompress /tmp/rhtas-cosign-verify.gz
         chmod +x /tmp/rhtas-cosign-verify
         /tmp/rhtas-cosign-verify initialize \
-          --mirror="$(params.tuf-url)" \
-          --root="$(params.tuf-url)/root.json"
+          --mirror="{{ .Values.rhtas.tufUrl }}" \
+          --root="{{ .Values.rhtas.tufUrl }}/root.json"
         /tmp/rhtas-cosign-verify verify \
-          --certificate-identity-regexp="$(params.certificate-identity-regexp)" \
-          --certificate-oidc-issuer="$(params.certificate-oidc-issuer)" \
+          --certificate-identity-regexp="{{ .Values.rhtas.certificateIdentityRegexp }}" \
+          --certificate-oidc-issuer="{{ .Values.rhtas.certificateOidcIssuer }}" \
           "$(params.image)"
 ---
 apiVersion: tekton.dev/v1

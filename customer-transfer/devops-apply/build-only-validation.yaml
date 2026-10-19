@@ -22,29 +22,6 @@ spec:
     - name: build-args
       type: array
       default: []
-    - name: http-proxy
-      type: string
-      default: ""
-    - name: https-proxy
-      type: string
-      default: ""
-    - name: no-proxy
-      type: string
-      default: ""
-    - name: fulcio-url
-      type: string
-    - name: rekor-url
-      type: string
-    - name: tuf-url
-      type: string
-    - name: client-url
-      type: string
-    - name: certificate-identity-regexp
-      type: string
-      default: ^https://kubernetes.io/namespaces/devops/serviceaccounts/pipeline$
-    - name: certificate-oidc-issuer
-      type: string
-      default: https://kubernetes.default.svc
   workspaces:
     - name: source
     - name: git-credentials
@@ -70,12 +47,6 @@ spec:
       params:
         - name: project
           value: $(params.dotnet-project)
-        - name: http-proxy
-          value: $(params.http-proxy)
-        - name: https-proxy
-          value: $(params.https-proxy)
-        - name: no-proxy
-          value: $(params.no-proxy)
       workspaces:
         - name: source
           workspace: source
@@ -92,12 +63,6 @@ spec:
           value: $(params.containerfile)
         - name: build-args
           value: ["$(params.build-args[*])"]
-        - name: http-proxy
-          value: $(params.http-proxy)
-        - name: https-proxy
-          value: $(params.https-proxy)
-        - name: no-proxy
-          value: $(params.no-proxy)
       workspaces:
         - name: source
           workspace: source
@@ -110,14 +75,6 @@ spec:
       params:
         - name: image
           value: $(tasks.build-image.results.image-url)
-        - name: fulcio-url
-          value: $(params.fulcio-url)
-        - name: rekor-url
-          value: $(params.rekor-url)
-        - name: tuf-url
-          value: $(params.tuf-url)
-        - name: client-url
-          value: $(params.client-url)
       workspaces:
         - name: registry-auth
           workspace: registry-auth
@@ -128,14 +85,6 @@ spec:
       params:
         - name: image
           value: $(tasks.build-image.results.image-url)
-        - name: tuf-url
-          value: $(params.tuf-url)
-        - name: client-url
-          value: $(params.client-url)
-        - name: certificate-identity-regexp
-          value: $(params.certificate-identity-regexp)
-        - name: certificate-oidc-issuer
-          value: $(params.certificate-oidc-issuer)
       workspaces:
         - name: registry-auth
           workspace: registry-auth
@@ -168,24 +117,7 @@ spec:
       value: services/acl/MOFA.UnifiedVisaPlatform.ACL/Dockerfile
     - name: build-args
       value:
-        - HTTP_PROXY=http://100.64.255.227:3128
-        - HTTPS_PROXY=http://100.64.255.227:3128
-        - NO_PROXY=.mofa.gov.sa
         - CERT_KEYWORD=dev
-    - name: http-proxy
-      value: http://100.64.255.227:3128
-    - name: https-proxy
-      value: http://100.64.255.227:3128
-    - name: no-proxy
-      value: .mofa.gov.sa
-    - name: fulcio-url
-      value: https://fulcio-server-trusted-artifact-signer.apps.hub-visa-ocp.mofa.gov.sa
-    - name: rekor-url
-      value: https://rekor-server-trusted-artifact-signer.apps.hub-visa-ocp.mofa.gov.sa
-    - name: tuf-url
-      value: https://tuf-trusted-artifact-signer.apps.hub-visa-ocp.mofa.gov.sa
-    - name: client-url
-      value: http://cli-server.trusted-artifact-signer.svc:8080
   workspaces:
     - name: source
       persistentVolumeClaim:

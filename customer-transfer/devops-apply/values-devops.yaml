@@ -17,6 +17,9 @@ rhtas:
   rekorUrl: https://rekor-server-trusted-artifact-signer.apps.hub-visa-ocp.mofa.gov.sa
   tufUrl: https://tuf-trusted-artifact-signer.apps.hub-visa-ocp.mofa.gov.sa
 
+proxy:
+  secretName: pipeline-proxy
+
 rhacs:
   insecureSkipTLSVerify: false
 
