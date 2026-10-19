@@ -30,6 +30,8 @@ Quay auth file. These names are intentionally different from the old private
 ```bash
 ./mirror-image.sh registry.access.redhat.com/ubi9/dotnet-100-aspnet:10.0 quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/ubi-aspnet:10.0 /secure/path/pullsecret.txt-quay
 ./mirror-image.sh registry.access.redhat.com/ubi9/dotnet-100:10.0 quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/ubi-sdk:10.0 /secure/path/pullsecret.txt-quay
+./mirror-image.sh registry.access.redhat.com/ubi9/nodejs-24:latest quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nodejs-24:ubi9 /secure/path/pullsecret.txt-quay
+./mirror-image.sh registry.access.redhat.com/ubi9/nginx-126:latest quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx-126:ubi9 /secure/path/pullsecret.txt-quay
 ```
 
 Then update backend Dockerfiles to use:
