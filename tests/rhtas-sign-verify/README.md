@@ -34,6 +34,18 @@ Quay auth file. These names are intentionally different from the old private
 ./mirror-image.sh registry.access.redhat.com/ubi9/nginx-126:latest quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx-126:ubi9 /secure/path/pullsecret.txt-quay
 ```
 
+For closer version matching to the existing frontend bases, these public Docker
+Hub alternatives can also be mirrored:
+
+```bash
+./mirror-image.sh docker.io/library/node:24-bookworm-slim quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nodejs:24-bookworm-slim /secure/path/pullsecret.txt-quay
+./mirror-image.sh docker.io/library/nginx:1.30.6 quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx:1.30.6 /secure/path/pullsecret.txt-quay
+```
+
+The Docker Hub Nginx tag is closer in version to the existing 1.30.3 image but
+is not FIPS-validated. Approve and test before using it beyond compatibility
+testing.
+
 Then update backend Dockerfiles to use:
 
 ```dockerfile
