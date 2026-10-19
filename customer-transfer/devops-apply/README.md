@@ -117,6 +117,8 @@ Buildah. With `NO_PROXY=.mofa.gov.sa`, the internal Azure Artifacts npm feed
 use the proxy. Keep the feed URL and scoped package mappings in the Dockerfile's
 existing temporary `.npmrc` creation, and continue mounting `NPM_TOKEN` as
 `id=npm_token` rather than adding the token to build arguments or the image.
+The frontend pipeline now also runs `npx nx test admin-portal` before the image
+build, using the same internal feed, npm secret, and proxy settings.
 
 The test-dev Quay source is not reachable from this transfer host, so mirror
 the latest public Red Hat UBI 9 Node.js and Nginx images. The auth file needs
@@ -160,9 +162,9 @@ yq eval 'select(.kind == "Pipeline")' customer-transfer/devops-apply/frontend-bu
 yq eval 'select(.kind == "PipelineRun")' customer-transfer/devops-apply/frontend-build-validation.yaml | oc create -f -
 ```
 
-This diagnostic runs the Dockerfile's `npm i` and `nx run admin-portal:build
---configuration=dev`, then pushes, signs, and verifies the image. It does not
-run RHACS scan or GitOps write-back.
+This diagnostic runs the admin-portal unit tests, then the Dockerfile's `npm i`
+and `nx run admin-portal:build --configuration=dev`, and finally pushes, signs,
+and verifies the image. It does not run RHACS scan or GitOps write-back.
 
 ## 7. Image tag location
 

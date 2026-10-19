@@ -2,6 +2,7 @@
 images:
   git: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/alpine-git:2026-10-07
   dotnet: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/dotnet-100:10.0
+  nodejs24: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nodejs-24:ubi9
   buildah: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/buildah:ocp4.22
   skopeo: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/skopeo:ocp4.22
   rhacs: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/rhacs-roxctl:4.11.4

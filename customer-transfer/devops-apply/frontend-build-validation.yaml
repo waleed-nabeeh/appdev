@@ -61,8 +61,26 @@ spec:
           workspace: source
         - name: git-credentials
           workspace: git-credentials
-    - name: build-image
+    - name: unit-test
       runAfter: [clone]
+      taskRef:
+        name: frontend-unit-test
+      params:
+        - name: project
+          value: admin-portal
+        - name: http-proxy
+          value: $(params.http-proxy)
+        - name: https-proxy
+          value: $(params.https-proxy)
+        - name: no-proxy
+          value: $(params.no-proxy)
+      workspaces:
+        - name: source
+          workspace: source
+        - name: npm-auth
+          workspace: npm-auth
+    - name: build-image
+      runAfter: [unit-test]
       taskRef:
         name: build-image
       params:

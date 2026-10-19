@@ -74,6 +74,82 @@ spec:
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
+  name: frontend-unit-test
+spec:
+  params:
+    - name: project
+      type: string
+      default: admin-portal
+    - name: http-proxy
+      type: string
+      default: ""
+    - name: https-proxy
+      type: string
+      default: ""
+    - name: no-proxy
+      type: string
+      default: ""
+  workspaces:
+    - name: source
+    - name: npm-auth
+  steps:
+    - name: test
+      image: {{ .Values.images.nodejs24 | quote }}
+      workingDir: $(workspaces.source.path)/source
+      env:
+        - name: HTTP_PROXY
+          value: $(params.http-proxy)
+        - name: HTTPS_PROXY
+          value: $(params.https-proxy)
+        - name: NO_PROXY
+          value: $(params.no-proxy)
+        - name: http_proxy
+          value: $(params.http-proxy)
+        - name: https_proxy
+          value: $(params.https-proxy)
+        - name: no_proxy
+          value: $(params.no-proxy)
+        - name: CI
+          value: "true"
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        test -s "$(workspaces.npm-auth.path)/NPM_TOKEN"
+        umask 077
+        token="$(cat "$(workspaces.npm-auth.path)/NPM_TOKEN")"
+        encoded_token="$(printf '%s' "$token" | base64 | tr -d '\n')"
+        unset token
+        npmrc="$(mktemp)"
+        npm_cache="$(mktemp -d)"
+        cleanup() { rm -f "$npmrc"; rm -rf "$npm_cache"; }
+        trap cleanup EXIT
+        export NPM_CONFIG_USERCONFIG="$npmrc"
+        export npm_config_cache="$npm_cache"
+        feed_url="https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_packaging/uvisaLocal/npm/registry/"
+        feed="//azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_packaging/uvisaLocal/npm"
+        {
+          echo "registry=https://registry.npmjs.org/"
+          echo "strict-ssl=false"
+          echo "@gs-ui:registry=${feed_url}"
+          echo "@gs:registry=${feed_url}"
+          echo "@gs-utils:registry=${feed_url}"
+          echo "@gs-shared:registry=${feed_url}"
+          echo "@library:registry=${feed_url}"
+          echo "@gs-theme:registry=${feed_url}"
+          echo "${feed}/registry/:username=MOFA"
+          echo "${feed}/registry/:_password=${encoded_token}"
+          echo "${feed}/registry/:email=ci@mofa.gov.sa"
+          echo "${feed}/:username=MOFA"
+          echo "${feed}/:_password=${encoded_token}"
+          echo "${feed}/:email=ci@mofa.gov.sa"
+        } > "$npmrc"
+        npm install --prefer-offline
+        npm install --no-save @nx/nx-linux-x64-gnu @rollup/rollup-linux-x64-gnu
+        npx nx test "$(params.project)"
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
   name: build-image
 spec:
   params:

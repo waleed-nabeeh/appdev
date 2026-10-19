@@ -4,6 +4,7 @@ serviceAccount:
 images:
   git: docker.io/alpine/git:latest
   dotnet: registry.access.redhat.com/ubi9/dotnet-100:latest
+  nodejs24: registry.access.redhat.com/ubi9/nodejs-24:latest
   buildah: registry.redhat.io/rhel9/buildah:latest
   skopeo: registry.redhat.io/rhel9/skopeo:latest
   rhacs: registry.redhat.io/advanced-cluster-security/rhacs-roxctl-rhel9:4.11
