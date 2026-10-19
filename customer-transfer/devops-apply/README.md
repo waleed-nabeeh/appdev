@@ -95,12 +95,43 @@ through a Buildah secret mount. The token is not passed as a build argument.
 The frontend source checkout must contain the updated Dockerfile base-image
 references shown below before the run can use the customer Quay mirror.
 
-Mirror the two bases from a transfer host whose auth file can pull from the
-source Quay and push to the customer Quay:
+In the frontend build stage, declare the proxy build arguments before the
+dependency-install `RUN` so npm can use the proxy values passed by the pipeline.
+Keep these as `ARG` values (not `ENV`) so they do not persist in the final image:
+
+```dockerfile
+FROM quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nodejs-24:ubi9 AS frontend
+
+ARG BUILD_ENVIRONMENT
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+
+WORKDIR /app
+# Keep the existing COPY and npm install steps below this point.
+```
+
+The pipeline passes the proxy arguments and sets the proxy environment for
+Buildah. With `NO_PROXY=.mofa.gov.sa`, the internal Azure Artifacts npm feed
+(`azuredevops.mofa.gov.sa`) is reached directly; public npm registry requests
+use the proxy. Keep the feed URL and scoped package mappings in the Dockerfile's
+existing temporary `.npmrc` creation, and continue mounting `NPM_TOKEN` as
+`id=npm_token` rather than adding the token to build arguments or the image.
+
+The test-dev Quay source is not reachable from this transfer host, so mirror
+the latest public Red Hat UBI 9 Node.js and Nginx images. The auth file needs
+internal Quay push credentials; the UBI source images are publicly accessible:
 
 ```bash
-REGISTRY_AUTH_FILE=/path/to/auth.json \
-  bash scripts/mirror/pull-push-customer-images.sh mirror/frontend-base-images.csv
+./tests/rhtas-sign-verify/mirror-image.sh \
+  registry.access.redhat.com/ubi9/nodejs-24:latest \
+  quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nodejs-24:ubi9 \
+  /secure/path/pullsecret.txt-quay
+
+./tests/rhtas-sign-verify/mirror-image.sh \
+  registry.access.redhat.com/ubi9/nginx-126:latest \
+  quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx-126:ubi9 \
+  /secure/path/pullsecret.txt-quay
 ```
 
 Update the `FROM` references in the three frontend portal Dockerfiles to these
@@ -108,14 +139,15 @@ internal images, then commit the Dockerfile update to the source branch used by
 the PipelineRun:
 
 ```text
-quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nodejs-24:9.8-1782938304
-quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx-fips:1.30.3-fips
+quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nodejs-24:ubi9
+quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx-126:ubi9
 ```
 
-The mirror uses the existing transfer script and source-to-target list in
-`mirror/frontend-base-images.csv`. The source registry is the test-dev Quay
-host, so its pull credentials must be present in `auth.json` along with the
-internal Quay push credentials.
+The UBI Node.js 24 image is the intended build-stage base. UBI Nginx 1.26 is
+not the private Nginx 1.30.3 FIPS image and must not be treated as FIPS-
+validated. Its OpenShift/S2I paths and configuration differ from the current
+private image, so adapt and test the runtime Dockerfile before using it. Inspect
+each target and record its immutable digest after mirroring.
 
 After adding `npm-auth` in namespace `devops` and updating the frontend
 Dockerfiles, upgrade the chart to install the optional Buildah secret
