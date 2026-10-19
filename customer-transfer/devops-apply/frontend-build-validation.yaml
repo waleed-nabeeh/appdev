@@ -119,8 +119,13 @@ spec:
         - BUILD_ENVIRONMENT=dev
   workspaces:
     - name: source
-      persistentVolumeClaim:
-        claimName: pipeline
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 10Gi
     - name: git-credentials
       secret:
         secretName: git-credentials

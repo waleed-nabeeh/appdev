@@ -55,11 +55,14 @@ oc get tasks,pipelines -n devops
 oc get sa pipeline -n devops
 ```
 
-## 3. Prepare the PipelineRun
+## 3. Per-run workspaces for parallel builds
 
-Replace `<source-pvc-name>` in `pipelinerun-acl.yaml` with a Bound PVC in
-`devops`. The PVC must be writable by Tekton and large enough for the complete
-backend repository and image build workspace.
+Both frontend and backend PipelineRuns use a `volumeClaimTemplate` for the
+`source` workspace. Tekton provisions a dedicated `ReadWriteOnce` PVC for each
+run, so parallel clones and builds cannot overwrite each other's checkout.
+Each manifest requests `10Gi`; confirm the `devops` storage quota and storage
+class can accommodate two simultaneous runs (20Gi requested total) before
+launching them. Secret workspaces remain shared and read-only.
 
 ## 4. Run ACL validation
 
@@ -71,6 +74,18 @@ oc describe pipelinerun -n devops <run-name>
 
 The first run performs clone, .NET test, image build, RHACS scan, security
 gate, and RHTAS signing. GitOps write-back is disabled.
+
+To test one frontend and one backend run concurrently, create both runs in
+separate terminals (or issue both commands back-to-back):
+
+```bash
+oc create -f customer-transfer/devops-apply/pipelinerun-acl.yaml
+yq eval 'select(.kind == "PipelineRun")' customer-transfer/devops-apply/frontend-build-validation.yaml | oc create -f -
+```
+
+Track them independently with `oc get pipelineruns,taskruns,pods,pvc -n devops`.
+Use a unique image tag per run if you launch repeated builds; never let
+concurrent runs push different content to the same tag.
 
 ## 5. Temporary build-only diagnostic
 
