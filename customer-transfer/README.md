@@ -105,9 +105,11 @@ operational-portal-dev deployment/operational-portal/Dockerfile
 
 Frontend builds also require the approved `NPM_TOKEN`. The installed
 `application-release` pipeline is currently .NET-specific, so a frontend
-pipeline task must be installed before running these services. It must run
-`npm ci`, the selected Nx build/test commands, image build, RHACS scan, gate,
-and RHTAS signing.
+full-release Pipeline is still needed before running all three services through
+scan, policy gate, signing, and GitOps update. For an isolated `admin-portal`
+image-build, sign, and verify test, use
+`devops-apply/frontend-build-validation.yaml`; it runs the Nx production step
+from the service Dockerfile and requires the `NPM_TOKEN` Kubernetes Secret.
 
 ## 7. Image tag update location
 

@@ -103,6 +103,8 @@ spec:
   workspaces:
     - name: source
     - name: registry-auth
+    - name: npm-auth
+      optional: true
   steps:
     - name: build-and-push
       image: {{ .Values.images.buildah }}
@@ -131,6 +133,15 @@ spec:
         for argument in "$@"; do
           build_args+=(--build-arg "$argument")
         done
+        build_secrets=()
+        if [ "$(workspaces.npm-auth.bound)" = "true" ]; then
+          npm_token="$(workspaces.npm-auth.path)/NPM_TOKEN"
+          if [ ! -s "$npm_token" ]; then
+            echo "npm-auth must contain a non-empty NPM_TOKEN key" >&2
+            exit 1
+          fi
+          build_secrets+=(--secret "id=npm_token,src=$npm_token")
+        fi
         authfile="$(workspaces.registry-auth.path)/config.json"
         if [ ! -f "$authfile" ] && [ -f "$(workspaces.registry-auth.path)/.dockerconfigjson" ]; then
           authfile="$(workspaces.registry-auth.path)/.dockerconfigjson"
@@ -139,6 +150,7 @@ spec:
         buildah --storage-driver=vfs bud \
           --authfile "$authfile" \
           "${build_args[@]}" \
+          "${build_secrets[@]}" \
           -f "$(params.containerfile)" -t "$(params.image)" "$(params.context)"
         digest=$(buildah --storage-driver=vfs push \
           --authfile "$authfile" \

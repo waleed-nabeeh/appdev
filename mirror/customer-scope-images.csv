@@ -6,6 +6,8 @@ registry.redhat.io/advanced-cluster-security/rhacs-roxctl-rhel9@sha256:b407cb461
 registry.access.redhat.com/ubi9/dotnet-100@sha256:744226d7703123413cd58495e7395bf7e544dc035bd10486831bcc0ff5e808bb,quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/dotnet-100:10.0
 registry.access.redhat.com/ubi9/nodejs-20@sha256:74cc7b1d13592b1e425074f434b90e470ab209da85fd1fdb8e6e9e4cabaec51a,quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nodejs:20
 registry.access.redhat.com/ubi9/nginx-124@sha256:da54bbccb61ef4c1229b501276e6af35878455471598426346bb3014571843ed,quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx:1.24
+central-quay-quay-enterprise.apps.visa-ocp-test-dev.mofa.gov.sa/s-sa-mofapipeline/uvp-nonprod/nodejs-24:9.8-1782938304,quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nodejs-24:9.8-1782938304
+central-quay-quay-enterprise.apps.visa-ocp-test-dev.mofa.gov.sa/s-sa-mofapipeline/uvp-nonprod/nginx:1.30.3-fips,quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx-fips:1.30.3-fips
 registry.connect.redhat.com/hashicorp/vault:1.20.4-ubi,quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/vault:1.20.4-ubi
 registry.redhat.io/rhtas/client-server-rhel9@sha256:3d08a27f79bda1f19369786723cb8d1e130c3d46cbb8a7f44e30571d5a213240,quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/rhtas-client-server:1.4.3
 registry.redhat.io/rhtas/certificate-transparency-rhel9@sha256:5a07b75ddd1a925c85b22cba4eac9317370e5fc9ca01d79e7a6414246171bb90,quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/rhtas-certificate-transparency:1.4.3

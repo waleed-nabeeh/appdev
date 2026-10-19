@@ -1,0 +1,181 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: application-frontend-build-validation
+  namespace: devops
+spec:
+  params:
+    - name: source-url
+      type: string
+    - name: source-revision
+      type: string
+      default: test
+    - name: image
+      type: string
+    - name: containerfile
+      type: string
+      default: deployment/admin-portal/Dockerfile
+    - name: build-args
+      type: array
+      default: []
+    - name: http-proxy
+      type: string
+      default: ""
+    - name: https-proxy
+      type: string
+      default: ""
+    - name: no-proxy
+      type: string
+      default: ""
+    - name: fulcio-url
+      type: string
+    - name: rekor-url
+      type: string
+    - name: tuf-url
+      type: string
+    - name: client-url
+      type: string
+    - name: certificate-identity-regexp
+      type: string
+      default: ^https://kubernetes.io/namespaces/devops/serviceaccounts/pipeline$
+    - name: certificate-oidc-issuer
+      type: string
+      default: https://kubernetes.default.svc
+  workspaces:
+    - name: source
+    - name: git-credentials
+      optional: true
+    - name: registry-auth
+    - name: npm-auth
+  tasks:
+    - name: clone
+      taskRef:
+        name: clone
+      params:
+        - name: url
+          value: $(params.source-url)
+        - name: revision
+          value: $(params.source-revision)
+      workspaces:
+        - name: source
+          workspace: source
+        - name: git-credentials
+          workspace: git-credentials
+    - name: build-image
+      runAfter: [clone]
+      taskRef:
+        name: build-image
+      params:
+        - name: image
+          value: $(params.image)
+        - name: context
+          value: .
+        - name: containerfile
+          value: $(params.containerfile)
+        - name: build-args
+          value: ["$(params.build-args[*])"]
+        - name: http-proxy
+          value: $(params.http-proxy)
+        - name: https-proxy
+          value: $(params.https-proxy)
+        - name: no-proxy
+          value: $(params.no-proxy)
+      workspaces:
+        - name: source
+          workspace: source
+        - name: registry-auth
+          workspace: registry-auth
+        - name: npm-auth
+          workspace: npm-auth
+    - name: sign-image
+      runAfter: [build-image]
+      taskRef:
+        name: sign-image
+      params:
+        - name: image
+          value: $(tasks.build-image.results.image-url)
+        - name: fulcio-url
+          value: $(params.fulcio-url)
+        - name: rekor-url
+          value: $(params.rekor-url)
+        - name: tuf-url
+          value: $(params.tuf-url)
+        - name: client-url
+          value: $(params.client-url)
+      workspaces:
+        - name: registry-auth
+          workspace: registry-auth
+    - name: verify-image
+      runAfter: [sign-image]
+      taskRef:
+        name: verify-image
+      params:
+        - name: image
+          value: $(tasks.build-image.results.image-url)
+        - name: tuf-url
+          value: $(params.tuf-url)
+        - name: client-url
+          value: $(params.client-url)
+        - name: certificate-identity-regexp
+          value: $(params.certificate-identity-regexp)
+        - name: certificate-oidc-issuer
+          value: $(params.certificate-oidc-issuer)
+      workspaces:
+        - name: registry-auth
+          workspace: registry-auth
+---
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: frontend-admin-portal-validation-
+  namespace: devops
+  labels:
+    app.kubernetes.io/part-of: customer-application-validation
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/name: admin-portal
+spec:
+  pipelineRef:
+    name: application-frontend-build-validation
+  serviceAccountName: pipeline
+  params:
+    - name: source-url
+      value: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Frontend
+    - name: source-revision
+      value: test
+    - name: image
+      value: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/admin-portal:frontend-validation
+    - name: containerfile
+      value: deployment/admin-portal/Dockerfile
+    - name: build-args
+      value:
+        - HTTP_PROXY=http://100.64.255.227:3128
+        - HTTPS_PROXY=http://100.64.255.227:3128
+        - NO_PROXY=.mofa.gov.sa
+        - BUILD_ENVIRONMENT=dev
+    - name: http-proxy
+      value: http://100.64.255.227:3128
+    - name: https-proxy
+      value: http://100.64.255.227:3128
+    - name: no-proxy
+      value: .mofa.gov.sa
+    - name: fulcio-url
+      value: https://fulcio-server-trusted-artifact-signer.apps.hub-visa-ocp.mofa.gov.sa
+    - name: rekor-url
+      value: https://rekor-server-trusted-artifact-signer.apps.hub-visa-ocp.mofa.gov.sa
+    - name: tuf-url
+      value: https://tuf-trusted-artifact-signer.apps.hub-visa-ocp.mofa.gov.sa
+    - name: client-url
+      value: http://cli-server.trusted-artifact-signer.svc:8080
+  workspaces:
+    - name: source
+      persistentVolumeClaim:
+        claimName: pipeline
+    - name: git-credentials
+      secret:
+        secretName: git-credentials
+    - name: registry-auth
+      secret:
+        secretName: registry-auth
+    - name: npm-auth
+      secret:
+        secretName: npm-auth

@@ -69,10 +69,12 @@ registry.access.redhat.com/ubi9/nodejs-20@sha256:74cc7b1d13592b1e425074f434b90e4
 registry.access.redhat.com/ubi9/nginx-124@sha256:da54bbccb61ef4c1229b501276e6af35878455471598426346bb3014571843ed
 ```
 
-Node.js builds the Angular static assets and Nginx serves them. The images are
-required in the air-gap inventory, but the repository currently has no Angular
-sample or Angular-specific Tekton task to validate them. Confirm the actual
-frontend's Angular/Node compatibility before freezing the Node.js stream.
+The current frontend Dockerfiles use a private Node.js 24 base and an Nginx
+1.30.3 FIPS base from the test-dev Quay host. Those exact images are now listed
+in `mirror/frontend-base-images.csv` for transfer to the customer `devops`
+organization. The UBI Node.js 20 and Nginx 1.24 images above remain alternate
+mirrors; they are not interchangeable with the current Dockerfile bases without
+validating the Node.js stream and runtime behavior.
 
 ## Scope coverage
 
@@ -80,7 +82,7 @@ frontend's Angular/Node compatibility before freezing the Node.js stream.
 | --- | --- |
 | Clone and GitOps update | Alpine Git |
 | .NET test, build, and runtime | UBI 9 .NET 10 SDK/runtime |
-| Angular build and runtime | UBI 9 Node.js 20 and Nginx 1.24 |
+| Frontend build and runtime | Node.js 24 and Nginx 1.30.3 FIPS from the test-dev Quay mirror list |
 | Build and push | Buildah |
 | ACS scan and security gate | `roxctl` plus ACS Central, database, collector, scanner, and scanner database |
 | RHTAS keyless sign and verify | Client-server plus Fulcio, Rekor, Trillian, CT log, TUF, Redis, and database operands |
