@@ -256,7 +256,36 @@ from the frontend Pipeline after investigating/fixing the current test failure.
 The backend unit-test task remains blocking. This run does not run RHACS scan or
 GitOps write-back.
 
-## 7. Image tag location
+## 7. Fan out frontend validation to all three portals
+
+`frontend-three-service-fanout.yaml` defines one Tekton PipelineRun with three
+independent lanes: `admin-portal`, `applicant-portal`, and
+`operational-portal`. Each lane clones the same source revision into its own
+5Gi PVC, runs that portal's Nx test, builds its Dockerfile with
+`BUILD_ENVIRONMENT=dev`, then signs and verifies its own image. The three lanes
+run concurrently. Unit-test failures are temporarily non-blocking, matching the
+existing frontend diagnostic; remove `onError: continue` from all three test
+tasks when tests should gate image builds.
+
+This first version always runs all three services. Git-diff/config-based
+selection and merge-request event dispatch are separate follow-up work; this
+manifest is manually dispatched for validating the fan-out itself. It reserves
+three 5Gi PVCs (15Gi total) per run. Change the source revision to the branch or
+commit containing your Dockerfile changes, and use fresh image tags for each
+concurrent/repeated run.
+
+```bash
+yq eval 'select(.kind == "Pipeline")' customer-transfer/devops-apply/frontend-three-service-fanout.yaml | oc apply -f -
+yq eval 'select(.kind == "PipelineRun")' customer-transfer/devops-apply/frontend-three-service-fanout.yaml | oc create -f -
+oc get pipelineruns,taskruns,pods,pvc -n devops
+```
+
+The sample PipelineRun uses branch `test` and the `dev-validation` image tags.
+Before each run, edit `source-revision` and the three image tags in the
+manifest as needed. The source commit must already be pushed to Azure DevOps;
+Tekton cannot build uncommitted Dockerfile edits on your workstation.
+
+## 8. Image tag location
 
 After approval, enable GitOps write-back and use this values file in the
 `RedHat_HelmCharts` repository:

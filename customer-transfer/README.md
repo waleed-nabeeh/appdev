@@ -110,6 +110,10 @@ scan, policy gate, signing, and GitOps update. For an isolated `admin-portal`
 image-build, sign, and verify test, use
 `devops-apply/frontend-build-validation.yaml`; it runs the Nx production step
 from the service Dockerfile and requires the `NPM_TOKEN` Kubernetes Secret.
+To validate all three portals concurrently with separate PVCs and per-service
+image tags, use `devops-apply/frontend-three-service-fanout.yaml`. It is a
+manual Tekton dispatch for now; merge-request event wiring and Git-diff/config-
+based service selection are not included yet.
 
 ## 7. Image tag update location
 
