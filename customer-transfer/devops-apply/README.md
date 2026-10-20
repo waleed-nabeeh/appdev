@@ -36,6 +36,63 @@ Do not put proxy values in Git or PipelineRun YAML. Secret values are hidden fro
 PipelineRun parameters, but remain readable to principals permitted to read
 Secrets in the namespace.
 
+For a non-production ESO connectivity test, use
+`external-secret-vault-test.yaml`. It creates a dedicated Kubernetes service
+account, a `SecretStore` in `devops` pointing to the Vault route, and an
+`ExternalSecret` that materializes a harmless value as Secret `eso-vault-test`.
+Vault remains in project `infra-platforms`; the Kubernetes Secret is created in
+`devops`.
+
+### Test ESO syncing from Vault
+
+1. In an approved Vault admin session (Vault is in `infra-platforms`), write a
+   harmless test value to KV v2 and grant a narrow policy to only that path:
+
+   ```bash
+   vault kv put -mount=secret devops/eso-test message=hello-eso
+   vault policy write eso-devops-test - <<'EOF'
+   path "secret/data/devops/eso-test" {
+     capabilities = ["read"]
+   }
+   EOF
+   vault write auth/kubernetes/role/eso-devops-test \
+     bound_service_account_names=eso-vault-reader \
+     bound_service_account_namespaces=devops \
+     policies=eso-devops-test \
+     ttl=1h
+   ```
+
+   This assumes Vault's Kubernetes auth mount is already configured at
+   `kubernetes/`, as used by the existing ESO setup. Do not put Vault tokens in
+   Git or pipeline logs.
+
+2. Ensure the ESO controller is allowed to request a token for ServiceAccount
+   `eso-vault-reader` in `devops`, and that the Vault route certificate is
+   trusted by ESO. If `SecretStore` reports an x509 error, configure the
+   approved Vault CA using the store's `caBundle` or `caProvider` before retrying.
+
+3. From the repo root, apply the test resources:
+
+   ```bash
+   oc apply -f customer-transfer/devops-apply/external-secret-vault-test.yaml
+   oc get secretstore vault-backend -n devops
+   oc get externalsecret eso-vault-test -n devops
+   oc describe externalsecret eso-vault-test -n devops
+   ```
+
+4. Wait for `Ready=True`, then confirm the generated Secret contains the test
+   field (this value is deliberately non-sensitive):
+
+   ```bash
+   oc get secret eso-vault-test -n devops \
+     -o jsonpath='{.data.message}' | base64 -d
+   printf '\n'
+   ```
+
+   Expected output: `hello-eso`. If it is not Ready, inspect the ExternalSecret
+   and SecretStore conditions and ESO controller logs. Common blockers are a
+   missing Store, Vault policy/role binding, TokenRequest permission, or CA trust.
+
 ## 2. Install the pipeline and tasks
 
 From the `appdev` repository root, run:
@@ -60,8 +117,8 @@ oc get sa pipeline -n devops
 Both frontend and backend PipelineRuns use a `volumeClaimTemplate` for the
 `source` workspace. Tekton provisions a dedicated `ReadWriteOnce` PVC for each
 run, so parallel clones and builds cannot overwrite each other's checkout.
-Each manifest requests `10Gi`; confirm the `devops` storage quota and storage
-class can accommodate two simultaneous runs (20Gi requested total) before
+Each manifest requests `5Gi`; confirm the `devops` storage quota and storage
+class can accommodate two simultaneous runs (10Gi requested total) before
 launching them. Secret workspaces remain shared and read-only.
 
 ## 4. Run ACL validation
