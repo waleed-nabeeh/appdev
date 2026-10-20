@@ -4,6 +4,14 @@ First deploy the latest Helm chart (the short-SHA image-tag change is in this ch
 
 Only set the webhook Route host and Basic Auth credentials yourself. The repository name, clone URL, branch filter, and target branch below match the Helm chart configuration.
 
+## One-command webhook test
+
+Run this from the Azure frontend repository on the pushed test branch that contains marker changes under `apps/admin-portal`, `apps/applicant-portal`, and `apps/operational-portal`. It uses the current branch and commit plus the remote `pre-prod` SHA, and sends the simulated Azure PR event directly. Replace only `<WEBHOOK_PASSWORD>`.
+
+```bash
+curl --fail-with-body -i -u "ado-hook:<WEBHOOK_PASSWORD>" -H 'Content-Type: application/json' -H 'X-Event-Key: git.pullrequest.created' 'https://frontend-pr-webhook-devops.apps.hub-visa-ocp.mofa.gov.sa/' --data "{\"eventType\":\"git.pullrequest.created\",\"resource\":{\"pullRequestId\":9999,\"status\":\"active\",\"sourceRefName\":\"refs/heads/$(git branch --show-current)\",\"targetRefName\":\"refs/heads/pre-prod\",\"repository\":{\"name\":\"RedHat_UnifiedVisaPlatform.Frontend\",\"remoteUrl\":\"https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Frontend\"},\"lastMergeSourceCommit\":{\"commitId\":\"$(git rev-parse HEAD)\"},\"lastMergeTargetCommit\":{\"commitId\":\"$(git ls-remote origin refs/heads/pre-prod | awk '{print $1}')\"}}}"
+```
+
 From the AppDev checkout, deploy the updated chart first:
 
 ```bash
