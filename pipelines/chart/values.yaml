@@ -1,6 +1,13 @@
 serviceAccount:
   name: pipeline
 
+frontendPr:
+  enabled: false
+  targetBranch: pre-prod
+  sourceUrl: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Frontend
+  proxyImage: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx-126:ubi9
+  webhookAuthSecretName: frontend-pr-webhook-auth
+
 proxy:
   secretName: pipeline-proxy
 

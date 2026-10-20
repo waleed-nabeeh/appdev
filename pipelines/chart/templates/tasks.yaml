@@ -9,6 +9,9 @@ spec:
     - name: revision
       type: string
       default: develop
+    - name: commit
+      type: string
+      default: ""
   workspaces:
     - name: source
     - name: git-credentials
@@ -30,8 +33,131 @@ spec:
             git config --global credential.helper store
           fi
         fi
-        git clone --branch "$(params.revision)" --single-branch \
+        REVISION="$(params.revision)"
+        case "$REVISION" in
+          refs/heads/*) REVISION="${REVISION#refs/heads/}" ;;
+        esac
+        git clone --branch "$REVISION" --single-branch \
           "$(params.url)" "$(workspaces.source.path)/source"
+        if [ -n "$(params.commit)" ]; then
+          git -C "$(workspaces.source.path)/source" fetch --depth=1 origin "$(params.commit)"
+          git -C "$(workspaces.source.path)/source" checkout --detach FETCH_HEAD
+        fi
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: frontend-pr-dispatch
+spec:
+  params:
+    - name: source-url
+      type: string
+    - name: source-revision
+      type: string
+    - name: source-commit
+      type: string
+    - name: target-ref
+      type: string
+    - name: selection-mode
+      type: string
+      default: diff
+    - name: config-file
+      type: string
+      default: service-pre-prod.tsv
+  workspaces:
+    - name: source
+    - name: git-credentials
+      optional: true
+    - name: service-config
+  results:
+    - name: run-admin-portal
+      description: Whether the admin portal lane should run
+    - name: run-applicant-portal
+      description: Whether the applicant portal lane should run
+    - name: run-operational-portal
+      description: Whether the operational portal lane should run
+  steps:
+    - name: select-services
+      image: {{ .Values.images.git }}
+      env:
+        - name: HOME
+          value: /tekton/home
+      script: |
+        #!/bin/sh
+        set -eu
+        REPO="$(workspaces.source.path)/repo"
+        if [ "$(workspaces.git-credentials.bound)" = "true" ]; then
+          cp -R "$(workspaces.git-credentials.path)"/. "$HOME"/
+          chmod -R go-rwx "$HOME"
+          if [ -f "$HOME/.git-credentials" ]; then
+            git config --global credential.helper store
+          fi
+        fi
+
+        REVISION="$(params.source-revision)"
+        case "$REVISION" in
+          refs/heads/*) REVISION="${REVISION#refs/heads/}" ;;
+        esac
+        git init "$REPO"
+        git -C "$REPO" remote add origin "$(params.source-url)"
+        git -C "$REPO" fetch --depth=100 origin "$REVISION"
+        git -C "$REPO" fetch --depth=100 origin "$(params.source-commit)"
+        git -C "$REPO" checkout --detach FETCH_HEAD
+
+        RUN_ADMIN=false
+        RUN_APPLICANT=false
+        RUN_OPERATIONAL=false
+        if [ "$(params.selection-mode)" = "all" ]; then
+          RUN_ADMIN=true
+          RUN_APPLICANT=true
+          RUN_OPERATIONAL=true
+        elif [ "$(params.selection-mode)" = "diff" ]; then
+          CONFIG="$(workspaces.service-config.path)/$(params.config-file)"
+          test -s "$CONFIG" || { echo "Missing or empty service map: $CONFIG" >&2; exit 1; }
+          git -C "$REPO" fetch --depth=100 origin "+$(params.target-ref):refs/remotes/origin/pr-target"
+          BASE=`git -C "$REPO" merge-base refs/remotes/origin/pr-target HEAD || true`
+          if [ -z "$BASE" ]; then
+            echo "Could not find PR merge base; running all portals conservatively"
+            RUN_ADMIN=true
+            RUN_APPLICANT=true
+            RUN_OPERATIONAL=true
+          else
+            git -C "$REPO" diff --name-only "$BASE" HEAD > /tmp/changed-files
+            while read -r changed; do
+              [ -n "$changed" ] || continue
+              MATCHED=false
+              while read -r service path; do
+                case "$service" in ""|\#*) continue ;; esac
+                case "$changed" in
+                  "$path"|"$path"/*)
+                    MATCHED=true
+                    case "$service" in
+                      admin-portal) RUN_ADMIN=true ;;
+                      applicant-portal) RUN_APPLICANT=true ;;
+                      operational-portal) RUN_OPERATIONAL=true ;;
+                      *) echo "Unknown service in map: $service" >&2; exit 1 ;;
+                    esac
+                    ;;
+                esac
+              done < "$CONFIG"
+              if [ "$MATCHED" != true ]; then
+                echo "Unmapped changed path '$changed'; running all portals conservatively"
+                RUN_ADMIN=true
+                RUN_APPLICANT=true
+                RUN_OPERATIONAL=true
+              fi
+            done < /tmp/changed-files
+          fi
+        else
+          echo "selection-mode must be 'diff' or 'all'" >&2
+          exit 1
+        fi
+
+        printf '%s' "$RUN_ADMIN" > "$(results.run-admin-portal.path)"
+        printf '%s' "$RUN_APPLICANT" > "$(results.run-applicant-portal.path)"
+        printf '%s' "$RUN_OPERATIONAL" > "$(results.run-operational-portal.path)"
+        echo "Selected lanes: admin=$RUN_ADMIN applicant=$RUN_APPLICANT operational=$RUN_OPERATIONAL"
+      workingDir: $(workspaces.source.path)
 ---
 apiVersion: tekton.dev/v1
 kind: Task

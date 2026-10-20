@@ -1,0 +1,291 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: application-frontend-three-service-validation
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: customer-application-validation
+    app.kubernetes.io/component: frontend
+spec:
+  params:
+    - name: source-url
+      type: string
+    - name: source-revision
+      type: string
+    - name: source-commit
+      type: string
+      default: ""
+    - name: target-ref
+      type: string
+      default: refs/heads/pre-prod
+    - name: selection-mode
+      type: string
+      default: all
+    - name: config-file
+      type: string
+      default: service-pre-prod.tsv
+    - name: image-admin-portal
+      type: string
+    - name: image-applicant-portal
+      type: string
+    - name: image-operational-portal
+      type: string
+    - name: build-environment
+      type: string
+      default: dev
+  workspaces:
+    - name: dispatch-source
+    - name: service-config
+    - name: source-admin-portal
+    - name: source-applicant-portal
+    - name: source-operational-portal
+    - name: git-credentials
+      optional: true
+    - name: registry-auth
+    - name: npm-auth
+  tasks:
+    - name: dispatch-service-selection
+      taskRef:
+        name: frontend-pr-dispatch
+      params:
+        - name: source-url
+          value: $(params.source-url)
+        - name: source-revision
+          value: $(params.source-revision)
+        - name: source-commit
+          value: $(params.source-commit)
+        - name: target-ref
+          value: $(params.target-ref)
+        - name: selection-mode
+          value: $(params.selection-mode)
+        - name: config-file
+          value: $(params.config-file)
+      workspaces:
+        - name: source
+          workspace: dispatch-source
+        - name: git-credentials
+          workspace: git-credentials
+        - name: service-config
+          workspace: service-config
+    - name: clone-admin-portal
+      runAfter: [dispatch-service-selection]
+      when:
+        - input: $(tasks.dispatch-service-selection.results.run-admin-portal)
+          operator: in
+          values: ["true"]
+      taskRef:
+        name: clone
+      params:
+        - name: url
+          value: $(params.source-url)
+        - name: revision
+          value: $(params.source-revision)
+        - name: commit
+          value: $(params.source-commit)
+      workspaces:
+        - name: source
+          workspace: source-admin-portal
+        - name: git-credentials
+          workspace: git-credentials
+    - name: clone-applicant-portal
+      runAfter: [dispatch-service-selection]
+      when:
+        - input: $(tasks.dispatch-service-selection.results.run-applicant-portal)
+          operator: in
+          values: ["true"]
+      taskRef:
+        name: clone
+      params:
+        - name: url
+          value: $(params.source-url)
+        - name: revision
+          value: $(params.source-revision)
+        - name: commit
+          value: $(params.source-commit)
+      workspaces:
+        - name: source
+          workspace: source-applicant-portal
+        - name: git-credentials
+          workspace: git-credentials
+    - name: clone-operational-portal
+      runAfter: [dispatch-service-selection]
+      when:
+        - input: $(tasks.dispatch-service-selection.results.run-operational-portal)
+          operator: in
+          values: ["true"]
+      taskRef:
+        name: clone
+      params:
+        - name: url
+          value: $(params.source-url)
+        - name: revision
+          value: $(params.source-revision)
+        - name: commit
+          value: $(params.source-commit)
+      workspaces:
+        - name: source
+          workspace: source-operational-portal
+        - name: git-credentials
+          workspace: git-credentials
+    - name: test-admin-portal
+      runAfter: [clone-admin-portal]
+      onError: continue
+      taskRef:
+        name: frontend-unit-test
+      params:
+        - name: project
+          value: admin-portal
+      workspaces:
+        - name: source
+          workspace: source-admin-portal
+        - name: npm-auth
+          workspace: npm-auth
+    - name: test-applicant-portal
+      runAfter: [clone-applicant-portal]
+      onError: continue
+      taskRef:
+        name: frontend-unit-test
+      params:
+        - name: project
+          value: applicant-portal
+      workspaces:
+        - name: source
+          workspace: source-applicant-portal
+        - name: npm-auth
+          workspace: npm-auth
+    - name: test-operational-portal
+      runAfter: [clone-operational-portal]
+      onError: continue
+      taskRef:
+        name: frontend-unit-test
+      params:
+        - name: project
+          value: operational-portal
+      workspaces:
+        - name: source
+          workspace: source-operational-portal
+        - name: npm-auth
+          workspace: npm-auth
+    - name: build-admin-portal
+      runAfter: [test-admin-portal]
+      taskRef:
+        name: build-image
+      params:
+        - name: image
+          value: $(params.image-admin-portal)
+        - name: context
+          value: .
+        - name: containerfile
+          value: deployment/admin-portal/Dockerfile
+        - name: build-args
+          value:
+            - BUILD_ENVIRONMENT=$(params.build-environment)
+      workspaces:
+        - name: source
+          workspace: source-admin-portal
+        - name: registry-auth
+          workspace: registry-auth
+        - name: npm-auth
+          workspace: npm-auth
+    - name: build-applicant-portal
+      runAfter: [test-applicant-portal]
+      taskRef:
+        name: build-image
+      params:
+        - name: image
+          value: $(params.image-applicant-portal)
+        - name: context
+          value: .
+        - name: containerfile
+          value: deployment/applicant-portal/Dockerfile
+        - name: build-args
+          value:
+            - BUILD_ENVIRONMENT=$(params.build-environment)
+      workspaces:
+        - name: source
+          workspace: source-applicant-portal
+        - name: registry-auth
+          workspace: registry-auth
+        - name: npm-auth
+          workspace: npm-auth
+    - name: build-operational-portal
+      runAfter: [test-operational-portal]
+      taskRef:
+        name: build-image
+      params:
+        - name: image
+          value: $(params.image-operational-portal)
+        - name: context
+          value: .
+        - name: containerfile
+          value: deployment/operational-portal/Dockerfile
+        - name: build-args
+          value:
+            - BUILD_ENVIRONMENT=$(params.build-environment)
+      workspaces:
+        - name: source
+          workspace: source-operational-portal
+        - name: registry-auth
+          workspace: registry-auth
+        - name: npm-auth
+          workspace: npm-auth
+    - name: sign-admin-portal
+      runAfter: [build-admin-portal]
+      taskRef:
+        name: sign-image
+      params:
+        - name: image
+          value: $(tasks.build-admin-portal.results.image-url)
+      workspaces:
+        - name: registry-auth
+          workspace: registry-auth
+    - name: sign-applicant-portal
+      runAfter: [build-applicant-portal]
+      taskRef:
+        name: sign-image
+      params:
+        - name: image
+          value: $(tasks.build-applicant-portal.results.image-url)
+      workspaces:
+        - name: registry-auth
+          workspace: registry-auth
+    - name: sign-operational-portal
+      runAfter: [build-operational-portal]
+      taskRef:
+        name: sign-image
+      params:
+        - name: image
+          value: $(tasks.build-operational-portal.results.image-url)
+      workspaces:
+        - name: registry-auth
+          workspace: registry-auth
+    - name: verify-admin-portal
+      runAfter: [sign-admin-portal]
+      taskRef:
+        name: verify-image
+      params:
+        - name: image
+          value: $(tasks.build-admin-portal.results.image-url)
+      workspaces:
+        - name: registry-auth
+          workspace: registry-auth
+    - name: verify-applicant-portal
+      runAfter: [sign-applicant-portal]
+      taskRef:
+        name: verify-image
+      params:
+        - name: image
+          value: $(tasks.build-applicant-portal.results.image-url)
+      workspaces:
+        - name: registry-auth
+          workspace: registry-auth
+    - name: verify-operational-portal
+      runAfter: [sign-operational-portal]
+      taskRef:
+        name: verify-image
+      params:
+        - name: image
+          value: $(tasks.build-operational-portal.results.image-url)
+      workspaces:
+        - name: registry-auth
+          workspace: registry-auth

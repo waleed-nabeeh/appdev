@@ -258,7 +258,8 @@ GitOps write-back.
 
 ## 7. Fan out frontend validation to all three portals
 
-`frontend-three-service-fanout.yaml` defines one Tekton PipelineRun with three
+The Helm chart installs the frontend validation Pipeline. The sample
+`frontend-three-service-fanout.yaml` PipelineRun has three
 independent lanes: `admin-portal`, `applicant-portal`, and
 `operational-portal`. Each lane clones the same source revision into its own
 5Gi PVC, runs that portal's Nx test, builds its Dockerfile with
@@ -267,15 +268,13 @@ run concurrently. Unit-test failures are temporarily non-blocking, matching the
 existing frontend diagnostic; remove `onError: continue` from all three test
 tasks when tests should gate image builds.
 
-This first version always runs all three services. Git-diff/config-based
-selection and merge-request event dispatch are separate follow-up work; this
-manifest is manually dispatched for validating the fan-out itself. It reserves
-three 5Gi PVCs (15Gi total) per run. Change the source revision to the branch or
-commit containing your Dockerfile changes, and use fresh image tags for each
-concurrent/repeated run.
+The sample run selects all three services. PR-triggered runs use the diff-based
+selector below. The run reserves three 5Gi PVCs (15Gi total), plus the
+dispatcher workspace when using `diff` mode. Change the source revision to the
+branch or commit containing your Dockerfile changes, and use fresh image tags
+for each concurrent/repeated run.
 
 ```bash
-yq eval 'select(.kind == "Pipeline")' customer-transfer/devops-apply/frontend-three-service-fanout.yaml | oc apply -f -
 yq eval 'select(.kind == "PipelineRun")' customer-transfer/devops-apply/frontend-three-service-fanout.yaml | oc create -f -
 oc get pipelineruns,taskruns,pods,pvc -n devops
 ```
@@ -285,7 +284,74 @@ Before each run, edit `source-revision` and the three image tags in the
 manifest as needed. The source commit must already be pushed to Azure DevOps;
 Tekton cannot build uncommitted Dockerfile edits on your workstation.
 
-## 8. Image tag location
+## 8. Trigger frontend validation from Azure Repos PRs
+
+The Helm chart installs the frontend Pipeline, selector ConfigMap, EventListener,
+TriggerBinding/Template, and authenticated HTTPS webhook proxy together when
+`frontendPr.enabled: true` is set. Active PR create/update events targeting
+`pre-prod` compare the pinned source commit with the target branch and select
+lanes using `pipelines/chart/files/service-pre-prod.tsv`. An unmapped changed
+path conservatively selects all three. The manual PipelineRun defaults to `all`.
+
+Before applying, confirm OpenShift Pipelines Triggers CRDs exist:
+
+```bash
+oc get crd eventlisteners.triggers.tekton.dev triggerbindings.triggers.tekton.dev triggertemplates.triggers.tekton.dev
+```
+
+The proxy needs a Basic Auth htpasswd Secret before Helm creates its Deployment.
+On a trusted admin workstation with `htpasswd` installed, run:
+
+```bash
+htpasswd -B -c /tmp/frontend-pr.htpasswd ado-hook
+oc -n devops create secret generic frontend-pr-webhook-auth \
+  --from-file=htpasswd=/tmp/frontend-pr.htpasswd
+rm -f /tmp/frontend-pr.htpasswd
+helm upgrade --install customer-release-pipeline ./pipelines/chart \
+  --namespace devops -f customer-transfer/devops-apply/values-devops.yaml
+oc get route frontend-pr-webhook -n devops
+oc get eventlistener,triggerbinding,triggertemplate,pipeline -n devops
+```
+
+Wait for the proxy pod to become Ready and copy the Route's HTTPS host. In
+Azure DevOps, open **Project Settings → Service Hooks → Create Subscription →
+Web Hooks**. Create subscriptions for **Pull request created** and **Pull
+request updated**. Filter each to repository
+`RedHat_UnifiedVisaPlatform.Frontend` and target branch `pre-prod`. Set the URL
+to `https://<frontend-pr-webhook-route-host>/`, enable Basic Authentication
+with username `ado-hook` and the password used above, and enable TLS
+certificate validation. Use the full resource payload. Send a test event and
+check **Service Hooks → History** for a successful delivery.
+
+Then create or update an active PR into `pre-prod`. The listener rejects other
+target branches, repositories, and event types. Check the resulting run:
+
+```bash
+oc get eventlistener,triggerbinding,triggertemplate -n devops
+oc get pods,pipelineruns,taskruns,pvc -n devops
+oc logs deployment/el-frontend-pr -n devops --since=10m
+oc describe pipelinerun -n devops <run-name>
+```
+
+Each run reserves about 17Gi across its workspaces (2Gi dispatch plus three
+5Gi lane PVCs), even when the diff selects fewer lanes. Leave sufficient quota
+for concurrent PRs. To test the selector without Azure, set `selection-mode`
+to `diff`, provide a source branch/commit and target ref in a PipelineRun, and
+bind the chart-managed `frontend-service-selector` ConfigMap workspace. Edit
+`pipelines/chart/files/service-pre-prod.tsv` to adjust path ownership, then run
+the Helm upgrade again.
+
+Important security boundary: this PR Pipeline currently runs tests and
+Dockerfiles with `npm-auth`, Quay push credentials, and RHTAS signing
+credentials. Only enable this trigger for a repository where PR authors are
+trusted to execute code with those credentials. For broader contributor access,
+use a separate unprivileged PR validation Pipeline (no registry push/signing
+secrets), and keep image publication/signing on a protected post-merge run.
+This trigger starts Tekton but does not report its result as an Azure PR status
+check or block PR completion; that requires a separate Azure status reporter
+and branch policy.
+
+## 9. Image tag location
 
 After approval, enable GitOps write-back and use this values file in the
 `RedHat_HelmCharts` repository:

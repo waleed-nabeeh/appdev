@@ -12,6 +12,18 @@ spec:
       type: string
     - name: source-revision
       type: string
+    - name: source-commit
+      type: string
+      default: ""
+    - name: target-ref
+      type: string
+      default: refs/heads/pre-prod
+    - name: selection-mode
+      type: string
+      default: all
+    - name: config-file
+      type: string
+      default: service-pre-prod.tsv
     - name: image-admin-portal
       type: string
     - name: image-applicant-portal
@@ -22,6 +34,8 @@ spec:
       type: string
       default: dev
   workspaces:
+    - name: dispatch-source
+    - name: service-config
     - name: source-admin-portal
     - name: source-applicant-portal
     - name: source-operational-portal
@@ -31,7 +45,36 @@ spec:
     - name: npm-auth
 
   tasks:
+    - name: dispatch-service-selection
+      taskRef:
+        name: frontend-pr-dispatch
+      params:
+        - name: source-url
+          value: $(params.source-url)
+        - name: source-revision
+          value: $(params.source-revision)
+        - name: source-commit
+          value: $(params.source-commit)
+        - name: target-ref
+          value: $(params.target-ref)
+        - name: selection-mode
+          value: $(params.selection-mode)
+        - name: config-file
+          value: $(params.config-file)
+      workspaces:
+        - name: source
+          workspace: dispatch-source
+        - name: git-credentials
+          workspace: git-credentials
+        - name: service-config
+          workspace: service-config
+
     - name: clone-admin-portal
+      runAfter: [dispatch-service-selection]
+      when:
+        - input: $(tasks.dispatch-service-selection.results.run-admin-portal)
+          operator: in
+          values: ["true"]
       taskRef:
         name: clone
       params:
@@ -39,6 +82,8 @@ spec:
           value: $(params.source-url)
         - name: revision
           value: $(params.source-revision)
+        - name: commit
+          value: $(params.source-commit)
       workspaces:
         - name: source
           workspace: source-admin-portal
@@ -46,6 +91,11 @@ spec:
           workspace: git-credentials
 
     - name: clone-applicant-portal
+      runAfter: [dispatch-service-selection]
+      when:
+        - input: $(tasks.dispatch-service-selection.results.run-applicant-portal)
+          operator: in
+          values: ["true"]
       taskRef:
         name: clone
       params:
@@ -53,6 +103,8 @@ spec:
           value: $(params.source-url)
         - name: revision
           value: $(params.source-revision)
+        - name: commit
+          value: $(params.source-commit)
       workspaces:
         - name: source
           workspace: source-applicant-portal
@@ -60,6 +112,11 @@ spec:
           workspace: git-credentials
 
     - name: clone-operational-portal
+      runAfter: [dispatch-service-selection]
+      when:
+        - input: $(tasks.dispatch-service-selection.results.run-operational-portal)
+          operator: in
+          values: ["true"]
       taskRef:
         name: clone
       params:
@@ -67,6 +124,8 @@ spec:
           value: $(params.source-url)
         - name: revision
           value: $(params.source-revision)
+        - name: commit
+          value: $(params.source-commit)
       workspaces:
         - name: source
           workspace: source-operational-portal
@@ -266,6 +325,8 @@ spec:
       value: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Frontend
     - name: source-revision
       value: test
+    - name: selection-mode
+      value: all
     - name: image-admin-portal
       value: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/admin-portal:dev-validation
     - name: image-applicant-portal
@@ -275,6 +336,16 @@ spec:
     - name: build-environment
       value: dev
   workspaces:
+    - name: dispatch-source
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 2Gi
+    - name: service-config
+      configMap:
+        name: frontend-service-selector
     - name: source-admin-portal
       volumeClaimTemplate:
         spec:

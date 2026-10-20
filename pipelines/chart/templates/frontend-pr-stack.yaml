@@ -1,0 +1,264 @@
+{{- if .Values.frontendPr.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: frontend-pr-listener
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: frontend-pr-listener
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups: ["tekton.dev"]
+    resources: ["pipelineruns"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: frontend-pr-listener
+  namespace: {{ .Release.Namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: frontend-pr-listener
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: frontend-pr-listener
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: frontend-azure-pr
+  namespace: {{ .Release.Namespace }}
+spec:
+  params:
+    - name: source-revision
+      value: $(body.resource.sourceRefName)
+    - name: source-commit
+      value: $(body.resource.lastMergeSourceCommit.commitId)
+    - name: target-ref
+      value: $(body.resource.targetRefName)
+    - name: pull-request-id
+      value: $(body.resource.pullRequestId)
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: frontend-azure-pr
+  namespace: {{ .Release.Namespace }}
+spec:
+  params:
+    - name: source-revision
+    - name: source-commit
+    - name: target-ref
+    - name: pull-request-id
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1
+      kind: PipelineRun
+      metadata:
+        generateName: frontend-pr-$(tt.params.pull-request-id)-
+        namespace: {{ .Release.Namespace }}
+        labels:
+          app.kubernetes.io/part-of: customer-application-validation
+          app.kubernetes.io/component: frontend
+          customer.mofa.gov.sa/trigger: azure-pr
+      spec:
+        pipelineRef:
+          name: application-frontend-three-service-validation
+        taskRunTemplate:
+          serviceAccountName: pipeline
+        params:
+          - name: source-url
+            value: {{ .Values.frontendPr.sourceUrl }}
+          - name: source-revision
+            value: $(tt.params.source-revision)
+          - name: source-commit
+            value: $(tt.params.source-commit)
+          - name: target-ref
+            value: $(tt.params.target-ref)
+          - name: selection-mode
+            value: diff
+          - name: config-file
+            value: service-pre-prod.tsv
+          - name: image-admin-portal
+            value: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/admin-portal:pr-$(tt.params.source-commit)
+          - name: image-applicant-portal
+            value: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/applicant-portal:pr-$(tt.params.source-commit)
+          - name: image-operational-portal
+            value: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/operational-portal:pr-$(tt.params.source-commit)
+          - name: build-environment
+            value: dev
+        workspaces:
+          - name: dispatch-source
+            volumeClaimTemplate:
+              spec:
+                accessModes: [ReadWriteOnce]
+                resources:
+                  requests:
+                    storage: 2Gi
+          - name: service-config
+            configMap:
+              name: frontend-service-selector
+          - name: source-admin-portal
+            volumeClaimTemplate:
+              spec:
+                accessModes: [ReadWriteOnce]
+                resources:
+                  requests:
+                    storage: 5Gi
+          - name: source-applicant-portal
+            volumeClaimTemplate:
+              spec:
+                accessModes: [ReadWriteOnce]
+                resources:
+                  requests:
+                    storage: 5Gi
+          - name: source-operational-portal
+            volumeClaimTemplate:
+              spec:
+                accessModes: [ReadWriteOnce]
+                resources:
+                  requests:
+                    storage: 5Gi
+          - name: git-credentials
+            secret:
+              secretName: git-credentials
+          - name: registry-auth
+            secret:
+              secretName: registry-auth
+          - name: npm-auth
+            secret:
+              secretName: npm-auth
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: frontend-pr
+  namespace: {{ .Release.Namespace }}
+spec:
+  serviceAccountName: frontend-pr-listener
+  triggers:
+    - name: azure-repos-preprod-pull-requests
+      bindings:
+        - ref: frontend-azure-pr
+      template:
+        ref: frontend-azure-pr
+      interceptors:
+        - ref:
+            name: cel
+          params:
+            - name: filter
+              value: >-
+                (body.eventType == 'git.pullrequest.created' || body.eventType == 'git.pullrequest.updated') &&
+                body.resource.status == 'active' &&
+                body.resource.targetRefName == '{{ .Values.frontendPr.targetBranch }}' &&
+                body.resource.repository.name == 'RedHat_UnifiedVisaPlatform.Frontend' &&
+                body.resource.sourceRefName.startsWith('refs/heads/') &&
+                body.resource.lastMergeSourceCommit.commitId != ''
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-pr-webhook-proxy
+  namespace: {{ .Release.Namespace }}
+data:
+  nginx.conf: |
+    pid /tmp/nginx.pid;
+    events { worker_connections 1024; }
+    http {
+      access_log /dev/stdout;
+      error_log /dev/stderr warn;
+      client_body_temp_path /tmp/client_temp;
+      proxy_temp_path /tmp/proxy_temp;
+      server {
+        listen 8080;
+        server_name _;
+        location = /healthz {
+          auth_basic off;
+          return 200 "ok\n";
+        }
+        location / {
+          auth_basic "Azure DevOps service hook";
+          auth_basic_user_file /etc/nginx/auth/htpasswd;
+          proxy_pass http://el-frontend-pr.{{ .Release.Namespace }}.svc.cluster.local:8080;
+          proxy_set_header Host $host;
+          proxy_set_header X-Forwarded-Proto $scheme;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-pr-webhook-proxy
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend-pr-webhook-proxy
+  template:
+    metadata:
+      labels:
+        app: frontend-pr-webhook-proxy
+    spec:
+      containers:
+        - name: nginx
+          image: {{ .Values.frontendPr.proxyImage | quote }}
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+            - name: webhook-auth
+              mountPath: /etc/nginx/auth
+              readOnly: true
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: frontend-pr-webhook-proxy
+        - name: webhook-auth
+          secret:
+            secretName: {{ .Values.frontendPr.webhookAuthSecretName }}
+            defaultMode: 0444
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-pr-webhook-proxy
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    app: frontend-pr-webhook-proxy
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: frontend-pr-webhook
+  namespace: {{ .Release.Namespace }}
+spec:
+  to:
+    kind: Service
+    name: frontend-pr-webhook-proxy
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+{{- end }}

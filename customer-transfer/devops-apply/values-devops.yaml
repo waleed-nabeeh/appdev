@@ -25,3 +25,7 @@ rhacs:
 
 serviceAccount:
   name: pipeline
+
+frontendPr:
+  enabled: true
+  targetBranch: pre-prod
