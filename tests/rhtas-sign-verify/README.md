@@ -32,7 +32,13 @@ Quay auth file. These names are intentionally different from the old private
 ./mirror-image.sh registry.access.redhat.com/ubi9/dotnet-100:10.0 quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/ubi-sdk:10.0 ../../../pullsecret.txt-quay
 ./mirror-image.sh registry.access.redhat.com/ubi9/nodejs-24:latest quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nodejs-24:ubi9 ../../../pullsecret.txt-quay
 ./mirror-image.sh registry.access.redhat.com/ubi9/nginx-126:latest quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx-126:ubi9 ../../../pullsecret.txt-quay
+./mirror-image.sh docker.io/nginxinc/nginx-unprivileged:1.28.1-alpine3.23 quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx-unprivileged:1.28.1-alpine3.23 ../../../pullsecret.txt-quay
 ```
+
+The unprivileged Nginx image above is for the Tekton PR webhook proxy. It is a
+runtime image (unlike the UBI Nginx S2I builder image), runs without root, and
+listens on port 8080, matching the proxy Deployment. After mirroring it, upgrade
+the Helm release so `frontendPr.proxyImage` uses the internal Quay tag.
 
 For closer version matching to the existing frontend bases, these public Docker
 Hub alternatives can also be mirrored:

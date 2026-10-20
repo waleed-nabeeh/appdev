@@ -29,3 +29,4 @@ serviceAccount:
 frontendPr:
   enabled: true
   targetBranch: pre-prod
+  proxyImage: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx-unprivileged:1.28.1-alpine3.23

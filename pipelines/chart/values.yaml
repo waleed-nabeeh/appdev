@@ -5,7 +5,7 @@ frontendPr:
   enabled: false
   targetBranch: pre-prod
   sourceUrl: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Frontend
-  proxyImage: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx-126:ubi9
+  proxyImage: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx-unprivileged:1.28.1-alpine3.23
   webhookAuthSecretName: frontend-pr-webhook-auth
 
 proxy:
