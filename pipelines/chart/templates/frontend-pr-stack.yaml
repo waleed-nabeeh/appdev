@@ -40,6 +40,8 @@ spec:
       value: $(body.resource.sourceRefName)
     - name: source-commit
       value: $(body.resource.lastMergeSourceCommit.commitId)
+    - name: source-commit-short
+      value: $(extensions.short-commit)
     - name: target-ref
       value: $(body.resource.targetRefName)
     - name: pull-request-id
@@ -54,6 +56,7 @@ spec:
   params:
     - name: source-revision
     - name: source-commit
+    - name: source-commit-short
     - name: target-ref
     - name: pull-request-id
   resourcetemplates:
@@ -85,11 +88,11 @@ spec:
           - name: config-file
             value: service-pre-prod.tsv
           - name: image-admin-portal
-            value: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/admin-portal:pr-$(tt.params.source-commit)
+            value: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/admin-portal:pr-$(tt.params.source-commit-short)
           - name: image-applicant-portal
-            value: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/applicant-portal:pr-$(tt.params.source-commit)
+            value: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/applicant-portal:pr-$(tt.params.source-commit-short)
           - name: image-operational-portal
-            value: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/operational-portal:pr-$(tt.params.source-commit)
+            value: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/operational-portal:pr-$(tt.params.source-commit-short)
           - name: build-environment
             value: dev
         workspaces:
@@ -159,6 +162,10 @@ spec:
                 body.resource.repository.name == 'RedHat_UnifiedVisaPlatform.Frontend' &&
                 body.resource.sourceRefName.startsWith('refs/heads/') &&
                 body.resource.lastMergeSourceCommit.commitId != ''
+            - name: overlays
+              value:
+                - key: short-commit
+                  expression: body.resource.lastMergeSourceCommit.commitId.truncate(7)
 ---
 apiVersion: v1
 kind: ConfigMap
