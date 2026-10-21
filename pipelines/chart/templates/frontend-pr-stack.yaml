@@ -95,6 +95,8 @@ spec:
             value: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/operational-portal:pr-$(tt.params.source-commit-short)
           - name: build-environment
             value: dev
+          - name: perform-gitops-update
+            value: "true"
         workspaces:
           - name: dispatch-source
             volumeClaimTemplate:

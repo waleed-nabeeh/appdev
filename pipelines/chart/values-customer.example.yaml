@@ -18,3 +18,14 @@ rhtas:
 
 proxy:
   secretName: pipeline-proxy
+
+frontendPr:
+  enabled: true
+  targetBranch: pre-prod
+  sourceUrl: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Frontend
+  proxyImage: registry.customer.example/nginx-unprivileged@sha256:REPLACE
+  webhookAuthSecretName: frontend-pr-webhook-auth
+  gitops:
+    repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_argocd
+    revision: dev
+    valuesFile: development/apps/core-apps.yaml

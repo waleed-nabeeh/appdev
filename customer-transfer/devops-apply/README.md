@@ -15,6 +15,16 @@ npm-auth:        key `NPM_TOKEN` (raw Azure Artifacts PAT for frontend builds)
 pipeline-proxy:  keys `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`
 ```
 
+The frontend PR pipeline also pushes verified image references to the configured
+GitOps repository. The `git-credentials` PAT must have Azure Repos **Code Read
+and Write** permission for both the frontend source repo and `RedHat_argocd`.
+The current Argo CD root Application tracks branch `dev`, path `development`,
+and reads `development/apps/core-apps.yaml`; the pipeline therefore updates
+only the selected frontend apps' image repository and tag in that file. It does
+not change the `app-chart` Helm `targetRevision` (`1.0.0`).
+The Azure PR trigger opts into that GitOps update. A manually created
+PipelineRun leaves `perform-gitops-update` false unless explicitly enabled.
+
 The `.git-credentials` value is:
 
 ```text
@@ -99,7 +109,7 @@ From the `appdev` repository root, run:
 
 ```bash
 oc project devops
-helm upgrade --install customer-release-pipeline \
+helm upgrade --install release-pipeline \
   ./pipelines/chart \
   --namespace devops \
   -f customer-transfer/devops-apply/values-devops.yaml
@@ -242,7 +252,7 @@ Dockerfiles, upgrade the chart to install the optional Buildah secret
 workspace, then apply the Pipeline and create its run:
 
 ```bash
-helm upgrade --install customer-release-pipeline ./pipelines/chart \
+helm upgrade --install release-pipeline ./pipelines/chart \
   --namespace devops -f customer-transfer/devops-apply/values-devops.yaml
 yq eval 'select(.kind == "Pipeline")' customer-transfer/devops-apply/frontend-build-validation.yaml | oc apply -f -
 yq eval 'select(.kind == "PipelineRun")' customer-transfer/devops-apply/frontend-build-validation.yaml | oc create -f -
@@ -307,7 +317,7 @@ htpasswd -B -c /tmp/frontend-pr.htpasswd ado-hook
 oc -n devops create secret generic frontend-pr-webhook-auth \
   --from-file=htpasswd=/tmp/frontend-pr.htpasswd
 rm -f /tmp/frontend-pr.htpasswd
-helm upgrade --install customer-release-pipeline ./pipelines/chart \
+helm upgrade --install release-pipeline ./pipelines/chart \
   --namespace devops -f customer-transfer/devops-apply/values-devops.yaml
 oc get route frontend-pr-webhook -n devops
 oc get eventlistener,triggerbinding,triggertemplate,pipeline -n devops
@@ -332,6 +342,24 @@ oc get pods,pipelineruns,taskruns,pvc -n devops
 oc logs deployment/el-frontend-pr -n devops --since=10m
 oc describe pipelinerun -n devops <run-name>
 ```
+
+### GitOps rollout
+
+After a PR PipelineRun succeeds, confirm that its `update-frontend-gitops` task
+created a commit on `RedHat_argocd` branch `dev`. The root Argo CD Application
+currently has automated sync disabled, so sync `dev-root-applications` once
+from the Argo CD UI/CLI. Its update applies the selected child Application
+image overrides; those child apps have auto-sync enabled and should roll out
+the new image tags. Check the three child apps and their workloads in Argo CD
+and OpenShift. Before enabling automatic root sync, confirm the desired prune
+and self-heal policy with the platform owner.
+
+The PR images use immutable `pr-<7-character-commit-SHA>` tags. This is suitable
+for a PR deployment test, not a release tag. A later protected post-merge or
+release pipeline can publish a SemVer tag. Do not bump or republish `app-chart`
+for an application-only image change: keep its `targetRevision` at `1.0.0`.
+Publish a new OCI chart version and update `targetRevision` only when the Helm
+chart itself changes.
 
 Each run reserves about 17Gi across its workspaces (2Gi dispatch plus three
 5Gi lane PVCs), even when the diff selects fewer lanes. Leave sufficient quota

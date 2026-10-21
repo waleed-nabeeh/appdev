@@ -7,6 +7,10 @@ frontendPr:
   sourceUrl: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Frontend
   proxyImage: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx-unprivileged:1.28.1-alpine3.23
   webhookAuthSecretName: frontend-pr-webhook-auth
+  gitops:
+    repository: ""
+    revision: dev
+    valuesFile: development/apps/core-apps.yaml
 
 proxy:
   secretName: pipeline-proxy

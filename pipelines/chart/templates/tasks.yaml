@@ -593,6 +593,168 @@ spec:
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
+  name: stage-frontend-gitops-update
+spec:
+  params:
+    - name: application
+      type: string
+    - name: image
+      type: string
+  workspaces:
+    - name: staging
+  steps:
+    - name: stage
+      image: {{ .Values.images.git }}
+      script: |
+        #!/bin/sh
+        set -eu
+        case "$(params.application)" in
+          admin-portal-dev|applicant-portal-dev|operational-portal-dev) ;;
+          *) echo "Refusing unknown Argo CD application" >&2; exit 1 ;;
+        esac
+        image="$(params.image)"
+        image="${image%%@*}"
+        case "$image" in
+          */*:*) ;;
+          *) echo "Expected repository:tag image reference" >&2; exit 1 ;;
+        esac
+        printf '%s\t%s\n' "$(params.application)" "$image" \
+          > "$(workspaces.staging.path)/.gitops-image-$(params.application).tsv"
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: update-frontend-gitops
+spec:
+  params:
+    - name: repository
+      type: string
+    - name: revision
+      type: string
+    - name: values-file
+      type: string
+  workspaces:
+    - name: admin-source
+    - name: applicant-source
+    - name: operational-source
+    - name: git-credentials
+      optional: true
+  steps:
+    - name: update-and-push
+      image: {{ .Values.images.git }}
+      env:
+        - name: HOME
+          value: /tekton/home
+      script: |
+        #!/bin/sh
+        set -eu
+        ADMIN_SOURCE="$(workspaces.admin-source.path)"
+        APPLICANT_SOURCE="$(workspaces.applicant-source.path)"
+        OPERATIONAL_SOURCE="$(workspaces.operational-source.path)"
+        if [ ! -f "$ADMIN_SOURCE/.gitops-image-admin-portal-dev.tsv" ] && \
+           [ ! -f "$APPLICANT_SOURCE/.gitops-image-applicant-portal-dev.tsv" ] && \
+           [ ! -f "$OPERATIONAL_SOURCE/.gitops-image-operational-portal-dev.tsv" ]; then
+          echo "No verified frontend images to deploy"
+          exit 0
+        fi
+
+        if [ "$(workspaces.git-credentials.bound)" = "true" ]; then
+          if [ -f "$(workspaces.git-credentials.path)/id_ed25519" ]; then
+            mkdir -p "$HOME/.ssh"
+            cp "$(workspaces.git-credentials.path)/id_ed25519" "$HOME/.ssh/id_ed25519"
+            cp "$(workspaces.git-credentials.path)/known_hosts" "$HOME/.ssh/known_hosts"
+            cp "$(workspaces.git-credentials.path)/ssh_config" "$HOME/.ssh/config"
+            export GIT_SSH_COMMAND="ssh -F $HOME/.ssh/config -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
+          else
+            cp -R "$(workspaces.git-credentials.path)"/. "$HOME"/
+            if [ -f "$HOME/.git-credentials" ]; then
+              git config --global credential.helper store
+            fi
+          fi
+        fi
+        chmod -R go-rwx "$HOME"
+
+        REPO=/tmp/frontend-gitops
+        git clone --branch "$(params.revision)" "$(params.repository)" "$REPO"
+        cd "$REPO"
+        VALUES="$(params.values-file)"
+        case "$VALUES" in /*|*../*) echo "values-file must stay inside the GitOps repository" >&2; exit 1 ;; esac
+        test -f "$VALUES" || { echo "Missing GitOps values file: $VALUES" >&2; exit 1; }
+
+        update_app() {
+          app="$1"
+          image_file="$2"
+          [ -f "$image_file" ] || return 0
+          IFS="$(printf '\t')" read -r staged_app image < "$image_file"
+          [ "$staged_app" = "$app" ] || { echo "Unexpected application in $image_file" >&2; exit 1; }
+          repository="${image%:*}"
+          tag="${image##*:}"
+          awk -v app="$app" -v repository="$repository" -v tag="$tag" '
+            function indent(line,    n) { n = match(line, /[^ ]/); return n ? n - 1 : length(line) }
+            function scalar(line, key, value,    prefix) {
+              prefix = line
+              sub(/:.*/, ":", prefix)
+              return prefix " \"" value "\""
+            }
+            BEGIN { in_app = 0; in_override = 0; in_image = 0; found_app = 0; found_repo = 0; found_tag = 0 }
+            {
+              line = $0
+              if (line ~ /^    [A-Za-z0-9_-]+:[[:space:]]*$/) {
+                in_app = (line == "    " app ":")
+                in_override = 0; in_image = 0
+                if (in_app) found_app = 1
+              }
+              if (in_app) {
+                n = indent(line)
+                if (n == 6 && line ~ /^      overrideValues:[[:space:]]*$/) { in_override = 1; in_image = 0 }
+                else if (n == 6 && line ~ /^      [A-Za-z_-]+:/) { in_override = 0; in_image = 0 }
+                if (in_override && n == 8 && line ~ /^        image:[[:space:]]*$/) in_image = 1
+                else if (in_image && n == 8) in_image = 0
+                if (in_image && n == 10 && line ~ /^          repository:[[:space:]]*/) {
+                  line = scalar(line, "repository", repository); found_repo = 1
+                }
+                if (in_image && n == 10 && line ~ /^          tag:[[:space:]]*/) {
+                  line = scalar(line, "tag", tag); found_tag = 1
+                }
+              }
+              print line
+            }
+            END {
+              if (!found_app || !found_repo || !found_tag) exit 42
+            }
+          ' "$VALUES" > "$VALUES.tmp" || { rm -f "$VALUES.tmp"; echo "Could not safely update $app in $VALUES" >&2; exit 1; }
+          mv "$VALUES.tmp" "$VALUES"
+        }
+
+        update_app admin-portal-dev "$ADMIN_SOURCE/.gitops-image-admin-portal-dev.tsv"
+        update_app applicant-portal-dev "$APPLICANT_SOURCE/.gitops-image-applicant-portal-dev.tsv"
+        update_app operational-portal-dev "$OPERATIONAL_SOURCE/.gitops-image-operational-portal-dev.tsv"
+
+        git config user.name "Tekton Pipeline"
+        git config user.email "tekton@customer.invalid"
+        git add "$VALUES"
+        if git diff --cached --quiet; then
+          echo "GitOps already references the verified frontend image tags"
+          exit 0
+        fi
+        git commit -m "ci(frontend): deploy verified PR images [skip ci]"
+        for attempt in 1 2 3 4 5; do
+          if git push origin "HEAD:$(params.revision)"; then
+            echo "Updated GitOps branch $(params.revision)"
+            exit 0
+          fi
+          git fetch origin "$(params.revision)"
+          git rebase "origin/$(params.revision)"
+        done
+        echo "GitOps push failed after five attempts" >&2
+        exit 1
+      securityContext:
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
   name: update-helm-chart
 spec:
   params:
