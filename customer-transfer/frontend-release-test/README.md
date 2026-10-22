@@ -9,18 +9,20 @@ is required for this test. Existing webhook configuration is left untouched.
 ## What Runs
 
 `application-frontend-release-test` resolves one source commit, then runs three
-parallel lanes: clone -> test -> build/push -> RHACS scan/gate -> sign -> verify.
+parallel lanes: clone -> test -> build/push -> sign -> verify, matching the
+previous working frontend fanout. ACS scan/gate are disabled because ACS is not
+ready; this run does not constitute vulnerability or policy validation.
 After all three verify successfully, one Task commits
 `tekton-frontend-test/releases/frontend.json` to `RedHat_argocd`, branch `dev`.
 This JSON document records the full source SHA, eight-character tag, PipelineRun,
 and each image repository/digest. The new app-of-apps chart consumes it.
 
 Unit-test failures temporarily remain non-blocking, as requested for frontend
-testing. Scan, policy, signing, verification, and GitOps failures are blocking.
-Set `frontendRelease.allowTestFailure=false` to enforce tests. RHACS needs
+testing. Build, signing, verification, and GitOps failures are blocking.
+Set `frontendRelease.allowTestFailure=false` to enforce tests. When ACS is ready,
+set `frontendRelease.scanEnabled=true` to add blocking scan/gate stages. RHACS needs
 registry integration to pull the private images; its credentials are separate
-from the pipeline registry Secret. `scanEnabled=false` is available only for an
-explicit build/signing-only test and does not constitute security validation.
+from the pipeline registry Secret.
 
 Chart `frontend-app:0.1.0` is published separately, once before the first run.
 It is reused across image builds. Bump Chart.yaml/version and GitOps
@@ -40,7 +42,7 @@ does not validate the customer's Operator versions or RBAC.
 oc whoami --show-server
 oc get clusterversion version
 oc get csv -A
-oc -n devops get secret git-credentials registry-auth npm-auth pipeline-proxy rhacs-auth
+oc -n devops get secret git-credentials registry-auth npm-auth pipeline-proxy
 oc get argocd -A
 ```
 
@@ -48,6 +50,13 @@ The existing `git-credentials` Secret must provide the `.git-credentials` format
 used by the tested HTTPS clone workflow: read access to the frontend source and
 write access to RedHat_argocd/dev. Do not embed tokens in URLs or these files.
 The pipeline service account remains `pipeline` in `devops`.
+
+The GitOps directory from step 3 must exist before running the full release.
+Installing only the Pipeline does not seed that directory: build/sign/verify
+can run, but the final GitOps update fails when its release JSON is missing.
+Do not seed GitOps during a running release; the concurrent-change guard will
+reject a branch changed after that run started. Prepare GitOps, then start a
+new PipelineRun. Chart publication and Argo setup are also needed to deploy.
 
 The new workloads use namespace `frontend-tekton-test`, unique names and routes,
 and port 8080. Confirm the built nginx image runs under restricted OpenShift SCC

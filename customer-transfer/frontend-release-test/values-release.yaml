@@ -3,6 +3,7 @@
 frontendRelease:
   enabled: true
   sourceRevision: pre-prod
-  scanEnabled: true
+  # ACS is not ready: match the working clone/test/build/sign/verify fanout.
+  scanEnabled: false
   # Temporary test concession carried over from the existing frontend validation.
   allowTestFailure: true

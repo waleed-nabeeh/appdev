@@ -6,7 +6,7 @@ frontendRelease:
   sourceUrl: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Frontend
   sourceRevision: pre-prod
   imageRepository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops
-  scanEnabled: true
+  scanEnabled: false
   allowTestFailure: true
   gitops:
     repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_argocd

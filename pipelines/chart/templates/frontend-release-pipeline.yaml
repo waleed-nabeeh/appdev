@@ -35,6 +35,7 @@ spec:
           workspace: git-credentials
 {{- range $service := list "admin-portal" "applicant-portal" "operational-portal" }}
     - name: clone-{{ $service }}
+      runAfter: [resolve-source]
       taskRef:
         name: clone
       params:
@@ -86,6 +87,7 @@ spec:
           workspace: npm-auth
 {{- if $.Values.frontendRelease.scanEnabled }}
     - name: scan-{{ $service }}
+      runAfter: [build-{{ $service }}]
       taskRef:
         name: scan-image
       params:
@@ -102,6 +104,8 @@ spec:
     - name: sign-{{ $service }}
 {{- if $.Values.frontendRelease.scanEnabled }}
       runAfter: [gate-{{ $service }}]
+{{- else }}
+      runAfter: [build-{{ $service }}]
 {{- end }}
       taskRef:
         name: sign-image

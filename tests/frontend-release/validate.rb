@@ -23,7 +23,28 @@ base = ['helm', 'template', 'release-pipeline', 'pipelines/chart', '-n', 'devops
         '-f', 'customer-transfer/devops-apply/values-devops.yaml']
 default = docs(run(*base))
 check(!default.any? { |d| d.dig('metadata', 'name') == 'application-frontend-release-test' }, 'Release must default off')
-release = docs(run(*base, '-f', 'customer-transfer/frontend-release-test/values-release.yaml'))
+test_release = docs(run(*base, '-f', 'customer-transfer/frontend-release-test/values-release.yaml'))
+test_pipeline = test_release.find { |d| d.dig('metadata', 'name') == 'application-frontend-release-test' }
+test_tasks = test_pipeline['spec']['tasks']
+check(test_tasks.none? { |t| t['name'].start_with?('scan-', 'gate-') }, 'ACS must be absent from the customer test')
+legacy = test_release.find { |d| d.dig('metadata', 'name') == 'application-frontend-three-service-validation' }['spec']['tasks']
+%w[admin-portal applicant-portal operational-portal].each do |service|
+  lane = ['resolve-source'] + %w[clone test build sign verify].map { |stage| "#{stage}-#{service}" }
+  lane.each_cons(2) do |before, after|
+    check(test_tasks.find { |t| t['name'] == after }['runAfter'] == [before], "Broken test lane #{after}")
+  end
+  %w[test build sign verify].each do |stage|
+    old = legacy.find { |t| t['name'] == "#{stage}-#{service}" }
+    new_task = test_tasks.find { |t| t['name'] == old['name'] }
+    check(new_task['taskRef'] == old['taskRef'], "Task drift for #{old['name']}")
+    check(new_task['workspaces'] == old['workspaces'], "Workspace drift for #{old['name']}")
+    check(new_task['onError'] == old['onError'], "Error handling drift for #{old['name']}")
+    old_params = old['params'].reject { |p| stage == 'build' && p['name'] == 'image' }
+    new_params = new_task['params'].reject { |p| stage == 'build' && p['name'] == 'image' }
+    check(new_params.to_json == old_params.to_json.gsub('$(params.build-environment)', 'dev'), "Parameter drift for #{old['name']}")
+  end
+end
+release = docs(run(*base, '-f', 'customer-transfer/frontend-release-test/values-release.yaml', '--set', 'frontendRelease.scanEnabled=true'))
 tasks = release.select { |d| d['kind'] == 'Task' }.to_h { |d| [d['metadata']['name'], d['spec']] }
 pipeline = release.find { |d| d.dig('metadata', 'name') == 'application-frontend-release-test' }
 check(!pipeline.nil?, 'Missing release Pipeline')
@@ -52,6 +73,10 @@ ptasks.each do |t|
 end
 services = %w[admin-portal applicant-portal operational-portal]
 services.each do |service|
+  lane = ['resolve-source'] + %w[clone test build scan gate sign verify].map { |stage| "#{stage}-#{service}" }
+  lane.each_cons(2) do |before, after|
+    check(ptasks.find { |t| t['name'] == after }['runAfter'] == [before], "Missing explicit lane edge #{before} -> #{after}")
+  end
   build = ptasks.find { |t| t['name'] == "build-#{service}" }
   check(build['params'].find { |p| p['name'] == 'build-args' }['value'] == ['BUILD_ENVIRONMENT=dev'], 'Wrong build argument')
   check(names.include?("gate-#{service}"), 'Missing security gate')
@@ -67,6 +92,10 @@ check(manual['spec']['workspaces'].map { |w| w['name'] }.sort == pipeline['spec'
 variant = docs(run(*base, '-f', 'customer-transfer/frontend-release-test/values-release.yaml', '--set', 'frontendRelease.scanEnabled=false,frontendRelease.allowTestFailure=false'))
 variant = variant.find { |d| d.dig('metadata', 'name') == pipeline['metadata']['name'] }
 check(variant['spec']['tasks'].none? { |t| t['name'].start_with?('scan-', 'gate-') || t.key?('onError') }, 'Strict-test/no-scan variant incorrect')
+services.each do |service|
+  sign = variant['spec']['tasks'].find { |t| t['name'] == "sign-#{service}" }
+  check(sign['runAfter'] == ["build-#{service}"], 'No-scan signing must explicitly follow build')
+end
 
 gitops = 'customer-transfer/frontend-release-test/gitops/tekton-frontend-test'
 check(docs(run('helm', 'template', 'frontend-release-test-root', gitops, '-n', 'development')).empty?, 'Empty release must not create workloads')
