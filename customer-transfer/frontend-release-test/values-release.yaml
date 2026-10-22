@@ -1,0 +1,8 @@
+# Apply after customer-transfer/devops-apply/values-devops.yaml.
+# Existing webhook resources/settings are not changed by this overlay.
+frontendRelease:
+  enabled: true
+  sourceRevision: pre-prod
+  scanEnabled: true
+  # Temporary test concession carried over from the existing frontend validation.
+  allowTestFailure: true

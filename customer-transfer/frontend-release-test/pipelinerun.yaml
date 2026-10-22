@@ -1,0 +1,46 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: frontend-release-test-
+  namespace: devops
+spec:
+  pipelineRef:
+    name: application-frontend-release-test
+  taskRunTemplate:
+    serviceAccountName: pipeline
+  timeouts:
+    pipeline: 2h0m0s
+  params:
+    - name: source-revision
+      value: pre-prod
+  workspaces:
+    - name: git-credentials
+      secret:
+        secretName: git-credentials
+    - name: registry-auth
+      secret:
+        secretName: registry-auth
+    - name: npm-auth
+      secret:
+        secretName: npm-auth
+    - name: source-admin-portal
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 5Gi
+    - name: source-applicant-portal
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 5Gi
+    - name: source-operational-portal
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 5Gi

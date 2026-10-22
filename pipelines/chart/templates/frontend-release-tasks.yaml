@@ -1,0 +1,135 @@
+{{- if .Values.frontendRelease.enabled }}
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: frontend-release-resolve
+  namespace: {{ .Release.Namespace }}
+spec:
+  params:
+    - name: revision
+      type: string
+  workspaces:
+    - name: git-credentials
+  results:
+    - name: commit
+    - name: tag
+    - name: gitops-base
+  steps:
+    - name: resolve
+      image: {{ .Values.images.git | quote }}
+      env:
+        - name: HOME
+          value: /tekton/home
+        - name: REVISION
+          value: $(params.revision)
+        - name: SOURCE_URL
+          value: {{ .Values.frontendRelease.sourceUrl | quote }}
+        - name: GITOPS_URL
+          value: {{ .Values.frontendRelease.gitops.repository | quote }}
+        - name: GITOPS_BRANCH
+          value: {{ .Values.frontendRelease.gitops.revision | quote }}
+      script: |
+        #!/bin/sh
+        set -eu
+        mkdir -p "$HOME"
+        cp -R "$(workspaces.git-credentials.path)"/. "$HOME"/
+        chmod -R go-rwx "$HOME"
+        git config --global credential.helper store
+        REVISION="${REVISION#refs/heads/}"
+        # Reject shell metacharacters before this value reaches the existing clone Task.
+        case "$REVISION" in ''|*[!a-zA-Z0-9_./-]*) echo 'Invalid branch name' >&2; exit 1 ;; esac
+        git check-ref-format "refs/heads/$REVISION"
+        commit=$(git ls-remote --exit-code "$SOURCE_URL" "refs/heads/$REVISION" | cut -f1)
+        base=$(git ls-remote --exit-code "$GITOPS_URL" "refs/heads/$GITOPS_BRANCH" | cut -f1)
+        printf '%s' "$commit" | grep -Eq '^[0-9a-f]{40}$'
+        printf '%s' "$base" | grep -Eq '^[0-9a-f]{40}$'
+        printf '%s' "$commit" > "$(results.commit.path)"
+        printf '%.8s' "$commit" > "$(results.tag.path)"
+        printf '%s' "$base" > "$(results.gitops-base.path)"
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: frontend-release-update
+  namespace: {{ .Release.Namespace }}
+spec:
+  params:
+    - name: source-commit
+      type: string
+    - name: gitops-base
+      type: string
+    - name: run-name
+      type: string
+{{- range $service := list "admin-portal" "applicant-portal" "operational-portal" }}
+    - name: {{ $service }}-digest
+      type: string
+{{- end }}
+  results:
+    - name: commit
+  workspaces:
+    - name: git-credentials
+  volumes:
+    - name: work
+      emptyDir: {}
+  stepTemplate:
+    volumeMounts:
+      - name: work
+        mountPath: /work
+    env:
+      - name: HOME
+        value: /work/home
+      - name: GITOPS_URL
+        value: {{ .Values.frontendRelease.gitops.repository | quote }}
+      - name: GITOPS_BRANCH
+        value: {{ .Values.frontendRelease.gitops.revision | quote }}
+      - name: RELEASE_FILE
+        value: {{ .Values.frontendRelease.gitops.releaseFile | quote }}
+      - name: EXPECTED_BASE
+        value: $(params.gitops-base)
+  steps:
+    - name: clone
+      image: {{ .Values.images.git | quote }}
+      script: |
+        #!/bin/sh
+        set -eu
+        mkdir -p "$HOME"
+        cp -R "$(workspaces.git-credentials.path)"/. "$HOME"/
+        chmod -R go-rwx "$HOME"
+        git config --global credential.helper store
+        git clone --single-branch --branch "$GITOPS_BRANCH" "$GITOPS_URL" /work/repo
+        if [ "$(git -C /work/repo rev-parse HEAD)" != "$EXPECTED_BASE" ]; then
+          echo 'GitOps changed during this build. Review the newer release and rerun; no changes pushed.' >&2
+          exit 1
+        fi
+    - name: update-json
+      image: {{ .Values.images.nodejs24 | quote }}
+      env:
+        - name: SOURCE_COMMIT
+          value: $(params.source-commit)
+        - name: RUN_NAME
+          value: $(params.run-name)
+        - name: IMAGE_REPOSITORY
+          value: {{ .Values.frontendRelease.imageRepository | quote }}
+{{- range $service := list "admin-portal" "applicant-portal" "operational-portal" }}
+        - name: {{ $service | upper | replace "-" "_" }}_DIGEST
+          value: $(params.{{ $service }}-digest)
+{{- end }}
+      script: |
+        #!/usr/bin/env node
+{{ .Files.Get "files/frontend-release-update.js" | indent 8 }}
+    - name: push
+      image: {{ .Values.images.git | quote }}
+      script: |
+        #!/bin/sh
+        set -eu
+        cd /work/repo
+        git config user.name 'Tekton Pipeline'
+        git config user.email 'pipeline@customer.invalid'
+        git add -- "$RELEASE_FILE"
+        if ! git diff --cached --quiet; then
+          git commit -m 'Release verified frontend images [skip ci]'
+          # No rebase/force: a concurrent update must not silently replace a newer release.
+          git push origin "HEAD:refs/heads/$GITOPS_BRANCH"
+        fi
+        git rev-parse HEAD | tr -d '\n' > "$(results.commit.path)"
+{{- end }}

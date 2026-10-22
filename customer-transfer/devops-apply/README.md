@@ -3,6 +3,11 @@
 This folder uses Azure DevOps HTTPS Git credentials and the mirrored repositories.
 It is intended to be applied after the centralized pipeline chart is installed.
 
+For the new manual three-frontend release test with eight-character commit tags,
+OCI chart publication, and digest-pinned GitOps deployment, use
+[the separate release test guide](../frontend-release-test/README.md).
+It does not require the Azure webhook or replace the existing validation pipelines.
+
 ## 1. Create required secrets in the UI
 
 Create these secrets in namespace `devops`:
@@ -221,12 +226,12 @@ the latest public Red Hat UBI 9 Node.js and Nginx images. The auth file needs
 internal Quay push credentials; the UBI source images are publicly accessible:
 
 ```bash
-./tests/rhtas-sign-verify/mirror-image.sh \
+./tools/image-copy/copy-image.sh \
   registry.access.redhat.com/ubi9/nodejs-24:latest \
   quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nodejs-24:ubi9 \
   /secure/path/pullsecret.txt-quay
 
-./tests/rhtas-sign-verify/mirror-image.sh \
+./tools/image-copy/copy-image.sh \
   registry.access.redhat.com/ubi9/nginx-126:latest \
   quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx-126:ubi9 \
   /secure/path/pullsecret.txt-quay

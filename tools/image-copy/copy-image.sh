@@ -21,4 +21,4 @@ skopeo copy \
   "docker://${source_image}" \
   "docker://${target_image}"
 
-echo "Image copied. Resolve and sign the immutable target digest before testing."
+echo "Image copied. Inspect the destination to confirm its digest before use."

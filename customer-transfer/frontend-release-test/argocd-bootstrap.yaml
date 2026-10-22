@@ -1,0 +1,43 @@
+# Reference installation uses development. Apply in the actual Argo CD namespace.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: frontend-release-test
+spec:
+  description: Isolated manual frontend release test
+  sourceRepos:
+    - https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_argocd
+    - quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops
+  destinations:
+    - namespace: development
+      server: https://kubernetes.default.svc
+    - namespace: frontend-tekton-test
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: argoproj.io
+      kind: Application
+    - group: apps
+      kind: Deployment
+    - group: ""
+      kind: Service
+    - group: route.openshift.io
+      kind: Route
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: frontend-release-test-root
+spec:
+  project: frontend-release-test
+  source:
+    repoURL: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_argocd
+    targetRevision: dev
+    path: tekton-frontend-test
+  destination:
+    namespace: development
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true

@@ -1,6 +1,18 @@
 serviceAccount:
   name: pipeline
 
+frontendRelease:
+  enabled: false
+  sourceUrl: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Frontend
+  sourceRevision: pre-prod
+  imageRepository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops
+  scanEnabled: true
+  allowTestFailure: true
+  gitops:
+    repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_argocd
+    revision: dev
+    releaseFile: tekton-frontend-test/releases/frontend.json
+
 frontendPr:
   enabled: false
   targetBranch: pre-prod

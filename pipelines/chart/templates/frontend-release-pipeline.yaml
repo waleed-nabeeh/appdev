@@ -1,0 +1,143 @@
+{{- if .Values.frontendRelease.enabled }}
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: application-frontend-release-test
+  namespace: {{ .Release.Namespace }}
+spec:
+  params:
+    - name: source-revision
+      type: string
+      default: {{ .Values.frontendRelease.sourceRevision | quote }}
+  results:
+    - name: source-commit
+      value: $(tasks.resolve-source.results.commit)
+    - name: image-tag
+      value: $(tasks.resolve-source.results.tag)
+    - name: gitops-commit
+      value: $(tasks.update-gitops.results.commit)
+  workspaces:
+    - name: git-credentials
+    - name: registry-auth
+    - name: npm-auth
+{{- range $service := list "admin-portal" "applicant-portal" "operational-portal" }}
+    - name: source-{{ $service }}
+{{- end }}
+  tasks:
+    - name: resolve-source
+      taskRef:
+        name: frontend-release-resolve
+      params:
+        - name: revision
+          value: $(params.source-revision)
+      workspaces:
+        - name: git-credentials
+          workspace: git-credentials
+{{- range $service := list "admin-portal" "applicant-portal" "operational-portal" }}
+    - name: clone-{{ $service }}
+      taskRef:
+        name: clone
+      params:
+        - name: url
+          value: {{ $.Values.frontendRelease.sourceUrl | quote }}
+        - name: revision
+          value: $(params.source-revision)
+        - name: commit
+          value: $(tasks.resolve-source.results.commit)
+      workspaces:
+        - name: source
+          workspace: source-{{ $service }}
+        - name: git-credentials
+          workspace: git-credentials
+    - name: test-{{ $service }}
+      runAfter: [clone-{{ $service }}]
+{{- if $.Values.frontendRelease.allowTestFailure }}
+      onError: continue
+{{- end }}
+      taskRef:
+        name: frontend-unit-test
+      params:
+        - name: project
+          value: {{ $service }}
+      workspaces:
+        - name: source
+          workspace: source-{{ $service }}
+        - name: npm-auth
+          workspace: npm-auth
+    - name: build-{{ $service }}
+      runAfter: [test-{{ $service }}]
+      taskRef:
+        name: build-image
+      params:
+        - name: image
+          value: {{ $.Values.frontendRelease.imageRepository }}/{{ $service }}:$(tasks.resolve-source.results.tag)
+        - name: context
+          value: .
+        - name: containerfile
+          value: deployment/{{ $service }}/Dockerfile
+        - name: build-args
+          value: [BUILD_ENVIRONMENT=dev]
+      workspaces:
+        - name: source
+          workspace: source-{{ $service }}
+        - name: registry-auth
+          workspace: registry-auth
+        - name: npm-auth
+          workspace: npm-auth
+{{- if $.Values.frontendRelease.scanEnabled }}
+    - name: scan-{{ $service }}
+      taskRef:
+        name: scan-image
+      params:
+        - name: image
+          value: $(tasks.build-{{ $service }}.results.image-url)
+    - name: gate-{{ $service }}
+      runAfter: [scan-{{ $service }}]
+      taskRef:
+        name: security-gate
+      params:
+        - name: image
+          value: $(tasks.build-{{ $service }}.results.image-url)
+{{- end }}
+    - name: sign-{{ $service }}
+{{- if $.Values.frontendRelease.scanEnabled }}
+      runAfter: [gate-{{ $service }}]
+{{- end }}
+      taskRef:
+        name: sign-image
+      params:
+        - name: image
+          value: $(tasks.build-{{ $service }}.results.image-url)
+      workspaces:
+        - name: registry-auth
+          workspace: registry-auth
+    - name: verify-{{ $service }}
+      runAfter: [sign-{{ $service }}]
+      taskRef:
+        name: verify-image
+      params:
+        - name: image
+          value: $(tasks.build-{{ $service }}.results.image-url)
+      workspaces:
+        - name: registry-auth
+          workspace: registry-auth
+{{- end }}
+    - name: update-gitops
+      runAfter: [verify-admin-portal, verify-applicant-portal, verify-operational-portal]
+      taskRef:
+        name: frontend-release-update
+      params:
+        - name: source-commit
+          value: $(tasks.resolve-source.results.commit)
+        - name: gitops-base
+          value: $(tasks.resolve-source.results.gitops-base)
+        - name: run-name
+          value: $(context.pipelineRun.name)
+{{- range $service := list "admin-portal" "applicant-portal" "operational-portal" }}
+        - name: {{ $service }}-digest
+          value: $(tasks.build-{{ $service }}.results.image-digest)
+{{- end }}
+      workspaces:
+        - name: git-credentials
+          workspace: git-credentials
+{{- end }}

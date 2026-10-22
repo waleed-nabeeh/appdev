@@ -1,0 +1,9 @@
+project: frontend-release-test
+destinationNamespace: frontend-tekton-test
+chart:
+  repository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops
+  name: frontend-app
+  version: 0.1.0
+imagePullSecret: registry-auth
+containerPort: 8080
+appsDomain: apps.hub-visa-ocp.mofa.gov.sa

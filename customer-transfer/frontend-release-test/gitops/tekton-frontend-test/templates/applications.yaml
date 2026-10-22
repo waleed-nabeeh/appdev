@@ -1,0 +1,44 @@
+{{- $release := .Files.Get "releases/frontend.json" | mustFromJson }}
+{{- if $release.sourceCommit }}
+{{- if not (regexMatch "^[0-9a-f]{40}$" $release.sourceCommit) }}
+{{- fail "Release sourceCommit must be a full Git SHA" }}
+{{- end }}
+{{- range $service := list "admin-portal" "applicant-portal" "operational-portal" }}
+{{- $image := required (printf "Missing release image for %s" $service) (index $release.images $service) }}
+{{- if not (regexMatch "^sha256:[0-9a-f]{64}$" $image.digest) }}
+{{- fail (printf "Invalid digest for %s" $service) }}
+{{- end }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ $service }}-tekton-test
+  namespace: {{ $.Release.Namespace }}
+  annotations:
+    customer.mofa.gov.sa/source-commit: {{ $release.sourceCommit | quote }}
+    customer.mofa.gov.sa/pipeline-run: {{ $release.pipelineRun | quote }}
+spec:
+  project: {{ $.Values.project }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ $.Values.destinationNamespace }}
+  source:
+    repoURL: {{ $.Values.chart.repository | quote }}
+    chart: {{ $.Values.chart.name }}
+    targetRevision: {{ $.Values.chart.version | quote }}
+    helm:
+      releaseName: {{ $service }}-tekton-test
+      values: |
+        image:
+{{ toYaml $image | indent 10 }}
+        imagePullSecrets:
+          - name: {{ $.Values.imagePullSecret }}
+        containerPort: {{ $.Values.containerPort }}
+        route:
+          host: {{ $service }}-tekton-test.{{ $.Values.appsDomain }}
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+{{- end }}
+{{- end }}
