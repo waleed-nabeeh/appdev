@@ -249,6 +249,56 @@ oc -n devops get pipelineruns -l customer.mofa.gov.sa/trigger=azure-pr \
 oc -n devops logs deployment/el-backend-pr --all-containers --tail=100
 ```
 
+## Webhook accepted but no PipelineRun: authorization check
+
+HTTP 202 means receipt, not successful PipelineRun creation. Check permission:
+
+```bash
+oc auth can-i create pipelineruns.tekton.dev \
+  --as=system:serviceaccount:devops:backend-pr-listener -n devops
+```
+
+Only if the answer is `no`, have an administrator apply this namespaced repair:
+
+```bash
+oc -n devops create role backend-pr-create-runs \
+  --verb=create \
+  --resource=pipelineruns.tekton.dev \
+  --dry-run=client -o yaml | oc apply -f -
+
+oc -n devops create rolebinding backend-pr-create-runs \
+  --role=backend-pr-create-runs \
+  --serviceaccount=devops:backend-pr-listener \
+  --dry-run=client -o yaml | oc apply -f -
+
+oc auth can-i create pipelineruns.tekton.dev \
+  --as=system:serviceaccount:devops:backend-pr-listener -n devops
+```
+
+Expected: `yes`. From the backend checkout, resend the event:
+
+```bash
+bash ../appdev/customer-transfer/backend-build-fanout/simulate-pr.sh --previous-commit
+```
+
+The Helm chart already declares this permission in Role/RoleBinding
+`backend-pr-listener`. The commands above create a separate temporary repair;
+they do not repair a failed Helm release. Reconcile the Helm-managed RBAC and
+remove the temporary binding/role once no longer needed. An impersonation error
+from `oc auth can-i --as` means your login cannot perform the check; it is not
+evidence that the listener lacks permission.
+
+If permission already returns `yes`, do not add more access. Inspect the error:
+
+```bash
+oc -n devops logs deployment/el-backend-pr --all-containers=true --since=15m --tail=200
+oc -n devops get eventlistener backend-pr -o yaml
+oc -n devops get triggerbinding backend-azure-pr
+oc -n devops get triggertemplate backend-azure-pr
+oc -n devops get pipeline application-backend-dispatch
+oc -n devops get pipelineruns --sort-by=.metadata.creationTimestamp
+```
+
 ## Validation and references
 
 ```bash
