@@ -1,0 +1,104 @@
+[
+  {
+    "name": "acl-service",
+    "project": "services/acl/MOFA.UnifiedVisaPlatform.ACL/MOFA.UnifiedVisaPlatform.ACL.csproj",
+    "containerfile": "services/acl/MOFA.UnifiedVisaPlatform.ACL/Dockerfile",
+    "context": "."
+  },
+  {
+    "name": "gateway-service",
+    "project": "gateways/web/MOFA.UnifiedVisaPlatform.WebGateway/MOFA.UnifiedVisaPlatform.WebGateway.csproj",
+    "containerfile": "gateways/web/MOFA.UnifiedVisaPlatform.WebGateway/Dockerfile",
+    "context": "."
+  },
+  {
+    "name": "administration-service",
+    "project": "services/administration/MOFA.UnifiedVisaPlatform.AdministrationService/MOFA.UnifiedVisaPlatform.AdministrationService.csproj",
+    "containerfile": "services/administration/MOFA.UnifiedVisaPlatform.AdministrationService/Dockerfile",
+    "context": "."
+  },
+  {
+    "name": "audit-logging-service",
+    "project": "services/audit-logging/MOFA.UnifiedVisaPlatform.AuditLoggingService/MOFA.UnifiedVisaPlatform.AuditLoggingService.csproj",
+    "containerfile": "services/audit-logging/MOFA.UnifiedVisaPlatform.AuditLoggingService/Dockerfile",
+    "context": "."
+  },
+  {
+    "name": "core-service",
+    "project": "services/core/MOFA.UnifiedVisaPlatform.Core/MOFA.UnifiedVisaPlatform.Core.csproj",
+    "containerfile": "services/core/MOFA.UnifiedVisaPlatform.Core/Dockerfile",
+    "context": "."
+  },
+  {
+    "name": "identity-service",
+    "project": "services/identity/MOFA.UnifiedVisaPlatform.IdentityService/MOFA.UnifiedVisaPlatform.IdentityService.csproj",
+    "containerfile": "services/identity/MOFA.UnifiedVisaPlatform.IdentityService/Dockerfile",
+    "context": "."
+  },
+  {
+    "name": "language-service",
+    "project": "services/language/MOFA.UnifiedVisaPlatform.LanguageService/MOFA.UnifiedVisaPlatform.LanguageService.csproj",
+    "containerfile": "services/language/MOFA.UnifiedVisaPlatform.LanguageService/Dockerfile",
+    "context": "."
+  },
+  {
+    "name": "document-service",
+    "project": "services/document/MOFA.UnifiedVisaPlatform.Document/MOFA.UnifiedVisaPlatform.Document.csproj",
+    "containerfile": "services/document/MOFA.UnifiedVisaPlatform.Document/Dockerfile",
+    "context": "."
+  },
+  {
+    "name": "event-service",
+    "project": "services/event/MOFA.UnifiedVisaPlatform.Event/MOFA.UnifiedVisaPlatform.Event.csproj",
+    "containerfile": "services/event/MOFA.UnifiedVisaPlatform.Event/Dockerfile",
+    "context": "."
+  },
+  {
+    "name": "notification-service",
+    "project": "services/notification/MOFA.UnifiedVisaPlatform.Notification/MOFA.UnifiedVisaPlatform.Notification.csproj",
+    "containerfile": "services/notification/MOFA.UnifiedVisaPlatform.Notification/Dockerfile",
+    "context": "."
+  },
+  {
+    "name": "request-service",
+    "project": "services/request/MOFA.UnifiedVisaPlatform.RequestService/MOFA.UnifiedVisaPlatform.RequestService.csproj",
+    "containerfile": "services/request/MOFA.UnifiedVisaPlatform.RequestService/Dockerfile",
+    "context": "."
+  },
+  {
+    "name": "stakeholder-service",
+    "project": "services/stakeholder/MOFA.UnifiedVisaPlatform.stakeholder/MOFA.UnifiedVisaPlatform.stakeholder.csproj",
+    "containerfile": "services/stakeholder/MOFA.UnifiedVisaPlatform.stakeholder/Dockerfile",
+    "context": "."
+  },
+  {
+    "name": "applicant-service",
+    "project": "services/applicant/MOFA.UnifiedVisaPlatform.Applicant/MOFA.UnifiedVisaPlatform.Applicant.csproj",
+    "containerfile": "services/applicant/MOFA.UnifiedVisaPlatform.Applicant/Dockerfile",
+    "context": "."
+  },
+  {
+    "name": "visitvisa-service",
+    "project": "services/visitVisa/MOFA.UnifiedVisaPlatform.VisitVisa/MOFA.UnifiedVisaPlatform.VisitVisa.csproj",
+    "containerfile": "services/visitVisa/MOFA.UnifiedVisaPlatform.VisitVisa/Dockerfile",
+    "context": "."
+  },
+  {
+    "name": "realtime-service",
+    "project": "services/realtime/MOFA.UnifiedVisaPlatform.RealTime/MOFA.UnifiedVisaPlatform.RealTime.csproj",
+    "containerfile": "services/realtime/MOFA.UnifiedVisaPlatform.RealTime/Dockerfile",
+    "context": "."
+  },
+  {
+    "name": "payment-service",
+    "project": "services/payment/MOFA.UnifiedVisaPlatform.Payment/MOFA.UnifiedVisaPlatform.Payment.csproj",
+    "containerfile": "services/payment/MOFA.UnifiedVisaPlatform.Payment/Dockerfile",
+    "context": "."
+  },
+  {
+    "name": "authserver-service",
+    "project": "apps/auth-server/MOFA.UnifiedVisaPlatform.AuthServer/MOFA.UnifiedVisaPlatform.AuthServer.csproj",
+    "containerfile": "apps/auth-server/MOFA.UnifiedVisaPlatform.AuthServer/Dockerfile",
+    "context": "."
+  }
+]

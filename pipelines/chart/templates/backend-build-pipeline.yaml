@@ -1,0 +1,231 @@
+{{- if .Values.backendBuild.enabled }}
+{{- $catalog := .Files.Get "files/backend-services.json" | fromJsonArray }}
+{{- $selected := .Values.backendBuild.selectedServices }}
+{{- $known := list }}
+{{- $services := list }}
+{{- range $service := $catalog }}
+{{- $known = append $known $service.name }}
+{{- if or (empty $selected) (has $service.name $selected) }}
+{{- $services = append $services $service }}
+{{- end }}
+{{- end }}
+{{- if ne (len $selected) (len (uniq $selected)) }}
+{{- fail "backendBuild.selectedServices must not contain duplicates" }}
+{{- end }}
+{{- range $name := $selected }}
+{{- if not (has $name $known) }}
+{{- fail (printf "Unknown backend service: %s" $name) }}
+{{- end }}
+{{- end }}
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: backend-build-resolve
+  namespace: {{ .Release.Namespace }}
+spec:
+  params:
+    - name: revision
+      type: string
+    - name: commit
+      type: string
+      default: ""
+  workspaces:
+    - name: git-credentials
+  results:
+    - name: commit
+    - name: tag
+  steps:
+    - name: resolve
+      image: {{ .Values.images.git | quote }}
+      env:
+        - name: HOME
+          value: /tekton/home
+        - name: SOURCE_URL
+          value: {{ .Values.backendBuild.sourceUrl | quote }}
+        - name: REVISION
+          value: $(params.revision)
+        - name: COMMIT
+          value: $(params.commit)
+      script: |
+        #!/bin/sh
+        set -eu
+        mkdir -p "$HOME"
+        cp -R "$(workspaces.git-credentials.path)"/. "$HOME"/
+        chmod -R go-rwx "$HOME"
+        git config --global credential.helper store
+        REVISION="${REVISION#refs/heads/}"
+        case "$REVISION" in ''|*[!a-zA-Z0-9_./-]*) echo 'Invalid source branch' >&2; exit 1 ;; esac
+        git check-ref-format "refs/heads/$REVISION"
+        if [ -z "$COMMIT" ]; then
+          COMMIT=$(git ls-remote --exit-code "$SOURCE_URL" "refs/heads/$REVISION" | cut -f1)
+        fi
+        if [ "${#COMMIT}" -ne 40 ] || ! printf '%s' "$COMMIT" | grep -Eq '^[0-9a-f]{40}$'; then
+          echo 'Expected a full 40-character source commit' >&2; exit 1;
+        fi
+        printf '%s' "$COMMIT" > "$(results.commit.path)"
+        printf '%.8s' "$COMMIT" > "$(results.tag.path)"
+---
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: application-backend-build-fanout
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: backend
+spec:
+  params:
+    - name: source-revision
+      type: string
+      default: {{ .Values.backendBuild.sourceRevision | quote }}
+    - name: source-commit
+      type: string
+      default: ""
+  results:
+    - name: source-commit
+      value: $(tasks.resolve-source.results.commit)
+    - name: image-tag
+      value: $(tasks.resolve-source.results.tag)
+{{- range $service := $services }}
+    - name: {{ $service.name }}-image
+      value: $(tasks.build-{{ $service.name }}.results.image-url)
+    - name: {{ $service.name }}-digest
+      value: $(tasks.build-{{ $service.name }}.results.image-digest)
+{{- end }}
+  workspaces:
+    - name: git-credentials
+    - name: registry-auth
+{{- range $service := $services }}
+    - name: source-{{ $service.name }}
+{{- end }}
+  tasks:
+    - name: resolve-source
+      taskRef:
+        name: backend-build-resolve
+      params:
+        - name: revision
+          value: $(params.source-revision)
+        - name: commit
+          value: $(params.source-commit)
+      workspaces:
+        - name: git-credentials
+          workspace: git-credentials
+{{- range $service := $services }}
+    - name: clone-{{ $service.name }}
+      runAfter: [resolve-source]
+      taskRef:
+        name: clone
+      params:
+        - name: url
+          value: {{ $.Values.backendBuild.sourceUrl | quote }}
+        - name: revision
+          value: $(params.source-revision)
+        - name: commit
+          value: $(tasks.resolve-source.results.commit)
+      workspaces:
+        - name: source
+          workspace: source-{{ $service.name }}
+        - name: git-credentials
+          workspace: git-credentials
+    - name: test-{{ $service.name }}
+      runAfter: [clone-{{ $service.name }}]
+{{- if $.Values.backendBuild.allowTestFailure }}
+      onError: continue
+{{- end }}
+      taskRef:
+        name: unit-test
+      params:
+        - name: project
+          value: {{ $service.project | quote }}
+      workspaces:
+        - name: source
+          workspace: source-{{ $service.name }}
+    - name: build-{{ $service.name }}
+      runAfter: [test-{{ $service.name }}]
+      taskRef:
+        name: build-image
+      params:
+        - name: image
+          value: {{ $.Values.backendBuild.imageRepository }}/{{ $service.name }}:$(tasks.resolve-source.results.tag)
+        - name: context
+          value: {{ $service.context | quote }}
+        - name: containerfile
+          value: {{ $service.containerfile | quote }}
+        - name: build-args
+          value: {{ $.Values.backendBuild.buildArgs | toJson }}
+      workspaces:
+        - name: source
+          workspace: source-{{ $service.name }}
+        - name: registry-auth
+          workspace: registry-auth
+    - name: scan-{{ $service.name }}
+      runAfter: [build-{{ $service.name }}]
+      taskRef:
+        name: scan-image
+      params:
+        - name: image
+          value: $(tasks.build-{{ $service.name }}.results.image-url)
+    - name: gate-{{ $service.name }}
+      runAfter: [scan-{{ $service.name }}]
+      taskRef:
+        name: security-gate
+      params:
+        - name: image
+          value: $(tasks.build-{{ $service.name }}.results.image-url)
+    - name: sign-{{ $service.name }}
+      runAfter: [gate-{{ $service.name }}]
+      taskRef:
+        name: sign-image
+      params:
+        - name: image
+          value: $(tasks.build-{{ $service.name }}.results.image-url)
+      workspaces:
+        - name: registry-auth
+          workspace: registry-auth
+{{- end }}
+---
+# Store only a run template in Helm. Applying the release never starts builds.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-build-run-template
+  namespace: {{ .Release.Namespace }}
+data:
+  pipelinerun.yaml: |
+    apiVersion: tekton.dev/v1
+    kind: PipelineRun
+    metadata:
+      generateName: backend-build-
+      namespace: {{ .Release.Namespace }}
+      labels:
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/part-of: customer-build-fanout
+    spec:
+      pipelineRef:
+        name: application-backend-build-fanout
+      taskRunTemplate:
+        serviceAccountName: {{ .Values.serviceAccount.name }}
+      timeouts:
+        pipeline: 4h0m0s
+        tasks: 3h50m0s
+      params:
+        - name: source-revision
+          value: {{ .Values.backendBuild.sourceRevision | quote }}
+        - name: source-commit
+          value: ""
+      workspaces:
+        - name: git-credentials
+          secret:
+            secretName: git-credentials
+        - name: registry-auth
+          secret:
+            secretName: registry-auth
+{{- range $service := $services }}
+        - name: source-{{ $service.name }}
+          volumeClaimTemplate:
+            spec:
+              accessModes: [ReadWriteOnce]
+              resources:
+                requests:
+                  storage: {{ $.Values.backendBuild.workspaceSize | quote }}
+{{- end }}
+{{- end }}

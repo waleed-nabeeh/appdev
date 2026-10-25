@@ -8,6 +8,9 @@ OCI chart publication, and digest-pinned GitOps deployment, use
 [the separate release test guide](../frontend-release-test/README.md).
 It does not require the Azure webhook or replace the existing validation pipelines.
 
+For the 17-service backend build/scan/gate/sign fanout (verification deferred
+to promotion), use [the backend build guide](../backend-build-fanout/README.md).
+
 ## 1. Create required secrets in the UI
 
 Create these secrets in namespace `devops`:

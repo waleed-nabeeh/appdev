@@ -1,6 +1,18 @@
 serviceAccount:
   name: pipeline
 
+backendBuild:
+  enabled: false
+  sourceUrl: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Backend
+  sourceRevision: test
+  imageRepository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops
+  # Empty means all 17 catalog services. Selection is applied at Helm upgrade time.
+  selectedServices: []
+  workspaceSize: 3Gi
+  allowTestFailure: false
+  buildArgs:
+    - CERT_KEYWORD=dev
+
 frontendRelease:
   enabled: false
   sourceUrl: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Frontend
