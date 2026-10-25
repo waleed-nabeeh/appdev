@@ -132,7 +132,7 @@ oc get sa pipeline -n devops
 Both frontend and backend PipelineRuns use a `volumeClaimTemplate` for the
 `source` workspace. Tekton provisions a dedicated `ReadWriteOnce` PVC for each
 run, so parallel clones and builds cannot overwrite each other's checkout.
-Each manifest requests `5Gi`; confirm the `devops` storage quota and storage
+Each manifest requests `3Gi`; confirm the `devops` storage quota and storage
 class can accommodate two simultaneous runs (10Gi requested total) before
 launching them. Secret workspaces remain shared and read-only.
 
@@ -277,14 +277,14 @@ The Helm chart installs the frontend validation Pipeline. The sample
 `frontend-three-service-fanout.yaml` PipelineRun has three
 independent lanes: `admin-portal`, `applicant-portal`, and
 `operational-portal`. Each lane clones the same source revision into its own
-5Gi PVC, runs that portal's Nx test, builds its Dockerfile with
+3Gi PVC, runs that portal's Nx test, builds its Dockerfile with
 `BUILD_ENVIRONMENT=dev`, then signs and verifies its own image. The three lanes
 run concurrently. Unit-test failures are temporarily non-blocking, matching the
 existing frontend diagnostic; remove `onError: continue` from all three test
 tasks when tests should gate image builds.
 
 The sample run selects all three services. PR-triggered runs use the diff-based
-selector below. The run reserves three 5Gi PVCs (15Gi total), plus the
+selector below. The run reserves three 3Gi PVCs (9Gi total), plus the
 dispatcher workspace when using `diff` mode. Change the source revision to the
 branch or commit containing your Dockerfile changes, and use fresh image tags
 for each concurrent/repeated run.
@@ -367,7 +367,7 @@ Publish a new OCI chart version and update `targetRevision` only when the Helm
 chart itself changes.
 
 Each run reserves about 17Gi across its workspaces (2Gi dispatch plus three
-5Gi lane PVCs), even when the diff selects fewer lanes. Leave sufficient quota
+3Gi lane PVCs), even when the diff selects fewer lanes. Leave sufficient quota
 for concurrent PRs. To test the selector without Azure, set `selection-mode`
 to `diff`, provide a source branch/commit and target ref in a PipelineRun, and
 bind the chart-managed `frontend-service-selector` ConfigMap workspace. Edit

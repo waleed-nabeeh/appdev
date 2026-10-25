@@ -114,21 +114,21 @@ spec:
                 accessModes: [ReadWriteOnce]
                 resources:
                   requests:
-                    storage: 5Gi
+                    storage: 3Gi
           - name: source-applicant-portal
             volumeClaimTemplate:
               spec:
                 accessModes: [ReadWriteOnce]
                 resources:
                   requests:
-                    storage: 5Gi
+                    storage: 3Gi
           - name: source-operational-portal
             volumeClaimTemplate:
               spec:
                 accessModes: [ReadWriteOnce]
                 resources:
                   requests:
-                    storage: 5Gi
+                    storage: 3Gi
           - name: git-credentials
             secret:
               secretName: git-credentials

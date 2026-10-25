@@ -87,6 +87,13 @@ update = ptasks.find { |t| t['name'] == 'update-gitops' }
 check(update['runAfter'].sort == services.map { |s| "verify-#{s}" }.sort, 'GitOps must wait for all verifications')
 check(tasks['frontend-release-update']['workspaces'].map { |w| w['name'] } == ['git-credentials'], 'GitOps must not mount three source PVCs')
 manual = YAML.load_file('customer-transfer/frontend-release-test/pipelinerun.yaml')
+manual['spec']['workspaces'].select { |w| w['volumeClaimTemplate'] }.each do |workspace|
+  check(workspace.dig('volumeClaimTemplate', 'spec', 'resources', 'requests', 'storage') == '3Gi', 'Release workspace must request 3Gi')
+end
+acl = YAML.load_file('customer-transfer/devops-apply/pipelinerun-acl.yaml')
+acl['spec']['workspaces'].select { |w| w['volumeClaimTemplate'] }.each do |workspace|
+  check(workspace.dig('volumeClaimTemplate', 'spec', 'resources', 'requests', 'storage') == '3Gi', 'ACL workspace must request 3Gi')
+end
 check(manual['spec']['pipelineRef']['name'] == pipeline['metadata']['name'], 'Wrong manual pipeline reference')
 check(manual['spec']['workspaces'].map { |w| w['name'] }.sort == pipeline['spec']['workspaces'].map { |w| w['name'] }.sort, 'PipelineRun workspace mismatch')
 variant = docs(run(*base, '-f', 'customer-transfer/frontend-release-test/values-release.yaml', '--set', 'frontendRelease.scanEnabled=false,frontendRelease.allowTestFailure=false'))

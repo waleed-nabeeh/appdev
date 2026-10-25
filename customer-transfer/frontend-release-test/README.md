@@ -202,8 +202,8 @@ oc -n devops describe pipelinerun <created-run-name>
 oc -n devops get taskruns -l tekton.dev/pipelineRun=<created-run-name>
 ```
 
-Each run provisions three independent 5Gi PVCs. The GitOps Task uses an emptyDir
-and small Task results, not those three PVCs. Quotas/storage must allow 15Gi per
+Each run provisions three independent 3Gi PVCs. The GitOps Task uses an emptyDir
+and small Task results, not those three PVCs. Quotas/storage must allow 9Gi per
 run; follow the approved PipelineRun/PVC retention process after testing.
 
 Only one release should be tested at a time. The resolver snapshots the GitOps
