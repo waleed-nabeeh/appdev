@@ -2,7 +2,23 @@
 backendBuild:
   enabled: true
   sourceRevision: test
-  selectedServices: [] # All 17; for a smaller test use [acl-service, payment-service].
+  # Match the 14 folders shown under /services on the customer's test branch.
+  # Payment is absent; Gateway and AuthServer are outside this requested scope.
+  selectedServices:
+    - acl-service
+    - administration-service
+    - audit-logging-service
+    - core-service
+    - identity-service
+    - language-service
+    - document-service
+    - event-service
+    - notification-service
+    - request-service
+    - stakeholder-service
+    - applicant-service
+    - visitvisa-service
+    - realtime-service
   workspaceSize: 3Gi
   # Preserve ACL's blocking test behavior. Do not silently ignore backend failures.
   allowTestFailure: false

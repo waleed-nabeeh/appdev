@@ -1,5 +1,16 @@
 # Backend Build Fanout (17 Services)
 
+Current customer selection: **14 services**, matching the /services folders
+shown on the customer's `test` branch on 2026-10-25. Payment is not shown there;
+Gateway and AuthServer are outside this selected folder scope. All three remain
+in the reference catalog but have no tasks, results or PVCs in the shipped
+selection. Existing PipelineRuns are not changed by this exclusion.
+
+Selected: acl, administration, applicant, audit-logging, core, document, event,
+identity, language, notification, realtime, request, stakeholder, visitVisa.
+The local Payment Dockerfile's case mismatch is a separate reference-copy issue;
+it does not prove the cause of a restore failure in the customer branch.
+
 Helm release: `release-pipeline`, namespace: `devops`.
 New Pipeline: `application-backend-build-fanout`.
 
@@ -77,8 +88,10 @@ permissions and RHTAS configuration are reused from the working customer values.
 
 ## 2. Select Services
 
-`values-backend.yaml` uses `selectedServices: []` for all 17. To run only one or
-two, set an explicit list and repeat the Helm upgrade:
+`values-backend.yaml` explicitly selects the 14 customer services above.
+Do not replace this list with `[]` unless you intend to enable the other three:
+an empty list selects all 17 catalog entries. To run only one or two, set an
+explicit list and repeat the Helm upgrade:
 
 ```yaml
 backendBuild:
@@ -86,7 +99,7 @@ backendBuild:
   sourceRevision: test
   selectedServices:
     - acl-service
-    - payment-service
+    - core-service
   workspaceSize: 3Gi
   allowTestFailure: false
   buildArgs:
@@ -111,7 +124,8 @@ oc create -f /tmp/backend-build.yaml
 oc -n devops get pipelineruns --sort-by=.metadata.creationTimestamp
 ```
 
-Each lane gets its own 3Gi RWO workspace. All 17 request **51Gi per run**, plus
+Each lane gets its own 3Gi RWO workspace. The shipped 14-service selection requests
+**42Gi per run**; all 17 would request 51Gi, plus
 container/node ephemeral storage. This is parallel fanout, not a three-build
 queue. Start with a smaller selection if quota or node capacity is limited.
 3Gi is the requested trial size, not measured proof of sufficient peak usage.

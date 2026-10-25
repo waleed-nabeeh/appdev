@@ -21,7 +21,8 @@ check(catalog.size == 17, 'Expected 17 services')
 check(catalog.map { |s| s['name'] }.uniq.size == 17, 'Duplicate service')
 baseline = render
 check(baseline.none? { |d| d.dig('metadata', 'name') == 'application-backend-build-fanout' }, 'Feature must default off')
-all = render(*overlay)
+customer = render(*overlay)
+all = render(*overlay, '--set-json', 'backendBuild.selectedServices=[]')
 # Ensure adding backend resources does not change existing pipeline/task definitions.
 baseline.each do |old|
   current = all.find { |d| d['kind'] == old['kind'] && d.dig('metadata', 'name') == old.dig('metadata', 'name') }
@@ -69,6 +70,12 @@ def validate(documents, services)
   pvcs.each { |w| check(w.dig('volumeClaimTemplate', 'spec', 'resources', 'requests', 'storage') == '3Gi', 'Wrong PVC size') }
 end
 validate(all, catalog)
+excluded = %w[payment-service gateway-service authserver-service]
+validate(customer, catalog.reject { |s| excluded.include?(s['name']) })
+customer_pipeline = customer.find { |d| d.dig('metadata', 'name') == 'application-backend-build-fanout' }
+excluded.each do |name|
+  check(!customer_pipeline.to_json.include?(name), "#{name} must be absent from customer tasks, workspaces and results")
+end
 %w[acl-service authserver-service].each do |name|
   validate(render(*overlay, '--set', "backendBuild.selectedServices={#{name}}"), catalog.select { |s| s['name'] == name })
 end
@@ -100,4 +107,4 @@ if ARGV[0]
     end
   end
 end
-puts 'Passed 17-service, one/two-service selection, dependency, result, workspace, isolation and shell checks'
+puts 'Passed 14-service customer selection, excluded lanes, full catalog, subset, dependency, workspace and shell checks'
