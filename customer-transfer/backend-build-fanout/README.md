@@ -1,5 +1,9 @@
 # Backend Build Fanout (17 Services)
 
+For runtime comma-separated selection, the new dispatcher, copy-paste curl test
+and labeled PVC cleanup, use [README-dispatch.md](README-dispatch.md).
+The fixed fanout below remains available and unchanged as the working fallback.
+
 Current customer selection: **14 services**, matching the /services folders
 shown on the customer's `test` branch on 2026-10-25. Payment is not shown there;
 Gateway and AuthServer are outside this selected folder scope. All three remain

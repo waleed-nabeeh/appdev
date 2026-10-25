@@ -12,6 +12,17 @@ backendBuild:
   allowTestFailure: false
   buildArgs:
     - CERT_KEYWORD=dev
+  dispatch:
+    enabled: false
+    imagePullSecrets:
+      - name: registry-auth
+    maxParallel: 3
+    timeoutSeconds: 39600
+    childTimeout: 2h0m0s
+    triggers:
+      enabled: false
+      targetBranch: test
+      authSecret: backend-pr-webhook-auth
 
 frontendRelease:
   enabled: false

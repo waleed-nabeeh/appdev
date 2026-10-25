@@ -1,0 +1,286 @@
+{{- if and .Values.backendBuild.enabled .Values.backendBuild.dispatch.enabled }}
+{{- $catalog := .Files.Get "files/backend-services.json" | fromJsonArray }}
+{{- $enabled := list }}
+{{- range $service := $catalog }}
+{{- if or (empty $.Values.backendBuild.selectedServices) (has $service.name $.Values.backendBuild.selectedServices) }}
+{{- $enabled = append $enabled $service }}
+{{- end }}
+{{- end }}
+{{- if lt (int .Values.backendBuild.dispatch.maxParallel) 1 }}
+{{- fail "backendBuild.dispatch.maxParallel must be positive" }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-dispatch-config
+  namespace: {{ .Release.Namespace }}
+data:
+  config.json: |
+    {{ dict "catalog" $enabled "imageRepository" .Values.backendBuild.imageRepository "buildServiceAccount" .Values.serviceAccount.name "workspaceSize" .Values.backendBuild.workspaceSize "maxParallel" (int .Values.backendBuild.dispatch.maxParallel) "timeoutSeconds" (int .Values.backendBuild.dispatch.timeoutSeconds) "childTimeout" .Values.backendBuild.dispatch.childTimeout | toJson }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backend-dispatcher
+  namespace: {{ .Release.Namespace }}
+imagePullSecrets:
+{{ .Values.backendBuild.dispatch.imagePullSecrets | toYaml | indent 2 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: backend-dispatcher
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups: [tekton.dev]
+    resources: [pipelineruns]
+    verbs: [get, create, patch]
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [get, create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: backend-dispatcher
+  namespace: {{ .Release.Namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: backend-dispatcher
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: backend-dispatcher
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: backend-dispatch-select
+  namespace: {{ .Release.Namespace }}
+spec:
+  params:
+    - {name: services, type: string}
+    - {name: selection-mode, type: string, default: manual}
+    - {name: source-revision, type: string}
+    - {name: source-commit, type: string, default: ""}
+    - {name: target-commit, type: string, default: ""}
+  workspaces:
+    - name: git-credentials
+  results:
+    - name: services
+    - name: commit
+  volumes:
+    - name: work
+      emptyDir: {}
+    - name: config
+      configMap:
+        name: backend-dispatch-config
+  stepTemplate:
+    volumeMounts:
+      - {name: work, mountPath: /work}
+      - {name: config, mountPath: /config, readOnly: true}
+    env:
+      - {name: MODE, value: $(params.selection-mode)}
+  steps:
+    - name: source
+      image: {{ .Values.images.git | quote }}
+      env:
+        - {name: HOME, value: /work/home}
+        - {name: CREDENTIALS_PATH, value: $(workspaces.git-credentials.path)}
+        - {name: REVISION, value: $(params.source-revision)}
+        - {name: COMMIT, value: $(params.source-commit)}
+        - {name: TARGET_COMMIT, value: $(params.target-commit)}
+        - {name: SOURCE_URL, value: {{ .Values.backendBuild.sourceUrl | quote }}}
+      script: |
+{{ .Files.Get "files/backend-select-source.sh" | indent 8 }}
+    - name: select
+      image: {{ .Values.images.nodejs24 | quote }}
+      env:
+        - {name: ACTION, value: select}
+        - {name: SERVICES, value: $(params.services)}
+      script: |
+        #!/usr/bin/env node
+{{ .Files.Get "files/backend-dispatch.js" | indent 8 }}
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: backend-service-settings
+  namespace: {{ .Release.Namespace }}
+spec:
+  params:
+    - {name: service, type: string}
+    - {name: source-commit, type: string}
+    - {name: source-revision, type: string}
+  results:
+    - name: project
+    - name: containerfile
+    - name: context
+    - name: image
+  volumes:
+    - name: config
+      configMap:
+        name: backend-dispatch-config
+  steps:
+    - name: prepare
+      image: {{ .Values.images.nodejs24 | quote }}
+      volumeMounts:
+        - {name: config, mountPath: /config, readOnly: true}
+      env:
+        - {name: ACTION, value: prepare}
+        - {name: SERVICE, value: $(params.service)}
+        - {name: COMMIT, value: $(params.source-commit)}
+        - {name: REVISION, value: $(params.source-revision)}
+      script: |
+        #!/usr/bin/env node
+{{ .Files.Get "files/backend-dispatch.js" | indent 8 }}
+---
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: application-backend-service-build
+  namespace: {{ .Release.Namespace }}
+spec:
+  params:
+    - {name: service, type: string}
+    - {name: source-commit, type: string}
+    - {name: source-revision, type: string}
+  results:
+    - {name: source-commit, value: $(params.source-commit)}
+    - {name: image-url, value: $(tasks.build.results.image-url)}
+    - {name: image-digest, value: $(tasks.build.results.image-digest)}
+  workspaces:
+    - name: source
+    - name: git-credentials
+    - name: registry-auth
+  tasks:
+    - name: settings
+      taskRef: {name: backend-service-settings}
+      params:
+        - {name: service, value: $(params.service)}
+        - {name: source-commit, value: $(params.source-commit)}
+        - {name: source-revision, value: $(params.source-revision)}
+    - name: clone
+      runAfter: [settings]
+      taskRef: {name: clone}
+      params:
+        - {name: url, value: {{ .Values.backendBuild.sourceUrl | quote }}}
+        - {name: revision, value: $(params.source-revision)}
+        - {name: commit, value: $(params.source-commit)}
+      workspaces:
+        - {name: source, workspace: source}
+        - {name: git-credentials, workspace: git-credentials}
+    - name: test
+      runAfter: [clone]
+{{- if .Values.backendBuild.allowTestFailure }}
+      onError: continue
+{{- end }}
+      taskRef: {name: unit-test}
+      params:
+        - {name: project, value: $(tasks.settings.results.project)}
+      workspaces:
+        - {name: source, workspace: source}
+    - name: build
+      runAfter: [test]
+      taskRef: {name: build-image}
+      params:
+        - {name: image, value: $(tasks.settings.results.image)}
+        - {name: context, value: $(tasks.settings.results.context)}
+        - {name: containerfile, value: $(tasks.settings.results.containerfile)}
+        - name: build-args
+          value: {{ .Values.backendBuild.buildArgs | toJson }}
+      workspaces:
+        - {name: source, workspace: source}
+        - {name: registry-auth, workspace: registry-auth}
+    - name: scan
+      runAfter: [build]
+      taskRef: {name: scan-image}
+      params:
+        - {name: image, value: $(tasks.build.results.image-url)}
+    - name: gate
+      runAfter: [scan]
+      taskRef: {name: security-gate}
+      params:
+        - {name: image, value: $(tasks.build.results.image-url)}
+    - name: sign
+      runAfter: [gate]
+      taskRef: {name: sign-image}
+      params:
+        - {name: image, value: $(tasks.build.results.image-url)}
+      workspaces:
+        - {name: registry-auth, workspace: registry-auth}
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: backend-dispatch-run
+  namespace: {{ .Release.Namespace }}
+spec:
+  params:
+    - {name: selected, type: string}
+    - {name: source-commit, type: string}
+    - {name: source-revision, type: string}
+    - {name: parent, type: string}
+  results:
+    - name: release-record
+  volumes:
+    - name: config
+      configMap:
+        name: backend-dispatch-config
+  steps:
+    - name: dispatch
+      image: {{ .Values.images.nodejs24 | quote }}
+      volumeMounts:
+        - {name: config, mountPath: /config, readOnly: true}
+      env:
+        - {name: ACTION, value: dispatch}
+        - {name: SELECTED, value: $(params.selected)}
+        - {name: COMMIT, value: $(params.source-commit)}
+        - {name: REVISION, value: $(params.source-revision)}
+        - {name: PARENT, value: $(params.parent)}
+        - {name: NAMESPACE, value: {{ .Release.Namespace | quote }}}
+      script: |
+        #!/usr/bin/env node
+{{ .Files.Get "files/backend-dispatch.js" | indent 8 }}
+---
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: application-backend-dispatch
+  namespace: {{ .Release.Namespace }}
+spec:
+  params:
+    - {name: services, type: string, default: ""}
+    - {name: selection-mode, type: string, default: manual}
+    - {name: source-revision, type: string, default: {{ .Values.backendBuild.sourceRevision | quote }}}
+    - {name: source-commit, type: string, default: ""}
+    - {name: target-commit, type: string, default: ""}
+  results:
+    - {name: source-commit, value: $(tasks.select.results.commit)}
+    - {name: selected-services, value: $(tasks.select.results.services)}
+    - {name: release-record, value: $(tasks.dispatch.results.release-record)}
+  workspaces:
+    - name: git-credentials
+  tasks:
+    - name: select
+      timeout: 10m0s
+      taskRef: {name: backend-dispatch-select}
+      params:
+        - {name: services, value: $(params.services)}
+        - {name: selection-mode, value: $(params.selection-mode)}
+        - {name: source-revision, value: $(params.source-revision)}
+        - {name: source-commit, value: $(params.source-commit)}
+        - {name: target-commit, value: $(params.target-commit)}
+      workspaces:
+        - {name: git-credentials, workspace: git-credentials}
+    - name: dispatch
+      timeout: 11h5m0s
+      runAfter: [select]
+      taskRef: {name: backend-dispatch-run}
+      params:
+        - {name: selected, value: $(tasks.select.results.services)}
+        - {name: source-commit, value: $(tasks.select.results.commit)}
+        - {name: source-revision, value: $(params.source-revision)}
+        - {name: parent, value: $(context.pipelineRun.name)}
+{{- end }}

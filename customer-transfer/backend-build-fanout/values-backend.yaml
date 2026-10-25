@@ -24,3 +24,8 @@ backendBuild:
   allowTestFailure: false
   buildArgs:
     - CERT_KEYWORD=dev
+  dispatch:
+    enabled: true
+    maxParallel: 3
+    triggers:
+      enabled: false

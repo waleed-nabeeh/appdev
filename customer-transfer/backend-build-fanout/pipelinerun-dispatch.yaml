@@ -1,0 +1,28 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: backend-dispatch-
+  namespace: devops
+spec:
+  pipelineRef:
+    name: application-backend-dispatch
+  taskRunTemplate:
+    serviceAccountName: backend-dispatcher
+  timeouts:
+    pipeline: 12h0m0s
+    tasks: 11h50m0s
+  params:
+    - name: services
+      value: "acl-service,core-service"
+    - name: selection-mode
+      value: manual
+    - name: source-revision
+      value: test
+    - name: source-commit
+      value: ""
+    - name: target-commit
+      value: ""
+  workspaces:
+    - name: git-credentials
+      secret:
+        secretName: git-credentials
