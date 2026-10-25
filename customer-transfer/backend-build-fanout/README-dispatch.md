@@ -179,6 +179,95 @@ pipeline credentials. The dispatcher has namespaced PipelineRun create/get/patch
 and ConfigMap create/get permissions. Creating PipelineRuns remains a powerful
 permission; this is not an untrusted-public-PR sandbox.
 
+## Simulated Azure PR curl (no password to type)
+
+This tests the real backend webhook Route, CEL filter and diff dispatcher, unlike
+the Kubernetes API curl above. No Azure service-hook creation permission is
+needed. Authentication stays enabled: the command reads the existing
+`backend-pr-webhook-auth` Secret's `authorization` key without printing it or
+putting its value in curl's command-line arguments. Your `oc` login needs access
+to that Secret. The older frontend htpasswd Secret is not interchangeable with
+this Secret; a password hash cannot be used as an Authorization header.
+
+Enable the listener first, from appdev (retain your other existing Helm overlays):
+
+```bash
+helm upgrade --install release-pipeline ./pipelines/chart -n devops \
+  -f customer-transfer/devops-apply/values-devops.yaml \
+  -f customer-transfer/backend-build-fanout/values-backend.yaml \
+  --set backendBuild.dispatch.triggers.enabled=true
+oc -n devops get eventlistener backend-pr
+oc -n devops get route backend-pr-webhook
+```
+
+Keep `triggers.enabled: true` in your own values file if you want subsequent Helm
+upgrades to retain the listener. Create the authentication Secret using the
+earlier instructions if it does not exist yet; do not remove the auth filter.
+
+Now run this entire block in **Bash inside the backend source checkout**, on a
+branch with changes relative to `test`. Push its commit first. The customer route
+and repository are filled in; both commits are real, not random placeholders.
+The route below is the expected default host; check it against `oc get route`
+above if your cluster uses a custom hostname. Do not run with `set -x`.
+
+```bash
+(
+  set +x
+  set -euo pipefail
+  ROUTE_URL='https://backend-pr-webhook-devops.apps.hub-visa-ocp.mofa.gov.sa/'
+  REPO_URL='https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Backend'
+  SOURCE_BRANCH=$(git branch --show-current)
+  case "$SOURCE_BRANCH" in
+    ''|*[!a-zA-Z0-9_./-]*) echo 'Use a named backend source branch.' >&2; exit 1 ;;
+  esac
+  SOURCE_SHA=$(git rev-parse HEAD)
+  TARGET_SHA=$(git ls-remote --exit-code "$REPO_URL" refs/heads/test | awk '{print $1}')
+  if [ "${#SOURCE_SHA}" -ne 40 ] || [ "${#TARGET_SHA}" -ne 40 ]; then
+    echo 'Could not resolve full source and target commits.' >&2; exit 1
+  fi
+  if [ "$SOURCE_SHA" = "$TARGET_SHA" ]; then
+    echo 'HEAD equals test: use a pushed branch with changes to test PR fanout.' >&2; exit 1
+  fi
+  AUTH_HEADER=$(oc -n devops get secret backend-pr-webhook-auth \
+    -o jsonpath='{.data.authorization}' | base64 --decode)
+  case "$AUTH_HEADER" in
+    'Basic '?*) ;;
+    *) echo 'Missing Basic authorization in backend-pr-webhook-auth.' >&2; exit 1 ;;
+  esac
+  printf 'Authorization: %s\n' "$AUTH_HEADER" |
+    curl --fail-with-body -sS -i \
+      --header @- \
+      --header 'Content-Type: application/json' \
+      "$ROUTE_URL" \
+      --data-binary "{
+        \"eventType\": \"git.pullrequest.created\",
+        \"resource\": {
+          \"pullRequestId\": $(date +%s),
+          \"status\": \"active\",
+          \"sourceRefName\": \"refs/heads/${SOURCE_BRANCH}\",
+          \"targetRefName\": \"refs/heads/test\",
+          \"repository\": {
+            \"name\": \"RedHat_UnifiedVisaPlatform.Backend\",
+            \"remoteUrl\": \"${REPO_URL}\"
+          },
+          \"lastMergeSourceCommit\": {\"commitId\": \"${SOURCE_SHA}\"},
+          \"lastMergeTargetCommit\": {\"commitId\": \"${TARGET_SHA}\"}
+        }
+      }"
+)
+```
+
+Git may separately prompt for Azure repository credentials when resolving `test`.
+This is not a webhook password prompt. The simulated PR ID is timestamp-based
+so each test starts a fresh batch. No real PR is created in Azure. Selection is
+still based on the real merge-base diff, so this does not force all 14 services.
+
+```bash
+oc -n devops get pipelineruns -l customer.mofa.gov.sa/trigger=azure-pr \
+  --sort-by=.metadata.creationTimestamp
+oc -n devops logs deployment/el-backend-pr --all-containers --tail=100
+```
+
 ## Validation and references
 
 ```bash
