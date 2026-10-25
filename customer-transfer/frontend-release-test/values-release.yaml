@@ -3,7 +3,7 @@
 frontendRelease:
   enabled: true
   sourceRevision: pre-prod
-  # ACS is not ready: match the working clone/test/build/sign/verify fanout.
-  scanEnabled: false
+  # Uses the existing rhacs-auth Secret; Quay integration must also be ready in ACS.
+  scanEnabled: true
   # Temporary test concession carried over from the existing frontend validation.
   allowTestFailure: true

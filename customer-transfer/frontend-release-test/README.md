@@ -9,20 +9,40 @@ is required for this test. Existing webhook configuration is left untouched.
 ## What Runs
 
 `application-frontend-release-test` resolves one source commit, then runs three
-parallel lanes: clone -> test -> build/push -> sign -> verify, matching the
-previous working frontend fanout. ACS scan/gate are disabled because ACS is not
-ready; this run does not constitute vulnerability or policy validation.
+parallel lanes: clone -> test -> build/push -> scan -> gate -> sign -> verify.
+The clone/test/build/sign/verify Tasks are reused from the working frontend
+fanout. The customer overlay now enables ACS scan/gate using `rhacs-auth`.
 After all three verify successfully, one Task commits
 `tekton-frontend-test/releases/frontend.json` to `RedHat_argocd`, branch `dev`.
 This JSON document records the full source SHA, eight-character tag, PipelineRun,
 and each image repository/digest. The new app-of-apps chart consumes it.
 
 Unit-test failures temporarily remain non-blocking, as requested for frontend
-testing. Build, signing, verification, and GitOps failures are blocking.
-Set `frontendRelease.allowTestFailure=false` to enforce tests. When ACS is ready,
-set `frontendRelease.scanEnabled=true` to add blocking scan/gate stages. RHACS needs
+testing. Build, scan, policy gate, signing, verification, and GitOps failures are
+blocking. Set `frontendRelease.allowTestFailure=false` to enforce tests. RHACS needs
 registry integration to pull the private images; its credentials are separate
 from the pipeline registry Secret.
+
+## Apply Order
+
+Use the existing `release-pipeline` Helm release in `devops`; do not install a
+second pipeline release. The older validation fanout and ACL backend are unchanged.
+
+1. Once: verify `rhacs-auth` and the ACS Quay integration (step 1).
+2. Once: publish `frontend-app:0.1.0` to Quay (step 2).
+3. Once: commit the new test GitOps directory to RedHat_argocd/dev (step 3).
+4. Once: configure Argo repository access and apply the isolated root (step 4).
+5. Apply the pipeline Helm overlay (step 5), then create a fresh run (step 6).
+
+Image-only releases repeat step 6. Helm/template changes repeat step 5 first.
+Do not overwrite the release JSON or republish an unchanged chart on each run.
+This test does not require Azure PR hooks, and it does not modify customer
+reference repos automatically.
+
+Baseline evidence: on 2026-10-25 the user supplied a successful three-service
+validation run with all build/sign/verify lanes green. Unit-test stages were
+red and non-blocking. That confirms the baseline, not ACS or GitOps deployment;
+those additions still require customer runtime validation.
 
 Chart `frontend-app:0.1.0` is published separately, once before the first run.
 It is reused across image builds. Bump Chart.yaml/version and GitOps
@@ -42,7 +62,7 @@ does not validate the customer's Operator versions or RBAC.
 oc whoami --show-server
 oc get clusterversion version
 oc get csv -A
-oc -n devops get secret git-credentials registry-auth npm-auth pipeline-proxy
+oc -n devops get secret git-credentials registry-auth npm-auth pipeline-proxy rhacs-auth
 oc get argocd -A
 ```
 
@@ -50,6 +70,16 @@ The existing `git-credentials` Secret must provide the `.git-credentials` format
 used by the tested HTTPS clone workflow: read access to the frontend source and
 write access to RedHat_argocd/dev. Do not embed tokens in URLs or these files.
 The pipeline service account remains `pipeline` in `devops`.
+
+`rhacs-auth` must contain keys `endpoint` (Central hostname:443, no https://)
+and `token` (a valid API token, preferably the Continuous Integration role).
+Never put the token in Helm values or Git. In ACS, test the Quay registry
+integration with read permission for all three image repositories. Confirm
+scanner health, image-pull access, and current vulnerability data. Keep
+`rhacs.insecureSkipTLSVerify=false`; supply approved CA trust if necessary.
+The mirrored roxctl image must be available and compatible with installed ACS.
+A failed policy gate may be an actual blocking policy violation, not an auth
+error; inspect its logs rather than bypassing it.
 
 The GitOps directory from step 3 must exist before running the full release.
 Installing only the Pipeline does not seed that directory: build/sign/verify

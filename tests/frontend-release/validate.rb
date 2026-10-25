@@ -26,10 +26,10 @@ check(!default.any? { |d| d.dig('metadata', 'name') == 'application-frontend-rel
 test_release = docs(run(*base, '-f', 'customer-transfer/frontend-release-test/values-release.yaml'))
 test_pipeline = test_release.find { |d| d.dig('metadata', 'name') == 'application-frontend-release-test' }
 test_tasks = test_pipeline['spec']['tasks']
-check(test_tasks.none? { |t| t['name'].start_with?('scan-', 'gate-') }, 'ACS must be absent from the customer test')
+check(test_tasks.count { |t| t['name'].start_with?('scan-', 'gate-') } == 6, 'Customer release must include three ACS scan/gate pairs')
 legacy = test_release.find { |d| d.dig('metadata', 'name') == 'application-frontend-three-service-validation' }['spec']['tasks']
 %w[admin-portal applicant-portal operational-portal].each do |service|
-  lane = ['resolve-source'] + %w[clone test build sign verify].map { |stage| "#{stage}-#{service}" }
+  lane = ['resolve-source'] + %w[clone test build scan gate sign verify].map { |stage| "#{stage}-#{service}" }
   lane.each_cons(2) do |before, after|
     check(test_tasks.find { |t| t['name'] == after }['runAfter'] == [before], "Broken test lane #{after}")
   end
