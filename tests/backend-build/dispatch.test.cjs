@@ -8,6 +8,7 @@ const catalog = ['acl', 'core', 'identity', 'event'].map(name => ({name: name + 
 const config = {catalog, imageRepository: 'quay.example/devops', workspaceSize: '3Gi', buildServiceAccount: 'pipeline', childTimeout: '2h0m0s', timeoutSeconds: 120, maxParallel: 2};
 const parent = {metadata: {name: 'batch-test', namespace: 'devops', uid: '12345678-1234-1234-1234-123456789abc'}, spec: {}};
 const names = catalog.map(s => s.name);
+check(serviceSettings(names[0], commit, 'test', config).commit === commit, 'Settings must emit the full SHA for the Pipeline result');
 check(JSON.stringify(selectServices(' acl-service,core-service,acl-service ', catalog)) === JSON.stringify(names.slice(0, 2)), 'Trim/dedup');
 check(selectServices('all', catalog).length === 4, 'all');
 ['', 'acl-service,', 'payment-service', 'all,acl-service'].forEach(input => rejects(() => selectServices(input, catalog)));

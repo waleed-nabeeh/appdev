@@ -118,6 +118,7 @@ spec:
     - name: containerfile
     - name: context
     - name: image
+    - name: commit
   volumes:
     - name: config
       configMap:
@@ -147,7 +148,7 @@ spec:
     - {name: source-commit, type: string}
     - {name: source-revision, type: string}
   results:
-    - {name: source-commit, value: $(params.source-commit)}
+    - {name: source-commit, value: $(tasks.settings.results.commit)}
     - {name: image-url, value: $(tasks.build.results.image-url)}
     - {name: image-digest, value: $(tasks.build.results.image-digest)}
   workspaces:

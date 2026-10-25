@@ -36,7 +36,7 @@ function serviceSettings(name, commit, revision, config) {
   check(service, 'Unknown or disabled service: ' + name);
   check(sha(commit), 'A full source SHA is required');
   check(branch(revision), 'Invalid source branch');
-  return {...service, tag: commit.slice(0, 8), image: config.imageRepository + '/' + name + ':' + commit.slice(0, 8)};
+  return {...service, commit, tag: commit.slice(0, 8), image: config.imageRepository + '/' + name + ':' + commit.slice(0, 8)};
 }
 
 function childName(uid, service) {
@@ -210,7 +210,7 @@ if (require.main === module) {
       console.log('Selected services: ' + (selected.join(',') || '(none)'));
     } else if (process.env.ACTION === 'prepare') {
       const service = serviceSettings(process.env.SERVICE, process.env.COMMIT, process.env.REVISION, config);
-      for (const key of ['project', 'containerfile', 'context', 'image']) fs.writeFileSync('/tekton/results/' + key, service[key]);
+      for (const key of ['project', 'containerfile', 'context', 'image', 'commit']) fs.writeFileSync('/tekton/results/' + key, service[key]);
     } else if (process.env.ACTION === 'dispatch') {
       const api = kubeClient(fs, require('node:https'));
       const parent = await api('GET', '/apis/tekton.dev/v1/namespaces/' + process.env.NAMESPACE + '/pipelineruns/' + process.env.PARENT);

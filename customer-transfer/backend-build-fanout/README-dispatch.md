@@ -220,6 +220,10 @@ above if your cluster uses a custom hostname. Do not run with `set -x`.
   ROUTE_URL='https://backend-pr-webhook-devops.apps.hub-visa-ocp.mofa.gov.sa/'
   REPO_URL='https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Backend'
   SOURCE_BRANCH=$(git branch --show-current)
+  case "$(git remote get-url origin)" in
+    */RedHat_UnifiedVisaPlatform.Backend|*/RedHat_UnifiedVisaPlatform.Backend.git) ;;
+    *) echo 'Run this from RedHat_UnifiedVisaPlatform.Backend, not appdev.' >&2; exit 1 ;;
+  esac
   case "$SOURCE_BRANCH" in
     ''|*[!a-zA-Z0-9_./-]*) echo 'Use a named backend source branch.' >&2; exit 1 ;;
   esac

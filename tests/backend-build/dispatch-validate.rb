@@ -16,6 +16,9 @@ definitions = enabled.select { |d| d['kind'] == 'Task' }.to_h { |d| [d['metadata
 %w[application-backend-dispatch application-backend-service-build].each do |name|
   spec = enabled.find { |d| d['kind'] == 'Pipeline' && d['metadata']['name'] == name }['spec']
   tasks = spec['tasks']
+  spec.fetch('results', []).each do |result|
+    check(result['value'].match?(/\A\$\(tasks\.[^.]+\.results\.[^)]+\)\z/), 'Pipeline results must reference Task results, not params')
+  end
   tasks.each do |task|
     definition = definitions.fetch(task['taskRef']['name'])
     params = task.fetch('params', []).map { |p| p['name'] }
