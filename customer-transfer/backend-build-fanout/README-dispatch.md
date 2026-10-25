@@ -207,54 +207,22 @@ upgrades, set both values in your customer overlay deliberately. Restore
 `backendBuild.dispatch.triggers.authRequired=true` and create the Secret when
 switching to authenticated hooks, or disable the listener after testing.
 
-Now run this entire block in **Bash inside the backend source checkout**, on a
+Run the script **inside the backend source checkout**, on a
 branch with changes relative to `test`. Push its commit first. The customer route
 and repository are filled in; both commits are real, not random placeholders.
 The route below is the expected default host; check it against `oc get route`
 above if your cluster uses a custom hostname. Do not run with `set -x`.
 
 ```bash
-(
-  set +x
-  set -euo pipefail
-  ROUTE_URL='https://backend-pr-webhook-devops.apps.hub-visa-ocp.mofa.gov.sa/'
-  REPO_URL='https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Backend'
-  SOURCE_BRANCH=$(git branch --show-current)
-  case "$(git remote get-url origin)" in
-    */RedHat_UnifiedVisaPlatform.Backend|*/RedHat_UnifiedVisaPlatform.Backend.git) ;;
-    *) echo 'Run this from RedHat_UnifiedVisaPlatform.Backend, not appdev.' >&2; exit 1 ;;
-  esac
-  case "$SOURCE_BRANCH" in
-    ''|*[!a-zA-Z0-9_./-]*) echo 'Use a named backend source branch.' >&2; exit 1 ;;
-  esac
-  SOURCE_SHA=$(git rev-parse HEAD)
-  TARGET_SHA=$(git ls-remote --exit-code "$REPO_URL" refs/heads/test | awk '{print $1}')
-  if [ "${#SOURCE_SHA}" -ne 40 ] || [ "${#TARGET_SHA}" -ne 40 ]; then
-    echo 'Could not resolve full source and target commits.' >&2; exit 1
-  fi
-  if [ "$SOURCE_SHA" = "$TARGET_SHA" ]; then
-    echo 'HEAD equals test: use a pushed branch with changes to test PR fanout.' >&2; exit 1
-  fi
-  curl --fail-with-body -sS -i \
-      --header 'Content-Type: application/json' \
-      "$ROUTE_URL" \
-      --data-binary "{
-        \"eventType\": \"git.pullrequest.created\",
-        \"resource\": {
-          \"pullRequestId\": $(date +%s),
-          \"status\": \"active\",
-          \"sourceRefName\": \"refs/heads/${SOURCE_BRANCH}\",
-          \"targetRefName\": \"refs/heads/test\",
-          \"repository\": {
-            \"name\": \"RedHat_UnifiedVisaPlatform.Backend\",
-            \"remoteUrl\": \"${REPO_URL}\"
-          },
-          \"lastMergeSourceCommit\": {\"commitId\": \"${SOURCE_SHA}\"},
-          \"lastMergeTargetCommit\": {\"commitId\": \"${TARGET_SHA}\"}
-        }
-      }"
-)
+# From appdev, switch to the sibling backend checkout first:
+cd ../RedHat_UnifiedVisaPlatform.Backend
+bash ../appdev/customer-transfer/backend-build-fanout/simulate-pr.sh
 ```
+
+The script contains the complete curl with the configured customer Route and
+repository. Run it with `bash`, not `source`. It validates the checkout and exits
+only its own process on failure, leaving your SSH session open. If your checkouts
+are not sibling directories, adjust only the local paths above.
 
 Git may separately prompt for Azure repository credentials when resolving `test`.
 This is not a webhook password prompt. The simulated PR ID is timestamp-based
