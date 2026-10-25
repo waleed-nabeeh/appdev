@@ -21,6 +21,7 @@ backendBuild:
     childTimeout: 2h0m0s
     triggers:
       enabled: false
+      authRequired: true
       targetBranch: test
       authSecret: backend-pr-webhook-auth
 

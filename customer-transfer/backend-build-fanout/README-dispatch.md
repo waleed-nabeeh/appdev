@@ -179,15 +179,15 @@ pipeline credentials. The dispatcher has namespaced PipelineRun create/get/patch
 and ConfigMap create/get permissions. Creating PipelineRuns remains a powerful
 permission; this is not an untrusted-public-PR sandbox.
 
-## Simulated Azure PR curl (no password to type)
+## Simulated Azure PR curl (no authentication, restricted-network test)
 
 This tests the real backend webhook Route, CEL filter and diff dispatcher, unlike
 the Kubernetes API curl above. No Azure service-hook creation permission is
-needed. Authentication stays enabled: the command reads the existing
-`backend-pr-webhook-auth` Secret's `authorization` key without printing it or
-putting its value in curl's command-line arguments. Your `oc` login needs access
-to that Secret. The older frontend htpasswd Secret is not interchangeable with
-this Secret; a password hash cannot be used as an Authorization header.
+needed. As requested for the restricted customer network, this test explicitly
+disables webhook authentication. No authentication Secret, username, password,
+Authorization header or Secret lookup is used. Skip the Secret creation section
+above for this mode. Anyone able to reach the Route can submit matching requests;
+repository/branch filters are not authentication. Keep access restricted.
 
 Enable the listener first, from appdev (retain your other existing Helm overlays):
 
@@ -195,14 +195,17 @@ Enable the listener first, from appdev (retain your other existing Helm overlays
 helm upgrade --install release-pipeline ./pipelines/chart -n devops \
   -f customer-transfer/devops-apply/values-devops.yaml \
   -f customer-transfer/backend-build-fanout/values-backend.yaml \
-  --set backendBuild.dispatch.triggers.enabled=true
+  --set backendBuild.dispatch.triggers.enabled=true \
+  --set backendBuild.dispatch.triggers.authRequired=false
 oc -n devops get eventlistener backend-pr
 oc -n devops get route backend-pr-webhook
 ```
 
-Keep `triggers.enabled: true` in your own values file if you want subsequent Helm
-upgrades to retain the listener. Create the authentication Secret using the
-earlier instructions if it does not exist yet; do not remove the auth filter.
+Chart defaults remain authenticated and triggers remain disabled. The command
+above explicitly enables this temporary unauthenticated test. To retain it across
+upgrades, set both values in your customer overlay deliberately. Restore
+`backendBuild.dispatch.triggers.authRequired=true` and create the Secret when
+switching to authenticated hooks, or disable the listener after testing.
 
 Now run this entire block in **Bash inside the backend source checkout**, on a
 branch with changes relative to `test`. Push its commit first. The customer route
@@ -228,15 +231,7 @@ above if your cluster uses a custom hostname. Do not run with `set -x`.
   if [ "$SOURCE_SHA" = "$TARGET_SHA" ]; then
     echo 'HEAD equals test: use a pushed branch with changes to test PR fanout.' >&2; exit 1
   fi
-  AUTH_HEADER=$(oc -n devops get secret backend-pr-webhook-auth \
-    -o jsonpath='{.data.authorization}' | base64 --decode)
-  case "$AUTH_HEADER" in
-    'Basic '?*) ;;
-    *) echo 'Missing Basic authorization in backend-pr-webhook-auth.' >&2; exit 1 ;;
-  esac
-  printf 'Authorization: %s\n' "$AUTH_HEADER" |
-    curl --fail-with-body -sS -i \
-      --header @- \
+  curl --fail-with-body -sS -i \
       --header 'Content-Type: application/json' \
       "$ROUTE_URL" \
       --data-binary "{

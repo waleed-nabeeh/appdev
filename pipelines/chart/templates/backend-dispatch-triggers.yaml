@@ -14,10 +14,12 @@ rules:
   - apiGroups: [tekton.dev]
     resources: [pipelineruns]
     verbs: [create]
+{{- if .Values.backendBuild.dispatch.triggers.authRequired }}
   - apiGroups: [""]
     resources: [secrets]
     resourceNames: [{{ .Values.backendBuild.dispatch.triggers.authSecret | quote }}]
     verbs: [get]
+{{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -127,7 +129,9 @@ spec:
           params:
             - name: filter
               value: >-
+{{- if .Values.backendBuild.dispatch.triggers.authRequired }}
                 header.canonical('Authorization').compareSecret('authorization', '{{ .Values.backendBuild.dispatch.triggers.authSecret }}') &&
+{{- end }}
                 (body.eventType == 'git.pullrequest.created' || body.eventType == 'git.pullrequest.updated') &&
                 body.resource.status == 'active' &&
                 body.resource.repository.remoteUrl == '{{ .Values.backendBuild.sourceUrl }}' &&
