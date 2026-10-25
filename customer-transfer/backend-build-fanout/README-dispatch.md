@@ -224,6 +224,20 @@ repository. Run it with `bash`, not `source`. It validates the checkout and exit
 only its own process on failure, leaving your SSH session open. If your checkouts
 are not sibling directories, adjust only the local paths above.
 
+If HEAD already equals `test`, test without creating a branch or editing code:
+
+```bash
+# Run inside the backend checkout, after pulling the latest appdev scripts.
+bash ../appdev/customer-transfer/backend-build-fanout/simulate-pr.sh --previous-commit
+```
+
+This sends a synthetic PR event with HEAD as source and its first parent as
+target. Both are real commits, but the target SHA intentionally does not represent
+the current `test` branch tip. It exercises the webhook and dispatcher using the
+last commit's diff; it does not create a real PR or force all services. HEAD must
+already be pushed and its parent available locally (not a depth-one checkout).
+No Git network lookup or credential prompt is used by this simulation option.
+
 Git may separately prompt for Azure repository credentials when resolving `test`.
 This is not a webhook password prompt. The simulated PR ID is timestamp-based
 so each test starts a fresh batch. No real PR is created in Azure. Selection is

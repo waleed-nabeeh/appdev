@@ -13,7 +13,14 @@ case "$SOURCE_BRANCH" in
   ''|*[!a-zA-Z0-9_./-]*) echo 'Use a named backend source branch.' >&2; exit 1 ;;
 esac
 SOURCE_SHA=$(git rev-parse HEAD)
-TARGET_SHA=$(git ls-remote --exit-code "$REPO_URL" refs/heads/test | awk '{print $1}')
+case "${1:-}" in
+  '') TARGET_SHA=$(git ls-remote --exit-code "$REPO_URL" refs/heads/test | awk '{print $1}') ;;
+  --previous-commit)
+    TARGET_SHA=$(git rev-parse --verify 'HEAD^1^{commit}')
+    echo 'Simulation only: comparing HEAD against its first parent, not the current test branch tip.' >&2
+    ;;
+  *) echo 'Usage: bash simulate-pr.sh [--previous-commit]' >&2; exit 1 ;;
+esac
 if [ "${#SOURCE_SHA}" -ne 40 ] || [ "${#TARGET_SHA}" -ne 40 ]; then
   echo 'Could not resolve full source and target commits.' >&2; exit 1
 fi
