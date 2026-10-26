@@ -3,18 +3,23 @@
 All deliverables are in appdev. The reference repository under `Mofa/wel` is
 READ-ONLY and has not been edited. Customer screenshot confirms:
 
-- Repository: `RedHat_argocd`
-- Branch: `pre-production`
-- Directory: `pre-production/apps/`
+- Repository: `RedHat_HelmCharts`
+- Branch: `dev`
+- Directory: `app-chart/`
+
+This destination replaces RedHat_argocd/pre-production because the current user
+does not have write access there. Both updater Tasks use the accessible HelmCharts
+repository. This tests Git tag updates only; it does not repoint Argo CD or publish
+an OCI chart. No local reference repository is modified by this configuration.
 
 ## Files to copy
 
 | From this folder | Customer GitOps destination | Contents |
 | --- | --- | --- |
-| `backend.yaml` | `pre-production/apps/backend.yaml` | 15 existing backend definitions |
-| `frontend.yaml` | `pre-production/apps/frontend.yaml` | Three frontend portals |
+| `backend.yaml` | `app-chart/backend.yaml` | 15 existing backend definitions |
+| `frontend.yaml` | `app-chart/frontend.yaml` | Three frontend portals |
 
-Create/paste these two files in Azure Repos on branch **pre-production**, not in
+Create/paste these two files in Azure Repos on branch **dev**, not in
 the backend source repo. These are Helm values files, not manifests for `oc apply`.
 They replace the requested combined core.yaml with the agreed split. Integration
 services are excluded. Payment and AuthServer are not in the reference core-apps
@@ -32,9 +37,10 @@ Gateway and frontend tags remain unchanged by the 14-service backend run.
 
 ## Run backend and frontend fanout
 
-1. Copy and commit both values files to the GitOps destination above.
+1. Confirm both values files exist at the destination above. The customer's latest
+   screenshot already shows them; do not overwrite existing updated tags with starter files.
 2. Ensure `git-credentials` in devops can read the backend source and read/write
-   `RedHat_argocd` on `pre-production`. Branch policy must permit this automation
+   `RedHat_HelmCharts` on `dev`. Branch policy must permit this automation
    commit; the Task does not create an Azure PR or bypass branch policy.
 3. From appdev apply the Helm overlay, retaining your existing frontend/trigger
    overlays or flags. No changes to the working child build stages are required:
@@ -58,18 +64,18 @@ oc create -f customer-transfer/frontend-release-test/pipelinerun.yaml
 The backend example selects `all` for the configured 14. Change `params.services`
 to `acl-service,core-service` or another allowed subset for a smaller test. Backend source
 is still `test`, with `CERT_KEYWORD=dev`. The GitOps destination branch is
-`pre-production`; these are deliberately separate settings.
+`dev` in RedHat_HelmCharts; these are deliberately separate settings.
 
 The frontend run builds all three portals from `pre-prod`, using
 `BUILD_ENVIRONMENT=dev`. The overlay enables ACS scan and gate for all three,
-then sign and update of `pre-production/apps/frontend.yaml`. Frontend unit tests
+then sign and update of `app-chart/frontend.yaml`. Frontend unit tests
 still allow failure temporarily; scan/gate failures block GitOps. Verification is
 disabled in this test overlay for promotion later, not bypassed inside a verify Task.
 
 The dispatcher captures the GitOps branch SHA before starting children. After
 every selected child succeeds through scan, gate and sign, `update-gitops`:
 
-1. Clones RedHat_argocd/pre-production and checks its target file has not changed during builds.
+1. Clones RedHat_HelmCharts/dev and checks its target file has not changed during builds.
 2. Reads the immutable successful batch ConfigMap and validates service names,
    full source SHA, eight-character tag, hub repository and recorded image digest.
 3. Parses backend.yaml and updates only
@@ -98,7 +104,7 @@ oc -n devops logs -l "tekton.dev/pipelineRun=$RUN,tekton.dev/pipelineTask=update
   --all-containers=true --tail=100 --prefix=true
 ```
 
-In Azure Repos, inspect the commit on pre-production. For the two-service example,
+In RedHat_HelmCharts, inspect the commit on dev. For the two-service example,
 only ACL and Core image tag values should change to the source commit's first
 eight characters. Other backend tags and the entire frontend.yaml stay unchanged.
 For `all`, 14 backend tags change and Gateway remains untouched.
@@ -123,27 +129,22 @@ preserved rather than guessed. Confirm or update them for preprod before sync.
 The customer must confirm Argo's registered preprod destination name/API URL,
 AppProject permissions, app namespaces, existing Secrets and worker labels.
 
-The parent Application must point to RedHat_argocd, branch `pre-production`, path
-`pre-production`. In its existing `spec.source.helm.valueFiles`, replace the old
-combined core-apps entry with these two entries, retaining other required files:
+An Argo administrator must configure the parent app-of-apps to consume the files
+from RedHat_HelmCharts/dev (or approve a separate transfer into the existing GitOps
+repository). Until that is done, changes here will NOT deploy through an Application
+still watching RedHat_argocd. Do not assume the directory name makes Argo discover them.
 
-```yaml
-valueFiles:
-  - apps/global.yaml
-  - apps/backend.yaml
-  - apps/frontend.yaml
-```
+These files contain `argocd-applications.applications`, which are values for the
+parent app-of-apps chart. They are NOT direct values for `app-chart/1.0.0` and
+must not simply be passed to that workload chart. The parent needs the matching
+argocd-applications dependency, global values, chart registry access and preprod
+destination configuration. The administrator must choose the supported repository
+layout or multi-source arrangement for the installed Argo version.
 
-Do not keep old definitions of the same app keys in another loaded values file.
-Helm merges values, so simply adding the split files while still loading the old
-core-apps.yaml can retain integration apps. Review any Argo prune operation before
-removing already-managed applications from the desired configuration.
-
-Check the parent chart dependency registry and global child chart repoURL in
-`pre-production/Chart.yaml` and `pre-production/apps/global.yaml`: the reference
-uses the old central Quay. The required app-chart and argocd-applications chart
-versions must exist in an approved accessible registry with Argo credentials.
-This tag-update Task does not package or push OCI charts.
+Do not load old and new definitions of the same app keys together. Review any
+prune operation before removing already-managed apps. Required app-chart and
+argocd-applications versions must exist in an approved accessible registry with
+Argo credentials. This tag-update Task does not package or push OCI charts.
 
 Keep the parent unsynced during the initial Git-only test. After reviewing the
 rendered Applications and environment settings, sync the parent, then the intended

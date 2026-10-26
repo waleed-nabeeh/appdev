@@ -11,6 +11,13 @@ end
 pipeline = after.find { |d| d['kind'] == 'Pipeline' && d['metadata']['name'] == 'application-backend-dispatch' }
 tasks = pipeline['spec']['tasks']
 definitions = after.select { |d| d['kind'] == 'Task' }.to_h { |d| [d['metadata']['name'], d['spec']] }
+expected_repo = 'https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_HelmCharts'
+%w[backend-gitops-update frontend-release-update].each do |name|
+  env = definitions.fetch(name)['stepTemplate']['env'].to_h { |e| [e['name'], e['value']] }
+  check(env['GITOPS_URL'] == expected_repo && env['GITOPS_BRANCH'] == 'dev', 'Wrong accessible Git update destination')
+  file = name.start_with?('backend') ? env['VALUES_FILE'] : env['RELEASE_FILE']
+  check(file == (name.start_with?('backend') ? 'app-chart/backend.yaml' : 'app-chart/frontend.yaml'), 'Wrong Git values file')
+end
 %w[gitops-base update-gitops].each do |name|
   check(tasks.find { |t| t['name'] == name }['when'][0]['values'] == ['true'], 'GitOps must be explicit opt-in per run')
 end

@@ -3,9 +3,9 @@ backendBuild:
   dispatch:
     gitops:
       enabled: true
-      repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_argocd
-      revision: pre-production
-      valuesFile: pre-production/apps/backend.yaml
+      repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_HelmCharts
+      revision: dev
+      valuesFile: app-chart/backend.yaml
 frontendRelease:
   enabled: true
   sourceRevision: pre-prod
@@ -13,7 +13,7 @@ frontendRelease:
   verifyEnabled: false
   allowTestFailure: true
   gitops:
-    repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_argocd
-    revision: pre-production
-    releaseFile: pre-production/apps/frontend.yaml
+    repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_HelmCharts
+    revision: dev
+    releaseFile: app-chart/frontend.yaml
     format: yaml

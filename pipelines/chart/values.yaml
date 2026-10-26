@@ -21,9 +21,9 @@ backendBuild:
     childTimeout: 2h0m0s
     gitops:
       enabled: false
-      repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_argocd
-      revision: pre-production
-      valuesFile: pre-production/apps/backend.yaml
+      repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_HelmCharts
+      revision: dev
+      valuesFile: app-chart/backend.yaml
     triggers:
       enabled: false
       authRequired: true

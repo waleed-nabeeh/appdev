@@ -1,7 +1,7 @@
 # Backend runtime dispatcher
 
-For the optional backend + frontend GitOps tag-update test on RedHat_argocd's
-`pre-production` branch, see [../backend-gitops/README.md](../backend-gitops/README.md).
+For the optional backend + frontend Git tag-update test on RedHat_HelmCharts'
+`dev` branch, see [../backend-gitops/README.md](../backend-gitops/README.md).
 
 The successful fixed 14-service fanout remains unchanged as a fallback. This adds
 a separate entry point with a runtime comma-separated service list. Helm's
