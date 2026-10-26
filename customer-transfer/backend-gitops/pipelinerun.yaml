@@ -1,0 +1,26 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: backend-gitops-test-
+  namespace: devops
+spec:
+  pipelineRef:
+    name: application-backend-dispatch
+  taskRunTemplate:
+    serviceAccountName: backend-dispatcher
+  timeouts:
+    pipeline: 12h0m0s
+    tasks: 11h50m0s
+  params:
+    - name: services
+      value: all
+    - name: update-gitops
+      value: "true"
+    - name: selection-mode
+      value: manual
+    - name: source-revision
+      value: test
+  workspaces:
+    - name: git-credentials
+      secret:
+        secretName: git-credentials

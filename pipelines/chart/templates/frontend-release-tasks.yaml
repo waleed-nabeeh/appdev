@@ -71,10 +71,17 @@ spec:
   volumes:
     - name: work
       emptyDir: {}
+{{- if eq (default "json" .Values.frontendRelease.gitops.format) "yaml" }}
+    - name: config
+      configMap: {name: gitops-yaml-code}
+{{- end }}
   stepTemplate:
     volumeMounts:
       - name: work
         mountPath: /work
+{{- if eq (default "json" .Values.frontendRelease.gitops.format) "yaml" }}
+      - {name: config, mountPath: /config, readOnly: true}
+{{- end }}
     env:
       - name: HOME
         value: /work/home
@@ -84,6 +91,10 @@ spec:
         value: {{ .Values.frontendRelease.gitops.revision | quote }}
       - name: RELEASE_FILE
         value: {{ .Values.frontendRelease.gitops.releaseFile | quote }}
+{{- if eq (default "json" .Values.frontendRelease.gitops.format) "yaml" }}
+      - {name: GITOPS_FORMAT, value: yaml}
+      - {name: VALUES_FILE, value: {{ .Values.frontendRelease.gitops.releaseFile | quote }}}
+{{- end }}
       - name: EXPECTED_BASE
         value: $(params.gitops-base)
   steps:
@@ -97,7 +108,11 @@ spec:
         chmod -R go-rwx "$HOME"
         git config --global credential.helper store
         git clone --single-branch --branch "$GITOPS_BRANCH" "$GITOPS_URL" /work/repo
+{{- if eq (default "json" .Values.frontendRelease.gitops.format) "yaml" }}
+        if ! git -C /work/repo merge-base --is-ancestor "$EXPECTED_BASE" HEAD || ! git -C /work/repo diff --quiet "$EXPECTED_BASE" HEAD -- "$RELEASE_FILE"; then
+{{- else }}
         if [ "$(git -C /work/repo rev-parse HEAD)" != "$EXPECTED_BASE" ]; then
+{{- end }}
           echo 'GitOps changed during this build. Review the newer release and rerun; no changes pushed.' >&2
           exit 1
         fi
@@ -120,6 +135,9 @@ spec:
     - name: push
       image: {{ .Values.images.git | quote }}
       script: |
+{{- if eq (default "json" .Values.frontendRelease.gitops.format) "yaml" }}
+{{ .Files.Get "files/gitops-push.sh" | indent 8 }}
+{{- else }}
         #!/bin/sh
         set -eu
         cd /work/repo
@@ -131,5 +149,6 @@ spec:
           # No rebase/force: a concurrent update must not silently replace a newer release.
           git push origin "HEAD:refs/heads/$GITOPS_BRANCH"
         fi
+{{- end }}
         git rev-parse HEAD | tr -d '\n' > "$(results.commit.path)"
 {{- end }}

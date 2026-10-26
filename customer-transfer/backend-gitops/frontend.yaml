@@ -1,0 +1,221 @@
+# Helm values for RedHat_argocd. Auto-sync is disabled for the initial Git-only test.
+# Initial tags are reference tags, not verified hub Quay artifacts.
+# Preprod Route hosts do not configure the Argo CD destination cluster.
+argocd-applications:
+  applications:
+
+    # operational-portal-dev
+    operational-portal-dev:
+      name: operational-portal-dev
+      project: core-apps
+      destination:
+        namespace: dev-frontend
+      source:
+        sourceType: helm
+        chart: app-chart
+        targetRevision: 1.0.0
+      syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      autoSync: false
+      overrideValues:
+        nameOverride: operational-portal-dev
+        fullnameOverride: operational-portal-dev
+        global:
+          nameOverride: operational-portal-dev
+          fullnameOverride: operational-portal-dev
+          serviceAccountName: default
+        workload:
+          kind: Deployment
+          replicas: 1
+        affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+              - matchExpressions:
+                - key: kubernetes.io/hostname
+                  operator: In
+                  values:
+                  - worker1
+                  - worker2
+                  - worker3
+        image:
+          repository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/operational-portal
+          tag: 0.44.0-alpha.0
+          pullPolicy: IfNotPresent
+          pullSecrets:
+          - name: regsecret
+        containerPorts:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        podSecurityContext: {}
+        securityContext: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        probes: {}
+        service:
+          enabled: true
+          type: ClusterIP
+          ports:
+          - name: http
+            port: 8080
+            targetPort: http
+            protocol: TCP
+        route:
+          enabled: true
+          host: operational-portal-dev.apps.pre-visa-ocp.mofa.gov.sa
+          path: "/"
+          port:
+            targetPort: http
+          tls:
+            enabled: true
+
+    # applicant-portal-dev
+    applicant-portal-dev:
+      name: applicant-portal-dev
+      project: core-apps
+      destination:
+        namespace: dev-frontend
+      source:
+        sourceType: helm
+        chart: app-chart
+        targetRevision: 1.0.0
+      syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      autoSync: false
+      overrideValues:
+        nameOverride: applicant-portal-dev
+        fullnameOverride: applicant-portal-dev
+        global:
+          nameOverride: applicant-portal-dev
+          fullnameOverride: applicant-portal-dev
+          serviceAccountName: default
+        workload:
+          kind: Deployment
+          replicas: 1
+        affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+              - matchExpressions:
+                - key: kubernetes.io/hostname
+                  operator: In
+                  values:
+                  - worker1
+                  - worker2
+                  - worker3
+        image:
+          repository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/applicant-portal
+          tag: 0.47.0-alpha.0
+          pullPolicy: IfNotPresent
+          pullSecrets:
+          - name: regsecret
+        containerPorts:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        podSecurityContext: {}
+        securityContext: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        probes: {}
+        service:
+          enabled: true
+          type: ClusterIP
+          ports:
+          - name: http
+            port: 8080
+            targetPort: http
+            protocol: TCP
+        route:
+          enabled: true
+          host: applicant-portal-dev.apps.pre-visa-ocp.mofa.gov.sa
+          path: "/applicant-portal/"
+          port:
+            targetPort: http
+          tls:
+            enabled: true
+
+    # admin-portal-dev
+    admin-portal-dev:
+      name: admin-portal-dev
+      project: core-apps
+      destination:
+        namespace: dev-frontend
+      source:
+        sourceType: helm
+        chart: app-chart
+        targetRevision: 1.0.0
+      syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      autoSync: false
+      overrideValues:
+        nameOverride: admin-portal-dev
+        fullnameOverride: admin-portal-dev
+        global:
+          nameOverride: admin-portal-dev
+          fullnameOverride: admin-portal-dev
+          serviceAccountName: default
+        workload:
+          kind: Deployment
+          replicas: 1
+        affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+              - matchExpressions:
+                - key: kubernetes.io/hostname
+                  operator: In
+                  values:
+                  - worker1
+                  - worker2
+                  - worker3
+        image:
+          repository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/admin-portal
+          tag: 0.37.0-alpha.0
+          pullPolicy: IfNotPresent
+          pullSecrets:
+          - name: regsecret
+        containerPorts:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        podSecurityContext: {}
+        securityContext: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        probes: {}
+        service:
+          enabled: true
+          type: ClusterIP
+          ports:
+          - name: http
+            port: 8080
+            targetPort: http
+            protocol: TCP
+        route:
+          enabled: true
+          host: admin-portal-dev.apps.pre-visa-ocp.mofa.gov.sa
+          path: "/"
+          port:
+            targetPort: http
+          tls:
+            enabled: true

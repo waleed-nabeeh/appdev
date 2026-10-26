@@ -115,6 +115,7 @@ spec:
       workspaces:
         - name: registry-auth
           workspace: registry-auth
+{{- if $.Values.frontendRelease.verifyEnabled }}
     - name: verify-{{ $service }}
       runAfter: [sign-{{ $service }}]
       taskRef:
@@ -126,8 +127,13 @@ spec:
         - name: registry-auth
           workspace: registry-auth
 {{- end }}
+{{- end }}
     - name: update-gitops
+{{- if .Values.frontendRelease.verifyEnabled }}
       runAfter: [verify-admin-portal, verify-applicant-portal, verify-operational-portal]
+{{- else }}
+      runAfter: [sign-admin-portal, sign-applicant-portal, sign-operational-portal]
+{{- end }}
       taskRef:
         name: frontend-release-update
       params:

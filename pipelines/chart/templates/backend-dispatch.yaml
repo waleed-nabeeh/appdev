@@ -253,6 +253,7 @@ metadata:
 spec:
   params:
     - {name: services, type: string, default: ""}
+    - {name: update-gitops, type: string, default: "false"}
     - {name: selection-mode, type: string, default: manual}
     - {name: source-revision, type: string, default: {{ .Values.backendBuild.sourceRevision | quote }}}
     - {name: source-commit, type: string, default: ""}
@@ -277,11 +278,35 @@ spec:
         - {name: git-credentials, workspace: git-credentials}
     - name: dispatch
       timeout: 11h5m0s
+{{- if .Values.backendBuild.dispatch.gitops.enabled }}
+      runAfter: [select, gitops-base]
+{{- else }}
       runAfter: [select]
+{{- end }}
       taskRef: {name: backend-dispatch-run}
       params:
         - {name: selected, value: $(tasks.select.results.services)}
         - {name: source-commit, value: $(tasks.select.results.commit)}
         - {name: source-revision, value: $(params.source-revision)}
         - {name: parent, value: $(context.pipelineRun.name)}
+{{- if .Values.backendBuild.dispatch.gitops.enabled }}
+    - name: gitops-base
+      runAfter: [select]
+      when:
+        - {input: $(params.update-gitops), operator: in, values: ["true"]}
+      taskRef: {name: backend-gitops-base}
+      workspaces:
+        - {name: git-credentials, workspace: git-credentials}
+    - name: update-gitops
+      runAfter: [dispatch]
+      when:
+        - {input: $(params.update-gitops), operator: in, values: ["true"]}
+      taskRef: {name: backend-gitops-update}
+      params:
+        - {name: release-record, value: $(tasks.dispatch.results.release-record)}
+        - {name: source-commit, value: $(tasks.select.results.commit)}
+        - {name: expected-base, value: $(tasks.gitops-base.results.commit)}
+      workspaces:
+        - {name: git-credentials, workspace: git-credentials}
+{{- end }}
 {{- end }}

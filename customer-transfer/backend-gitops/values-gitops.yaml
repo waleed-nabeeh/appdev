@@ -1,0 +1,19 @@
+# Add after values-devops.yaml and values-backend.yaml. Existing overlays still apply.
+backendBuild:
+  dispatch:
+    gitops:
+      enabled: true
+      repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_argocd
+      revision: pre-production
+      valuesFile: pre-production/apps/backend.yaml
+frontendRelease:
+  enabled: true
+  sourceRevision: pre-prod
+  scanEnabled: true
+  verifyEnabled: false
+  allowTestFailure: true
+  gitops:
+    repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_argocd
+    revision: pre-production
+    releaseFile: pre-production/apps/frontend.yaml
+    format: yaml

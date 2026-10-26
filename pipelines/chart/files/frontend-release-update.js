@@ -34,7 +34,18 @@ if (require.main === module) {
   if (!file.startsWith(root + '/') || fs.realpathSync(file) !== file) {
     throw new Error('Release file must be a regular path inside the GitOps checkout');
   }
-  const previous = JSON.parse(fs.readFileSync(file, 'utf8'));
-  const release = updateRelease(previous, process.env);
-  fs.writeFileSync(file, JSON.stringify(release, null, 2) + '\n');
+  if (process.env.GITOPS_FORMAT === 'yaml') {
+    const yaml = require('/config/js-yaml.js');
+    const {updateCore} = require('/config/backend-gitops-update.js');
+    const release = updateRelease({schemaVersion: 1, images: {}}, process.env);
+    const record = {schemaVersion: 1, succeeded: true, selected: services, failed: [], notStarted: [], sourceCommit: release.sourceCommit,
+      images: Object.fromEntries(services.map(name => [name, {...release.images[name], image: release.images[name].repository + '@' + release.images[name].digest}]))};
+    const previous = yaml.load(fs.readFileSync(file, 'utf8'), {schema: yaml.JSON_SCHEMA, maxDepth: 100});
+    const updated = updateCore(previous, record, {catalog: services.map(name => ({name})), imageRepository: process.env.IMAGE_REPOSITORY}, release.sourceCommit);
+    if (JSON.stringify(updated) !== JSON.stringify(previous)) fs.writeFileSync(file, yaml.dump(updated, {schema: yaml.JSON_SCHEMA, noRefs: true, lineWidth: -1, quotingType: '"'}));
+  } else {
+    const previous = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const release = updateRelease(previous, process.env);
+    fs.writeFileSync(file, JSON.stringify(release, null, 2) + '\n');
+  }
 }

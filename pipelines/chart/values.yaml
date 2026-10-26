@@ -19,6 +19,11 @@ backendBuild:
     maxParallel: 3
     timeoutSeconds: 39600
     childTimeout: 2h0m0s
+    gitops:
+      enabled: false
+      repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_argocd
+      revision: pre-production
+      valuesFile: pre-production/apps/backend.yaml
     triggers:
       enabled: false
       authRequired: true
@@ -27,6 +32,7 @@ backendBuild:
 
 frontendRelease:
   enabled: false
+  verifyEnabled: true
   sourceUrl: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Frontend
   sourceRevision: pre-prod
   imageRepository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops
