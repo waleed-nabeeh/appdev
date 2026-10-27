@@ -1,5 +1,9 @@
 # Backend and frontend GitOps test
 
+For the current combined dispatcher setup, use
+[Application Builds](../application-build/README.md) with its single values file
+and two parent runs. The fixed fanout examples below remain available.
+
 All deliverables are in appdev. The reference repository under `Mofa/wel` is
 READ-ONLY and has not been edited. Customer screenshot confirms:
 
@@ -153,8 +157,7 @@ For the default selection, 14 backend tags change and Gateway remains untouched.
 
 GitOps tasks require Helm `backendBuild.dispatch.gitops.enabled: true` (with
 `backendBuild.dispatch.enabled` enabled by values-backend.yaml). In the fixed
-fanout, GitOps is a normal stage with no run switch. The separate dispatcher/Azure
-PR flow still defaults to false.
+fanout and dispatcher, GitOps is a normal final stage with no run switch.
 Despite the existing `dispatch.gitops` setting name,
 the same configuration now enables GitOps Tasks for both backend Pipelines.
 The fixed fanout passes results directly and needs no additional API RBAC.

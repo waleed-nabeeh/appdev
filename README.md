@@ -1,5 +1,9 @@
 # Customer Release Engineering Demo
 
+For the current customer backend/frontend builds, use
+[Application Builds](customer-transfer/application-build/README.md): one Helm
+values file, comma-separated service selection, scoped dispatchers and GitOps updates.
+
 GitOps and pipeline-as-code assets for the Customer release-engineering demo. The
 same structure is intended for customer use after replacing demo endpoints,
 storage classes, image references, and credentials with approved internal

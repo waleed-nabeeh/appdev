@@ -1,5 +1,9 @@
 # Backend runtime dispatcher
 
+For the current combined frontend/backend setup, use
+[Application Builds](../application-build/README.md). It replaces the multiple
+overlay commands below with one values file and enables GitOps in both dispatchers.
+
 For the optional backend + frontend Git tag-update test on RedHat_HelmCharts'
 `dev` branch, see [../backend-gitops/README.md](../backend-gitops/README.md).
 

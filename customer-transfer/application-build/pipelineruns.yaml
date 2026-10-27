@@ -1,0 +1,61 @@
+# Starts both scopes. Replace services: all with comma-separated allowed names.
+---
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: backend-build-dispatch-
+  namespace: devops
+  labels:
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: application-build
+spec:
+  pipelineRef:
+    name: application-backend-dispatch
+  taskRunTemplate:
+    serviceAccountName: backend-dispatcher
+  timeouts:
+    pipeline: 12h0m0s
+    tasks: 11h50m0s
+  params:
+  - name: services
+    value: all
+  - name: selection-mode
+    value: manual
+  - name: source-revision
+    value: test
+  - name: source-commit
+    value: ''
+  workspaces:
+  - name: git-credentials
+    secret:
+      secretName: git-credentials
+---
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: frontend-build-dispatch-
+  namespace: devops
+  labels:
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: application-build
+spec:
+  pipelineRef:
+    name: application-frontend-dispatch
+  taskRunTemplate:
+    serviceAccountName: frontend-dispatcher
+  timeouts:
+    pipeline: 12h0m0s
+    tasks: 11h50m0s
+  params:
+  - name: services
+    value: all
+  - name: selection-mode
+    value: manual
+  - name: source-revision
+    value: pre-prod
+  - name: source-commit
+    value: ''
+  workspaces:
+  - name: git-credentials
+    secret:
+      secretName: git-credentials

@@ -19,9 +19,9 @@ expected_repo = 'https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/R
   file = name.start_with?('backend') ? env['VALUES_FILE'] : env['RELEASE_FILE']
   check(file == (name.start_with?('backend') ? 'app-chart/backend.yaml' : 'app-chart/frontend.yaml'), 'Wrong Git values file')
 end
-%w[gitops-base update-gitops].each do |name|
-  check(tasks.find { |t| t['name'] == name }['when'][0]['values'] == ['true'], 'GitOps must be explicit opt-in per run')
-end
+check(tasks.none? { |t| t['name'] == 'gitops-base' }, 'Dispatcher must not start a separate base check')
+check(!tasks.find { |t| t['name'] == 'update-gitops' }.key?('when'), 'GitOps must be a normal final stage')
+check(pipeline['spec']['params'].none? { |p| p['name'] == 'update-gitops' }, 'Dispatcher must not require a GitOps run switch')
 check(tasks.find { |t| t['name'] == 'update-gitops' }['runAfter'] == ['dispatch'], 'Update must follow successful batch')
 tasks.each do |task|
   definition = definitions.fetch(task['taskRef']['name'])

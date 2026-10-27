@@ -1,45 +1,48 @@
-{{- if and .Values.backendBuild.enabled .Values.backendBuild.dispatch.enabled .Values.backendBuild.dispatch.triggers.enabled }}
+{{- define "application.dispatchTriggers" }}
+{{- $root := .root }}
+{{- $scope := .scope }}
+{{- $settings := .settings }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: backend-pr-listener
-  namespace: {{ .Release.Namespace }}
+  name: {{ $scope }}-pr-listener
+  namespace: {{ $root.Release.Namespace }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: backend-pr-listener
-  namespace: {{ .Release.Namespace }}
+  name: {{ $scope }}-pr-listener
+  namespace: {{ $root.Release.Namespace }}
 rules:
   - apiGroups: [tekton.dev]
     resources: [pipelineruns]
     verbs: [create]
-{{- if .Values.backendBuild.dispatch.triggers.authRequired }}
+{{- if $settings.dispatch.triggers.authRequired }}
   - apiGroups: [""]
     resources: [secrets]
-    resourceNames: [{{ .Values.backendBuild.dispatch.triggers.authSecret | quote }}]
+    resourceNames: [{{ $settings.dispatch.triggers.authSecret | quote }}]
     verbs: [get]
 {{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: backend-pr-listener
-  namespace: {{ .Release.Namespace }}
+  name: {{ $scope }}-pr-listener
+  namespace: {{ $root.Release.Namespace }}
 subjects:
-  - {kind: ServiceAccount, name: backend-pr-listener, namespace: {{ .Release.Namespace }}}
+  - {kind: ServiceAccount, name: {{ $scope }}-pr-listener, namespace: {{ $root.Release.Namespace }}}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: backend-pr-listener
+  name: {{ $scope }}-pr-listener
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: backend-pr-triggers
-  namespace: {{ .Release.Namespace }}
+  name: {{ $scope }}-pr-triggers
+  namespace: {{ $root.Release.Namespace }}
 subjects:
-  - {kind: ServiceAccount, name: backend-pr-listener, namespace: {{ .Release.Namespace }}}
+  - {kind: ServiceAccount, name: {{ $scope }}-pr-listener, namespace: {{ $root.Release.Namespace }}}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -48,9 +51,9 @@ roleRef:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ printf "%s-%s-backend-pr" .Release.Namespace .Release.Name | trunc 63 | trimSuffix "-" }}
+  name: {{ printf "%s-%s-%s-pr" $root.Release.Namespace $root.Release.Name $scope | trunc 63 | trimSuffix "-" }}
 subjects:
-  - {kind: ServiceAccount, name: backend-pr-listener, namespace: {{ .Release.Namespace }}}
+  - {kind: ServiceAccount, name: {{ $scope }}-pr-listener, namespace: {{ $root.Release.Namespace }}}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -59,8 +62,8 @@ roleRef:
 apiVersion: triggers.tekton.dev/v1beta1
 kind: TriggerBinding
 metadata:
-  name: backend-azure-pr
-  namespace: {{ .Release.Namespace }}
+  name: {{ $scope }}-azure-pr
+  namespace: {{ $root.Release.Namespace }}
 spec:
   params:
     - {name: source-revision, value: $(body.resource.sourceRefName)}
@@ -73,8 +76,8 @@ spec:
 apiVersion: triggers.tekton.dev/v1beta1
 kind: TriggerTemplate
 metadata:
-  name: backend-azure-pr
-  namespace: {{ .Release.Namespace }}
+  name: {{ $scope }}-azure-pr
+  namespace: {{ $root.Release.Namespace }}
 spec:
   params:
     - name: source-revision
@@ -87,15 +90,15 @@ spec:
     - apiVersion: tekton.dev/v1
       kind: PipelineRun
       metadata:
-        name: backend-pr-$(tt.params.pr-id)-$(tt.params.source-short)-$(tt.params.target-short)
-        namespace: {{ .Release.Namespace }}
+        name: {{ $scope }}-pr-$(tt.params.pr-id)-$(tt.params.source-short)-$(tt.params.target-short)
+        namespace: {{ $root.Release.Namespace }}
         labels:
           customer.mofa.gov.sa/trigger: azure-pr
       spec:
         pipelineRef:
-          name: application-backend-dispatch
+          name: application-{{ $scope }}-dispatch
         taskRunTemplate:
-          serviceAccountName: backend-dispatcher
+          serviceAccountName: {{ $scope }}-dispatcher
         timeouts:
           pipeline: 12h0m0s
           tasks: 11h50m0s
@@ -113,29 +116,29 @@ spec:
 apiVersion: triggers.tekton.dev/v1beta1
 kind: EventListener
 metadata:
-  name: backend-pr
-  namespace: {{ .Release.Namespace }}
+  name: {{ $scope }}-pr
+  namespace: {{ $root.Release.Namespace }}
 spec:
-  serviceAccountName: backend-pr-listener
+  serviceAccountName: {{ $scope }}-pr-listener
   triggers:
-    - name: azure-backend-pr
+    - name: azure-{{ $scope }}-pr
       bindings:
-        - ref: backend-azure-pr
+        - ref: {{ $scope }}-azure-pr
       template:
-        ref: backend-azure-pr
+        ref: {{ $scope }}-azure-pr
       interceptors:
         - ref:
             name: cel
           params:
             - name: filter
               value: >-
-{{- if .Values.backendBuild.dispatch.triggers.authRequired }}
-                header.canonical('Authorization').compareSecret('authorization', '{{ .Values.backendBuild.dispatch.triggers.authSecret }}') &&
+{{- if $settings.dispatch.triggers.authRequired }}
+                header.canonical('Authorization').compareSecret('authorization', '{{ $settings.dispatch.triggers.authSecret }}') &&
 {{- end }}
                 (body.eventType == 'git.pullrequest.created' || body.eventType == 'git.pullrequest.updated') &&
                 body.resource.status == 'active' &&
-                body.resource.repository.remoteUrl == '{{ .Values.backendBuild.sourceUrl }}' &&
-                body.resource.targetRefName == 'refs/heads/{{ trimPrefix "refs/heads/" .Values.backendBuild.dispatch.triggers.targetBranch }}' &&
+                body.resource.repository.remoteUrl == '{{ $settings.sourceUrl }}' &&
+                body.resource.targetRefName == 'refs/heads/{{ trimPrefix "refs/heads/" $settings.dispatch.triggers.targetBranch }}' &&
                 body.resource.sourceRefName.matches('^refs/heads/[A-Za-z0-9_./-]+$') &&
                 body.resource.lastMergeSourceCommit.commitId.matches('^[0-9a-f]{40}$') &&
                 body.resource.lastMergeTargetCommit.commitId.matches('^[0-9a-f]{40}$') &&
@@ -153,15 +156,26 @@ spec:
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
-  name: backend-pr-webhook
-  namespace: {{ .Release.Namespace }}
+  name: {{ $scope }}-pr-webhook
+  namespace: {{ $root.Release.Namespace }}
 spec:
   to:
     kind: Service
-    name: el-backend-pr
+    name: el-{{ $scope }}-pr
   port:
     targetPort: http-listener
   tls:
     termination: edge
     insecureEdgeTerminationPolicy: Redirect
+{{- end }}
+
+{{- if and .Values.backendBuild.enabled .Values.backendBuild.dispatch.enabled .Values.backendBuild.dispatch.triggers.enabled }}
+{{ include "application.dispatchTriggers" (dict "root" . "scope" "backend" "settings" .Values.backendBuild) }}
+{{- end }}
+{{- if and .Values.frontendRelease.enabled .Values.frontendRelease.dispatch.enabled .Values.frontendRelease.dispatch.triggers.enabled }}
+{{- if .Values.frontendPr.enabled }}
+{{- fail "Disable legacy frontendPr.enabled before enabling frontend dispatcher triggers" }}
+{{- end }}
+---
+{{ include "application.dispatchTriggers" (dict "root" . "scope" "frontend" "settings" .Values.frontendRelease) }}
 {{- end }}

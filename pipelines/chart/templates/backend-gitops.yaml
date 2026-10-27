@@ -1,4 +1,4 @@
-{{- if or (and .Values.backendBuild.enabled .Values.backendBuild.dispatch.enabled .Values.backendBuild.dispatch.gitops.enabled) (and .Values.frontendRelease.enabled (eq (default "json" .Values.frontendRelease.gitops.format) "yaml")) }}
+{{- if or (and .Values.backendBuild.enabled .Values.backendBuild.dispatch.enabled .Values.backendBuild.dispatch.gitops.enabled) (and .Values.frontendRelease.enabled (or (eq (default "json" .Values.frontendRelease.gitops.format) "yaml") (and .Values.frontendRelease.dispatch.enabled .Values.frontendRelease.dispatch.gitops.enabled))) }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -48,12 +48,17 @@ spec:
         [ "${#base}" -eq 40 ]
         printf '%s' "$base" | grep -Eq '^[0-9a-f]{40}$'
         printf '%s' "$base" > "$(results.commit.path)"
+{{- end }}
+{{- define "application.gitopsUpdater" }}
+{{- $root := .root }}
+{{- $scope := .scope }}
+{{- $settings := .settings }}
 ---
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
-  name: backend-gitops-update
-  namespace: {{ .Release.Namespace }}
+  name: {{ $scope }}-gitops-update
+  namespace: {{ $root.Release.Namespace }}
 spec:
   params:
     - {name: release-record, type: string, default: ""}
@@ -70,7 +75,7 @@ spec:
     - name: config
       projected:
         sources:
-          - configMap: {name: backend-dispatch-config}
+          - configMap: {name: {{ $scope }}-dispatch-config}
           - configMap: {name: gitops-yaml-code}
   stepTemplate:
     volumeMounts:
@@ -78,13 +83,13 @@ spec:
       - {name: config, mountPath: /config, readOnly: true}
     env:
       - {name: HOME, value: /work/home}
-      - {name: GITOPS_URL, value: {{ .Values.backendBuild.dispatch.gitops.repository | quote }}}
-      - {name: GITOPS_BRANCH, value: {{ .Values.backendBuild.dispatch.gitops.revision | quote }}}
-      - {name: VALUES_FILE, value: {{ .Values.backendBuild.dispatch.gitops.valuesFile | quote }}}
+      - {name: GITOPS_URL, value: {{ $settings.dispatch.gitops.repository | quote }}}
+      - {name: GITOPS_BRANCH, value: {{ $settings.dispatch.gitops.revision | quote }}}
+      - {name: VALUES_FILE, value: {{ $settings.dispatch.gitops.valuesFile | quote }}}
       - {name: EXPECTED_BASE, value: $(params.expected-base)}
   steps:
     - name: clone
-      image: {{ .Values.images.git | quote }}
+      image: {{ $root.Values.images.git | quote }}
       script: |
         #!/bin/sh
         set -eu
@@ -98,23 +103,29 @@ spec:
         chmod -R g+rwX /work/repo
         if [ -n "$EXPECTED_BASE" ]; then
           if ! git -C /work/repo merge-base --is-ancestor "$EXPECTED_BASE" HEAD || ! git -C /work/repo diff --quiet "$EXPECTED_BASE" HEAD -- "$VALUES_FILE"; then
-            echo 'Backend GitOps file changed since this batch began. No update pushed; review and rerun.' >&2
+            echo 'GitOps file changed since this batch began. No update pushed; review and rerun.' >&2
             exit 1
           fi
         fi
     - name: update-yaml
-      image: {{ .Values.images.nodejs24 | quote }}
+      image: {{ $root.Values.images.nodejs24 | quote }}
       env:
         - {name: RELEASE_RECORD, value: $(params.release-record)}
         - {name: RELEASE_JSON, value: $(params.release-json)}
         - {name: SOURCE_COMMIT, value: $(params.source-commit)}
-        - {name: NAMESPACE, value: {{ .Release.Namespace | quote }}}
+        - {name: NAMESPACE, value: {{ $root.Release.Namespace | quote }}}
       script: |
         #!/usr/bin/env node
-{{ .Files.Get "files/backend-gitops-update.js" | indent 8 }}
+{{ $root.Files.Get "files/backend-gitops-update.js" | indent 8 }}
     - name: push
-      image: {{ .Values.images.git | quote }}
+      image: {{ $root.Values.images.git | quote }}
       script: |
-{{ .Files.Get "files/gitops-push.sh" | indent 8 }}
+{{ $root.Files.Get "files/gitops-push.sh" | indent 8 }}
         git rev-parse HEAD | tr -d '\n' > "$(results.commit.path)"
+{{- end }}
+{{- if and .Values.backendBuild.enabled .Values.backendBuild.dispatch.enabled .Values.backendBuild.dispatch.gitops.enabled }}
+{{ include "application.gitopsUpdater" (dict "root" . "scope" "backend" "settings" .Values.backendBuild) }}
+{{- end }}
+{{- if and .Values.frontendRelease.enabled .Values.frontendRelease.dispatch.enabled .Values.frontendRelease.dispatch.gitops.enabled }}
+{{ include "application.gitopsUpdater" (dict "root" . "scope" "frontend" "settings" .Values.frontendRelease) }}
 {{- end }}

@@ -21,6 +21,17 @@ const apps = core['argocd-applications'].applications;
 check(Object.keys(apps).length === 15, 'All 15 existing backend definitions must remain');
 const frontend = yaml.load(fs.readFileSync('customer-transfer/backend-gitops/frontend.yaml', 'utf8'), {schema: yaml.JSON_SCHEMA});
 check(Object.keys(frontend['argocd-applications'].applications).length === 3, 'Three frontend definitions');
+const frontendCatalog = ['admin-portal', 'applicant-portal', 'operational-portal'].map(name => ({name}));
+const frontendConfig = {...config, scope: 'frontend', catalog: frontendCatalog};
+for (const count of [0, 1, 2, 3]) {
+  const selected = frontendCatalog.slice(0, count).map(s => s.name);
+  const updated = updateCore(frontend, record(selected), frontendConfig, sha);
+  for (const [key, original] of Object.entries(frontend['argocd-applications'].applications)) {
+    const expected = JSON.parse(JSON.stringify(original));
+    if (selected.includes(key.slice(0, -4))) expected.overrideValues.image.tag = sha.slice(0, 8);
+    check(JSON.stringify(updated['argocd-applications'].applications[key]) === JSON.stringify(expected), 'Changed unrelated frontend settings: ' + key);
+  }
+}
 for (const count of [0, 1, 2, 14]) {
   const selected = catalog.slice(0, count).map(s => s.name);
   const updated = updateCore(core, record(selected), config, sha);
@@ -50,19 +61,23 @@ console.log('Passed backend/frontend split, 0/1/2/14-service updates, YAML round
 
 // Exercise the deployed entry point with an in-memory filesystem/API. Fixed
 // fanout must never require a service-account token or a ConfigMap API request.
-async function checkEntry(env, expectedCalls, expectedError, immutable = true) {
+async function checkEntry(env, expectedCalls, expectedError, immutable = true, frontendScope = false) {
   const source = fs.readFileSync('pipelines/chart/files/backend-gitops-update.js', 'utf8');
-  const filename = '/work/repo/app-chart/backend.yaml';
+  const activeConfig = frontendScope ? frontendConfig : config;
+  const activeDocument = frontendScope ? frontend : core;
+  const activeRecord = frontendScope ? record(['admin-portal']) : one;
+  const relative = 'app-chart/' + (frontendScope ? 'frontend' : 'backend') + '.yaml';
+  const filename = '/work/repo/' + relative;
   let calls = 0;
   let written;
   let error;
-  const proc = {env: {SOURCE_COMMIT: sha, VALUES_FILE: 'app-chart/backend.yaml', NAMESPACE: 'devops', ...env}};
+  const proc = {env: {SOURCE_COMMIT: sha, VALUES_FILE: relative, NAMESPACE: 'devops', ...env}};
   const mod = {exports: {}};
   const mockFs = {
     realpathSync: p => p,
     readFileSync: p => {
-      if (p === '/config/config.json') return JSON.stringify(config);
-      if (p === filename) return yaml.dump(core, {schema: yaml.JSON_SCHEMA});
+      if (p === '/config/config.json') return JSON.stringify(activeConfig);
+      if (p === filename) return yaml.dump(activeDocument, {schema: yaml.JSON_SCHEMA});
       throw new Error('Unexpected filesystem read: ' + p);
     },
     writeFileSync: (p, data) => { check(p === filename, 'Unexpected write path'); written = yaml.load(data, {schema: yaml.JSON_SCHEMA}); }
@@ -74,8 +89,8 @@ async function checkEntry(env, expectedCalls, expectedError, immutable = true) {
     if (name === 'node:https') { check(expectedCalls > 0, 'Fixed fanout must not initialize API access'); return {}; }
     if (name === '/config/backend-dispatch.js') return {kubeClient: () => async (method, url) => {
       calls++;
-      check(method === 'GET' && url === '/api/v1/namespaces/devops/configmaps/backend-result-' + 'a'.repeat(16), 'Wrong batch lookup');
-      return {immutable, data: {'release.json': JSON.stringify(one)}};
+      check(method === 'GET' && url === '/api/v1/namespaces/devops/configmaps/' + (frontendScope ? 'frontend' : 'backend') + '-result-' + 'a'.repeat(16), 'Wrong batch lookup');
+      return {immutable, data: {'release.json': JSON.stringify(activeRecord)}};
     }};
     throw new Error('Unexpected dependency: ' + name);
   };
@@ -88,14 +103,16 @@ async function checkEntry(env, expectedCalls, expectedError, immutable = true) {
     check(proc.exitCode === 1 && error && !written, 'Invalid input must fail without writing');
   } else {
     check(!proc.exitCode && !error, error || 'Unexpected entry point failure');
-    check(JSON.stringify(written) === JSON.stringify(updateCore(core, one, config, sha)), 'Entry point did not update only selected tags');
+    check(JSON.stringify(written) === JSON.stringify(updateCore(activeDocument, activeRecord, activeConfig, sha)), 'Entry point did not update only selected tags');
   }
 }
-(async () => {
+module.exports = (async () => {
   await checkEntry({RELEASE_JSON: JSON.stringify(one)}, 0, false);
   await checkEntry({RELEASE_RECORD: 'backend-result-' + 'a'.repeat(16)}, 1, false);
   await checkEntry({RELEASE_JSON: JSON.stringify(one), RELEASE_RECORD: 'backend-result-' + 'a'.repeat(16)}, 0, true);
   await checkEntry({RELEASE_JSON: '{'}, 0, true);
   await checkEntry({RELEASE_RECORD: 'backend-result-' + 'a'.repeat(16)}, 1, true, false);
+  await checkEntry({RELEASE_RECORD: 'frontend-result-' + 'a'.repeat(16)}, 1, false, true, true);
+  await checkEntry({RELEASE_RECORD: 'backend-result-' + 'a'.repeat(16)}, 0, true, true, true);
   console.log('Passed fixed-fanout input without API access, dispatcher compatibility and invalid-input rejection');
 })().catch(error => { console.error(error); process.exitCode = 1; });

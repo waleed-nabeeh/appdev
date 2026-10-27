@@ -1,5 +1,9 @@
 # Backend Build Fanout (17 Services)
 
+For the current combined frontend/backend dispatcher setup, use
+[Application Builds](../application-build/README.md) with its single values file.
+The fixed fanout instructions below remain a fallback.
+
 For runtime comma-separated selection, the new dispatcher, copy-paste curl test
 and labeled PVC cleanup, use [README-dispatch.md](README-dispatch.md).
 The fixed fanout below remains available. For the same build lanes followed by
@@ -21,8 +25,8 @@ New Pipeline: `application-backend-build-fanout`.
 
 Each selected service runs `clone -> test -> build/push -> ACS scan -> gate -> sign`.
 Without the GitOps overlay, the default run remains build-only. With that overlay,
-GitOps updates default to true for new fixed-fanout runs, including console starts.
-An explicit `update-gitops: "false"` parameter skips the update for a single run.
+GitOps is a normal final stage for new fixed-fanout runs, including console starts.
+There is no per-run GitOps switch.
 There is no verification, OCI chart push or direct Argo sync. Verification belongs in promotion.
 The all-service promotion/OCI publishing flow is not delivered by this change.
 Existing ACL and frontend resources are left unchanged.

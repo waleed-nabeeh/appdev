@@ -24,7 +24,7 @@ function selectDiff(paths, catalog, fallback) {
     // Only changes within an executable project's own directory are narrowly scoped.
     // Libraries/contracts, build metadata, shared code and unmapped paths affect all.
     if (/\.(csproj|props|targets|sln|slnx)$/i.test(path)) return all;
-    const matches = catalog.filter(s => path.startsWith(s.containerfile.slice(0, -'Dockerfile'.length)));
+    const matches = catalog.filter(s => (s.paths || [s.containerfile.slice(0, -'Dockerfile'.length)]).some(prefix => path.startsWith(prefix)));
     if (matches.length !== 1) return all;
     selected.add(matches[0].name);
   }
@@ -39,8 +39,8 @@ function serviceSettings(name, commit, revision, config) {
   return {...service, commit, tag: commit.slice(0, 8), image: config.imageRepository + '/' + name + ':' + commit.slice(0, 8)};
 }
 
-function childName(uid, service) {
-  return 'backend-' + uid.replaceAll('-', '').slice(0, 16) + '-' + service;
+function childName(uid, service, scope = 'backend') {
+  return scope + '-' + uid.replaceAll('-', '').slice(0, 16) + '-' + service;
 }
 
 function makeChild(parent, service, commit, revision, config) {
@@ -48,22 +48,23 @@ function makeChild(parent, service, commit, revision, config) {
   return {
     apiVersion: 'tekton.dev/v1', kind: 'PipelineRun',
     metadata: {
-      name: childName(parent.metadata.uid, service), namespace: parent.metadata.namespace,
+      name: childName(parent.metadata.uid, service, config.scope), namespace: parent.metadata.namespace,
       labels: {'customer.mofa.gov.sa/batch': parent.metadata.name, 'customer.mofa.gov.sa/service': service},
       ownerReferences: [{apiVersion: 'tekton.dev/v1', kind: 'PipelineRun', name: parent.metadata.name, uid: parent.metadata.uid}]
     },
     spec: {
-      pipelineRef: {name: 'application-backend-service-build'},
+      pipelineRef: {name: config.childPipeline || 'application-backend-service-build'},
       taskRunTemplate: {serviceAccountName: config.buildServiceAccount},
       timeouts: {pipeline: config.childTimeout},
       params: [{name: 'service', value: service}, {name: 'source-commit', value: commit}, {name: 'source-revision', value: revision}],
       workspaces: [
         {name: 'source', volumeClaimTemplate: {
-          metadata: {labels: {pipeline: 'backend-dispatch', 'customer.mofa.gov.sa/batch': parent.metadata.name, 'customer.mofa.gov.sa/service': service}},
+          metadata: {labels: {pipeline: (config.scope || 'backend') + '-dispatch', 'customer.mofa.gov.sa/batch': parent.metadata.name, 'customer.mofa.gov.sa/service': service}},
           spec: {accessModes: ['ReadWriteOnce'], resources: {requests: {storage: config.workspaceSize}}}
         }},
         {name: 'git-credentials', secret: {secretName: 'git-credentials'}},
-        {name: 'registry-auth', secret: {secretName: 'registry-auth'}}
+        {name: 'registry-auth', secret: {secretName: 'registry-auth'}},
+        ...(config.npmAuth ? [{name: 'npm-auth', secret: {secretName: 'npm-auth'}}] : [])
       ]
     }
   };
@@ -102,11 +103,11 @@ async function dispatch({api, sleep, now, parent, config, selected, commit, revi
     check(run.metadata.ownerReferences?.some(r => r.uid === owner), 'Child ownership mismatch');
     const p = Object.fromEntries(run.spec.params.map(x => [x.name, x.value]));
     check(p.service === service && p['source-commit'] === commit && p['source-revision'] === revision, 'Existing child parameters differ');
-    check(run.spec.pipelineRef?.name === 'application-backend-service-build', 'Unexpected child pipeline');
+    check(run.spec.pipelineRef?.name === (config.childPipeline || 'application-backend-service-build'), 'Unexpected child pipeline');
   };
   // Deterministic names reuse already-created children after a dispatcher retry.
   for (const service of selected) {
-    const existing = await read(childName(owner, service));
+    const existing = await read(childName(owner, service, config.scope));
     if (!existing) pending.push(service);
     else {
       owned(existing, service);
@@ -123,7 +124,7 @@ async function dispatch({api, sleep, now, parent, config, selected, commit, revi
         const service = pending.shift();
         let child;
         try { child = await api('POST', prefix, makeChild(parent, service, commit, revision, config)); }
-        catch (e) { if (e.status !== 409) throw e; child = await read(childName(owner, service)); }
+        catch (e) { if (e.status !== 409) throw e; child = await read(childName(owner, service, config.scope)); }
         check(child, 'Child creation was not confirmed');
         owned(child, service);
         active.set(service, child);
@@ -155,7 +156,7 @@ async function dispatch({api, sleep, now, parent, config, selected, commit, revi
     if (state(run) === 'succeeded') record.images[service] = releaseImage(run, service, commit, config);
     else record.failed.push({service, run: run.metadata.name});
   }
-  const name = 'backend-result-' + owner.replaceAll('-', '').slice(0, 16);
+  const name = (config.scope || 'backend') + '-result-' + owner.replaceAll('-', '').slice(0, 16);
   const cmPath = '/api/v1/namespaces/' + parent.metadata.namespace + '/configmaps';
   const cm = {apiVersion: 'v1', kind: 'ConfigMap', metadata: {name, namespace: parent.metadata.namespace,
     ownerReferences: [{apiVersion: 'tekton.dev/v1', kind: 'PipelineRun', name: parent.metadata.name, uid: owner}]},

@@ -1,0 +1,5 @@
+[
+  {"name":"admin-portal","project":"admin-portal","context":".","containerfile":"deployment/admin-portal/Dockerfile","paths":["apps/admin-portal/","deployment/admin-portal/"]},
+  {"name":"applicant-portal","project":"applicant-portal","context":".","containerfile":"deployment/applicant-portal/Dockerfile","paths":["apps/applicant-portal/","deployment/applicant-portal/"]},
+  {"name":"operational-portal","project":"operational-portal","context":".","containerfile":"deployment/operational-portal/Dockerfile","paths":["apps/operational-portal/","deployment/operational-portal/"]}
+]

@@ -32,6 +32,27 @@ backendBuild:
 
 frontendRelease:
   enabled: false
+  selectedServices: []
+  workspaceSize: 3Gi
+  buildArgs:
+    - BUILD_ENVIRONMENT=dev
+  dispatch:
+    enabled: false
+    imagePullSecrets:
+      - name: registry-auth
+    maxParallel: 3
+    timeoutSeconds: 39600
+    childTimeout: 2h0m0s
+    gitops:
+      enabled: false
+      repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_HelmCharts
+      revision: dev
+      valuesFile: app-chart/frontend.yaml
+    triggers:
+      enabled: false
+      authRequired: true
+      targetBranch: pre-prod
+      authSecret: frontend-pr-webhook-auth
   verifyEnabled: true
   sourceUrl: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Frontend
   sourceRevision: pre-prod

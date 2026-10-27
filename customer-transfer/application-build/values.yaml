@@ -1,0 +1,96 @@
+# Single customer configuration for backend/frontend dispatch, builds, GitOps and PR triggers.
+# Manual selection belongs in PipelineRun services; selectedServices is the allowed catalog.
+# Build arguments stay dev until the preprod Dockerfiles are prepared.
+---
+images:
+  git: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/alpine-git:2026-10-07
+  dotnet: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/dotnet-100:10.0
+  nodejs24: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nodejs-24:ubi9
+  buildah: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/buildah:ocp4.22
+  skopeo: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/skopeo:ocp4.22
+  rhacs: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/rhacs-roxctl:4.11.4
+  rhtasClientServer: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/rhtas-client-server:1.4.3
+rhtas:
+  audience: trusted-artifact-signer
+  clientUrl: http://cli-server.trusted-artifact-signer.svc:8080
+  certificateIdentityRegexp: "^https://kubernetes.io/namespaces/devops/serviceaccounts/pipeline$"
+  certificateOidcIssuer: https://kubernetes.default.svc
+  fulcioUrl: https://fulcio-server-trusted-artifact-signer.apps.hub-visa-ocp.mofa.gov.sa
+  rekorUrl: https://rekor-server-trusted-artifact-signer.apps.hub-visa-ocp.mofa.gov.sa
+  tufUrl: https://tuf-trusted-artifact-signer.apps.hub-visa-ocp.mofa.gov.sa
+proxy:
+  secretName: pipeline-proxy
+rhacs:
+  insecureSkipTLSVerify: false
+serviceAccount:
+  name: pipeline
+frontendPr:
+  enabled: false
+backendBuild:
+  enabled: true
+  sourceUrl: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Backend
+  sourceRevision: test
+  imageRepository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops
+  selectedServices:
+  - acl-service
+  - administration-service
+  - audit-logging-service
+  - core-service
+  - identity-service
+  - language-service
+  - document-service
+  - event-service
+  - notification-service
+  - request-service
+  - stakeholder-service
+  - applicant-service
+  - visitvisa-service
+  - realtime-service
+  workspaceSize: 3Gi
+  allowTestFailure: false
+  buildArgs:
+  - CERT_KEYWORD=dev
+  dispatch:
+    enabled: true
+    maxParallel: 3
+    triggers:
+      enabled: true
+      authRequired: false
+      targetBranch: test
+    gitops:
+      enabled: true
+      repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_HelmCharts
+      revision: dev
+      valuesFile: app-chart/backend.yaml
+frontendRelease:
+  enabled: true
+  sourceUrl: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Frontend
+  sourceRevision: pre-prod
+  imageRepository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops
+  scanEnabled: true
+  verifyEnabled: false
+  allowTestFailure: true
+  gitops:
+    repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_HelmCharts
+    revision: dev
+    releaseFile: app-chart/frontend.yaml
+    format: yaml
+  selectedServices:
+  - admin-portal
+  - applicant-portal
+  - operational-portal
+  workspaceSize: 3Gi
+  buildArgs:
+  - BUILD_ENVIRONMENT=dev
+  dispatch:
+    enabled: true
+    maxParallel: 3
+    gitops:
+      enabled: true
+      repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_HelmCharts
+      revision: dev
+      valuesFile: app-chart/frontend.yaml
+    triggers:
+      enabled: true
+      authRequired: false
+      targetBranch: pre-prod

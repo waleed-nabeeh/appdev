@@ -1,36 +1,52 @@
-{{- if and .Values.backendBuild.enabled .Values.backendBuild.dispatch.enabled }}
-{{- $catalog := .Files.Get "files/backend-services.json" | fromJsonArray }}
+{{- define "application.buildDispatcher" }}
+{{- $root := .root }}
+{{- $scope := .scope }}
+{{- $settings := .settings }}
+{{- $frontend := eq $scope "frontend" }}
+{{- $catalog := $root.Files.Get (printf "files/%s-services.json" $scope) | fromJsonArray }}
 {{- $enabled := list }}
 {{- range $service := $catalog }}
-{{- if or (empty $.Values.backendBuild.selectedServices) (has $service.name $.Values.backendBuild.selectedServices) }}
+{{- if or (empty $settings.selectedServices) (has $service.name $settings.selectedServices) }}
 {{- $enabled = append $enabled $service }}
 {{- end }}
 {{- end }}
-{{- if lt (int .Values.backendBuild.dispatch.maxParallel) 1 }}
-{{- fail "backendBuild.dispatch.maxParallel must be positive" }}
+{{- $known := list }}
+{{- range $service := $catalog }}
+{{- $known = append $known $service.name }}
+{{- end }}
+{{- if ne (len $settings.selectedServices) (len (uniq $settings.selectedServices)) }}
+{{- fail (printf "%s selectedServices contains duplicates" $scope) }}
+{{- end }}
+{{- range $name := $settings.selectedServices }}
+{{- if not (has $name $known) }}
+{{- fail (printf "Unknown %s service: %s" $scope $name) }}
+{{- end }}
+{{- end }}
+{{- if lt (int $settings.dispatch.maxParallel) 1 }}
+{{- fail "dispatch.maxParallel must be positive" }}
 {{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: backend-dispatch-config
-  namespace: {{ .Release.Namespace }}
+  name: {{ $scope }}-dispatch-config
+  namespace: {{ $root.Release.Namespace }}
 data:
   config.json: |
-    {{ dict "catalog" $enabled "imageRepository" .Values.backendBuild.imageRepository "buildServiceAccount" .Values.serviceAccount.name "workspaceSize" .Values.backendBuild.workspaceSize "maxParallel" (int .Values.backendBuild.dispatch.maxParallel) "timeoutSeconds" (int .Values.backendBuild.dispatch.timeoutSeconds) "childTimeout" .Values.backendBuild.dispatch.childTimeout | toJson }}
+    {{ dict "scope" $scope "childPipeline" (printf "application-%s-service-build" $scope) "npmAuth" $frontend "catalog" $enabled "imageRepository" $settings.imageRepository "buildServiceAccount" $root.Values.serviceAccount.name "workspaceSize" $settings.workspaceSize "maxParallel" (int $settings.dispatch.maxParallel) "timeoutSeconds" (int $settings.dispatch.timeoutSeconds) "childTimeout" $settings.dispatch.childTimeout | toJson }}
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: backend-dispatcher
-  namespace: {{ .Release.Namespace }}
+  name: {{ $scope }}-dispatcher
+  namespace: {{ $root.Release.Namespace }}
 imagePullSecrets:
-{{ .Values.backendBuild.dispatch.imagePullSecrets | toYaml | indent 2 }}
+{{ $settings.dispatch.imagePullSecrets | toYaml | indent 2 }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: backend-dispatcher
-  namespace: {{ .Release.Namespace }}
+  name: {{ $scope }}-dispatcher
+  namespace: {{ $root.Release.Namespace }}
 rules:
   - apiGroups: [tekton.dev]
     resources: [pipelineruns]
@@ -42,22 +58,22 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: backend-dispatcher
-  namespace: {{ .Release.Namespace }}
+  name: {{ $scope }}-dispatcher
+  namespace: {{ $root.Release.Namespace }}
 subjects:
   - kind: ServiceAccount
-    name: backend-dispatcher
-    namespace: {{ .Release.Namespace }}
+    name: {{ $scope }}-dispatcher
+    namespace: {{ $root.Release.Namespace }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: backend-dispatcher
+  name: {{ $scope }}-dispatcher
 ---
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
-  name: backend-dispatch-select
-  namespace: {{ .Release.Namespace }}
+  name: {{ $scope }}-dispatch-select
+  namespace: {{ $root.Release.Namespace }}
 spec:
   params:
     - {name: services, type: string}
@@ -75,7 +91,7 @@ spec:
       emptyDir: {}
     - name: config
       configMap:
-        name: backend-dispatch-config
+        name: {{ $scope }}-dispatch-config
   stepTemplate:
     volumeMounts:
       - {name: work, mountPath: /work}
@@ -84,30 +100,30 @@ spec:
       - {name: MODE, value: $(params.selection-mode)}
   steps:
     - name: source
-      image: {{ .Values.images.git | quote }}
+      image: {{ $root.Values.images.git | quote }}
       env:
         - {name: HOME, value: /work/home}
         - {name: CREDENTIALS_PATH, value: $(workspaces.git-credentials.path)}
         - {name: REVISION, value: $(params.source-revision)}
         - {name: COMMIT, value: $(params.source-commit)}
         - {name: TARGET_COMMIT, value: $(params.target-commit)}
-        - {name: SOURCE_URL, value: {{ .Values.backendBuild.sourceUrl | quote }}}
+        - {name: SOURCE_URL, value: {{ $settings.sourceUrl | quote }}}
       script: |
-{{ .Files.Get "files/backend-select-source.sh" | indent 8 }}
+{{ $root.Files.Get "files/backend-select-source.sh" | indent 8 }}
     - name: select
-      image: {{ .Values.images.nodejs24 | quote }}
+      image: {{ $root.Values.images.nodejs24 | quote }}
       env:
         - {name: ACTION, value: select}
         - {name: SERVICES, value: $(params.services)}
       script: |
         #!/usr/bin/env node
-{{ .Files.Get "files/backend-dispatch.js" | indent 8 }}
+{{ $root.Files.Get "files/backend-dispatch.js" | indent 8 }}
 ---
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
-  name: backend-service-settings
-  namespace: {{ .Release.Namespace }}
+  name: {{ $scope }}-service-settings
+  namespace: {{ $root.Release.Namespace }}
 spec:
   params:
     - {name: service, type: string}
@@ -122,10 +138,10 @@ spec:
   volumes:
     - name: config
       configMap:
-        name: backend-dispatch-config
+        name: {{ $scope }}-dispatch-config
   steps:
     - name: prepare
-      image: {{ .Values.images.nodejs24 | quote }}
+      image: {{ $root.Values.images.nodejs24 | quote }}
       volumeMounts:
         - {name: config, mountPath: /config, readOnly: true}
       env:
@@ -135,13 +151,13 @@ spec:
         - {name: REVISION, value: $(params.source-revision)}
       script: |
         #!/usr/bin/env node
-{{ .Files.Get "files/backend-dispatch.js" | indent 8 }}
+{{ $root.Files.Get "files/backend-dispatch.js" | indent 8 }}
 ---
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
-  name: application-backend-service-build
-  namespace: {{ .Release.Namespace }}
+  name: application-{{ $scope }}-service-build
+  namespace: {{ $root.Release.Namespace }}
 spec:
   params:
     - {name: service, type: string}
@@ -155,9 +171,12 @@ spec:
     - name: source
     - name: git-credentials
     - name: registry-auth
+{{- if $frontend }}
+    - name: npm-auth
+{{- end }}
   tasks:
     - name: settings
-      taskRef: {name: backend-service-settings}
+      taskRef: {name: {{ $scope }}-service-settings}
       params:
         - {name: service, value: $(params.service)}
         - {name: source-commit, value: $(params.source-commit)}
@@ -166,7 +185,7 @@ spec:
       runAfter: [settings]
       taskRef: {name: clone}
       params:
-        - {name: url, value: {{ .Values.backendBuild.sourceUrl | quote }}}
+        - {name: url, value: {{ $settings.sourceUrl | quote }}}
         - {name: revision, value: $(params.source-revision)}
         - {name: commit, value: $(params.source-commit)}
       workspaces:
@@ -174,14 +193,17 @@ spec:
         - {name: git-credentials, workspace: git-credentials}
     - name: test
       runAfter: [clone]
-{{- if .Values.backendBuild.allowTestFailure }}
+{{- if $settings.allowTestFailure }}
       onError: continue
 {{- end }}
-      taskRef: {name: unit-test}
+      taskRef: {name: {{ ternary "frontend-unit-test" "unit-test" $frontend }}}
       params:
         - {name: project, value: $(tasks.settings.results.project)}
       workspaces:
         - {name: source, workspace: source}
+{{- if $frontend }}
+        - {name: npm-auth, workspace: npm-auth}
+{{- end }}
     - name: build
       runAfter: [test]
       taskRef: {name: build-image}
@@ -190,10 +212,13 @@ spec:
         - {name: context, value: $(tasks.settings.results.context)}
         - {name: containerfile, value: $(tasks.settings.results.containerfile)}
         - name: build-args
-          value: {{ .Values.backendBuild.buildArgs | toJson }}
+          value: {{ $settings.buildArgs | toJson }}
       workspaces:
         - {name: source, workspace: source}
         - {name: registry-auth, workspace: registry-auth}
+{{- if $frontend }}
+        - {name: npm-auth, workspace: npm-auth}
+{{- end }}
     - name: scan
       runAfter: [build]
       taskRef: {name: scan-image}
@@ -215,8 +240,8 @@ spec:
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
-  name: backend-dispatch-run
-  namespace: {{ .Release.Namespace }}
+  name: {{ $scope }}-dispatch-run
+  namespace: {{ $root.Release.Namespace }}
 spec:
   params:
     - {name: selected, type: string}
@@ -228,10 +253,10 @@ spec:
   volumes:
     - name: config
       configMap:
-        name: backend-dispatch-config
+        name: {{ $scope }}-dispatch-config
   steps:
     - name: dispatch
-      image: {{ .Values.images.nodejs24 | quote }}
+      image: {{ $root.Values.images.nodejs24 | quote }}
       volumeMounts:
         - {name: config, mountPath: /config, readOnly: true}
       env:
@@ -240,24 +265,23 @@ spec:
         - {name: COMMIT, value: $(params.source-commit)}
         - {name: REVISION, value: $(params.source-revision)}
         - {name: PARENT, value: $(params.parent)}
-        - {name: NAMESPACE, value: {{ .Release.Namespace | quote }}}
+        - {name: NAMESPACE, value: {{ $root.Release.Namespace | quote }}}
       script: |
         #!/usr/bin/env node
-{{ .Files.Get "files/backend-dispatch.js" | indent 8 }}
+{{ $root.Files.Get "files/backend-dispatch.js" | indent 8 }}
 ---
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
-  name: application-backend-dispatch
-  namespace: {{ .Release.Namespace }}
+  name: application-{{ $scope }}-dispatch
+  namespace: {{ $root.Release.Namespace }}
 spec:
   params:
-    - {name: services, type: string, default: ""}
-    - {name: update-gitops, type: string, default: "false"}
-    - {name: selection-mode, type: string, default: manual}
-    - {name: source-revision, type: string, default: {{ .Values.backendBuild.sourceRevision | quote }}}
-    - {name: source-commit, type: string, default: ""}
-    - {name: target-commit, type: string, default: ""}
+    - {name: services, type: string, default: all, description: "Comma-separated allowed service names, or all"}
+    - {name: selection-mode, type: string, default: manual, description: "manual uses services; diff uses source-commit and target-commit"}
+    - {name: source-revision, type: string, default: {{ $settings.sourceRevision | quote }}}
+    - {name: source-commit, type: string, default: "", description: "Optional full source SHA; empty resolves source-revision HEAD"}
+    - {name: target-commit, type: string, default: "", description: "Full target SHA required only for diff/PR selection"}
   results:
     - {name: source-commit, value: $(tasks.select.results.commit)}
     - {name: selected-services, value: $(tasks.select.results.services)}
@@ -267,7 +291,7 @@ spec:
   tasks:
     - name: select
       timeout: 10m0s
-      taskRef: {name: backend-dispatch-select}
+      taskRef: {name: {{ $scope }}-dispatch-select}
       params:
         - {name: services, value: $(params.services)}
         - {name: selection-mode, value: $(params.selection-mode)}
@@ -278,35 +302,29 @@ spec:
         - {name: git-credentials, workspace: git-credentials}
     - name: dispatch
       timeout: 11h5m0s
-{{- if .Values.backendBuild.dispatch.gitops.enabled }}
-      runAfter: [select, gitops-base]
-{{- else }}
       runAfter: [select]
-{{- end }}
-      taskRef: {name: backend-dispatch-run}
+      taskRef: {name: {{ $scope }}-dispatch-run}
       params:
         - {name: selected, value: $(tasks.select.results.services)}
         - {name: source-commit, value: $(tasks.select.results.commit)}
         - {name: source-revision, value: $(params.source-revision)}
         - {name: parent, value: $(context.pipelineRun.name)}
-{{- if .Values.backendBuild.dispatch.gitops.enabled }}
-    - name: gitops-base
-      runAfter: [select]
-      when:
-        - {input: $(params.update-gitops), operator: in, values: ["true"]}
-      taskRef: {name: backend-gitops-base}
-      workspaces:
-        - {name: git-credentials, workspace: git-credentials}
+{{- if $settings.dispatch.gitops.enabled }}
     - name: update-gitops
       runAfter: [dispatch]
-      when:
-        - {input: $(params.update-gitops), operator: in, values: ["true"]}
-      taskRef: {name: backend-gitops-update}
+      taskRef: {name: {{ $scope }}-gitops-update}
       params:
         - {name: release-record, value: $(tasks.dispatch.results.release-record)}
         - {name: source-commit, value: $(tasks.select.results.commit)}
-        - {name: expected-base, value: $(tasks.gitops-base.results.commit)}
       workspaces:
         - {name: git-credentials, workspace: git-credentials}
 {{- end }}
+{{- end }}
+
+{{- if and .Values.backendBuild.enabled .Values.backendBuild.dispatch.enabled }}
+{{ include "application.buildDispatcher" (dict "root" . "scope" "backend" "settings" .Values.backendBuild) }}
+{{- end }}
+{{- if and .Values.frontendRelease.enabled .Values.frontendRelease.dispatch.enabled }}
+---
+{{ include "application.buildDispatcher" (dict "root" . "scope" "frontend" "settings" .Values.frontendRelease) }}
 {{- end }}
