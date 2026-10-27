@@ -19,8 +19,6 @@ spec:
       value: "test"
     - name: source-commit
       value: ""
-    - name: update-gitops
-      value: "true"
   workspaces:
     - name: git-credentials
       secret:

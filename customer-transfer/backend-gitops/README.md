@@ -41,11 +41,11 @@ The backend test now uses **application-backend-build-fanout**, the working
 14-lane Pipeline, with the existing `pipeline` service account. It adds a GitOps
 base check before cloning and one GitOps update after all selected signing tasks.
 It does not launch the dispatcher parent or child PipelineRuns.
-With this overlay installed, `update-gitops` defaults to **true** for new
-`application-backend-build-fanout` runs, including console starts and the ordinary
-Helm-generated run template. An explicit false value still skips the update.
-An existing run or a rerun that copies old parameters can retain false; create
-a fresh run or explicitly set true in that case.
+With this overlay installed, `update-gitops` is a normal stage in
+`application-backend-build-fanout`, including console starts and the ordinary
+Helm-generated run template. There is no `update-gitops` run parameter or `when`
+guard. It runs after every selected service successfully completes signing.
+Apply the Helm upgrade, then create a new run; existing runs keep their old spec.
 
 1. Confirm both values files exist at the destination above. The customer's latest
    screenshot already shows them; do not overwrite existing updated tags with starter files.
@@ -152,8 +152,8 @@ For the default selection, 14 backend tags change and Gateway remains untouched.
 
 GitOps tasks require Helm `backendBuild.dispatch.gitops.enabled: true` (with
 `backendBuild.dispatch.enabled` enabled by values-backend.yaml). In the fixed
-fanout, new runs now default `update-gitops` to true; setting it explicitly to false
-skips GitOps. The separate dispatcher/Azure PR flow still defaults to false.
+fanout, GitOps is a normal stage with no run switch. The separate dispatcher/Azure
+PR flow still defaults to false.
 Despite the existing `dispatch.gitops` setting name,
 the same configuration now enables GitOps Tasks for both backend Pipelines.
 The fixed fanout passes results directly and needs no additional API RBAC.

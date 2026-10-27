@@ -65,9 +65,9 @@ check(YAML.load_file('customer-transfer/backend-gitops/pipelinerun.yaml') == YAM
     check(image['digest'] == "$(tasks.build-#{s}.results.image-digest)", 'Digest must come from build result')
     check(image['image'] == image['repository'] + '@' + image['digest'], 'Invalid digest reference')
   end
-  check(p['spec']['params'].find { |v| v['name'] == 'update-gitops' }['default'] == 'true', 'Fixed fanout GitOps must default on when the overlay is enabled')
+  check(p['spec']['params'].none? { |v| v['name'] == 'update-gitops' }, 'Fixed fanout must not require a GitOps run switch')
   %w[gitops-base update-gitops].each do |name|
-    check(ptasks.find { |t| t['name'] == name }['when'] == [{'input' => '$(params.update-gitops)', 'operator' => 'in', 'values' => ['true']}], 'Missing opt-in guard')
+    check(!ptasks.find { |t| t['name'] == name }.key?('when'), 'GitOps must be a normal stage without a run guard')
   end
   ptasks.each do |t|
     definition = definitions.fetch(t['taskRef']['name'])
@@ -85,7 +85,7 @@ check(YAML.load_file('customer-transfer/backend-gitops/pipelinerun.yaml') == YAM
   run = YAML.safe_load(cm['data']['gitops-pipelinerun.yaml'])
   check(run.dig('spec', 'pipelineRef', 'name') == fanout_name, 'GitOps test must use fixed fanout')
   check(run.dig('spec', 'taskRunTemplate', 'serviceAccountName') == 'pipeline', 'Use working pipeline service account')
-  check(run['spec']['params'].any? { |v| v['name'] == 'update-gitops' && v['value'] == 'true' }, 'Test must enable update')
+  check(run['spec']['params'].none? { |v| v['name'] == 'update-gitops' }, 'Run must not need a GitOps switch')
   check(run['spec']['workspaces'].map { |w| w['name'] }.sort == p['spec']['workspaces'].map { |w| w['name'] }.sort, 'Subset run workspace mismatch')
   claims = run['spec']['workspaces'].select { |w| w['volumeClaimTemplate'] }
   check(claims.size == selected.size && claims.all? { |w| w.dig('volumeClaimTemplate', 'spec', 'resources', 'requests', 'storage') == '3Gi' }, 'Wrong subset PVC allocation')

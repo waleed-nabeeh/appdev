@@ -86,11 +86,6 @@ spec:
     - name: source-commit
       type: string
       default: ""
-{{- if $gitops }}
-    - name: update-gitops
-      type: string
-      default: "true"
-{{- end }}
   results:
     - name: source-commit
       value: $(tasks.resolve-source.results.commit)
@@ -123,8 +118,6 @@ spec:
 {{- if $gitops }}
     - name: gitops-base
       runAfter: [resolve-source]
-      when:
-        - {input: $(params.update-gitops), operator: in, values: ["true"]}
       taskRef:
         name: backend-gitops-base
       workspaces:
@@ -221,8 +214,6 @@ spec:
 {{- range $service := $services }}
         - sign-{{ $service.name }}
 {{- end }}
-      when:
-        - {input: $(params.update-gitops), operator: in, values: ["true"]}
       taskRef:
         name: backend-gitops-update
       params:
@@ -271,10 +262,6 @@ data:
           value: {{ $.Values.backendBuild.sourceRevision | quote }}
         - name: source-commit
           value: ""
-{{- if $update }}
-        - name: update-gitops
-          value: "true"
-{{- end }}
       workspaces:
         - name: git-credentials
           secret:
