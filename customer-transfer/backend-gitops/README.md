@@ -2,7 +2,7 @@
 
 For the current combined dispatcher setup, use
 [Application Builds](../application-build/README.md) with its single values file
-and two parent runs. The fixed fanout examples below remain available.
+and dispatcher TaskRuns that each launch one selected-lane build run. The fixed fanout examples below remain available.
 
 All deliverables are in appdev. The reference repository under `Mofa/wel` is
 READ-ONLY and has not been edited. Customer screenshot confirms:
@@ -297,3 +297,11 @@ References: [Argo CD Helm values](https://argo-cd.readthedocs.io/en/stable/user-
 [app-of-apps](https://argo-cd.readthedocs.io/en/stable/operator-manual/cluster-bootstrapping/),
 [Tekton Task result dependencies](https://tekton.dev/docs/pipelines/pipelines/#using-results),
 [Red Hat container file permissions](https://developers.redhat.com/blog/2020/10/26/adapting-docker-and-kubernetes-containers-to-run-on-red-hat-openshift-container-platform).
+
+## Supplied preproduction files
+
+`backend-preproduction.yaml` and `frontend-preproduction.yaml` are included as
+customer-supplied transfer files (15 backend applications and three frontends).
+They are preserved as supplied. Their inclusion does not retarget the current
+build updater, which still writes `app-chart/backend.yaml` and
+`app-chart/frontend.yaml` in RedHat_HelmCharts/dev.

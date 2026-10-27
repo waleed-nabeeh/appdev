@@ -1,6 +1,9 @@
 serviceAccount:
   name: pipeline
 
+applicationBuild:
+  singleRun: false
+
 backendBuild:
   enabled: false
   sourceUrl: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Backend

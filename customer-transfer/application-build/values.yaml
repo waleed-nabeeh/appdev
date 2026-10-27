@@ -1,5 +1,5 @@
-# Single customer configuration for backend/frontend dispatch, builds, GitOps and PR triggers.
-# Manual selection belongs in PipelineRun services; selectedServices is the allowed catalog.
+# Single customer configuration: one selected-lane build PipelineRun per scope.
+# Manual selection belongs in dispatcher TaskRun services; selectedServices is the allowed catalog.
 # Build arguments stay dev until the preprod Dockerfiles are prepared.
 ---
 images:
@@ -24,6 +24,8 @@ rhacs:
   insecureSkipTLSVerify: false
 serviceAccount:
   name: pipeline
+applicationBuild:
+  singleRun: true
 frontendPr:
   enabled: false
 backendBuild:
@@ -52,7 +54,6 @@ backendBuild:
   - CERT_KEYWORD=dev
   dispatch:
     enabled: true
-    maxParallel: 3
     triggers:
       enabled: true
       authRequired: false
@@ -84,7 +85,6 @@ frontendRelease:
   - BUILD_ENVIRONMENT=dev
   dispatch:
     enabled: true
-    maxParallel: 3
     gitops:
       enabled: true
       repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_HelmCharts

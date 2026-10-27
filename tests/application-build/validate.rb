@@ -40,44 +40,46 @@ documents.select { |d| d['kind'] == 'Pipeline' }.each do |pipeline|
     check(producer_task && tasks.fetch(producer_task['taskRef']['name']).fetch('results', []).any? { |r| r['name'] == result }, 'Invalid task result reference')
   end
 end
-runs = YAML.load_stream(File.read('customer-transfer/application-build/pipelineruns.yaml')).compact
-check(runs.size == 2, 'Expected two parent run examples')
+runs = YAML.load_stream(File.read('customer-transfer/application-build/dispatches.yaml')).compact
+check(runs.size == 2, 'Expected two dispatcher TaskRun examples')
 %w[backend frontend].each do |scope|
   front = scope == 'frontend'
   config = JSON.parse(get.call('ConfigMap', scope + '-dispatch-config')['data']['config.json'])
   check(config['scope'] == scope && config['catalog'].size == (front ? 3 : 14), 'Incorrect allowed catalog')
-  check(config['childPipeline'] == "application-#{scope}-service-build" && config['npmAuth'] == front, 'Incorrect child scope/workspaces')
-  check(config['workspaceSize'] == '3Gi' && config['maxParallel'] == 3, 'Incorrect storage/concurrency settings')
-  parent = get.call('Pipeline', "application-#{scope}-dispatch")['spec']
-  check(parent['tasks'].map { |t| t['name'] } == %w[select dispatch update-gitops], 'Parent must select, dispatch, update GitOps')
-  check(parent['params'].none? { |p| p['name'] == 'update-gitops' }, 'No GitOps run switch')
-  check(parent['params'].find { |p| p['name'] == 'services' }['default'] == 'all', 'CSV input must have a usable default')
-  check(parent['tasks'].last['runAfter'] == ['dispatch'] && !parent['tasks'].last.key?('when'), 'GitOps must follow successful dispatch')
-  child = get.call('Pipeline', config['childPipeline'])['spec']
-  check(child['tasks'].map { |t| t['name'] } == %w[settings clone test build scan gate sign], 'Child must preserve working build flow without verify')
-  child['tasks'].each_cons(2) { |a, b| check(b['runAfter'] == [a['name']], 'Broken child stage ordering') }
-  unit = child['tasks'].find { |t| t['name'] == 'test' }
-  check(unit['taskRef']['name'] == (front ? 'frontend-unit-test' : 'unit-test'), 'Incorrect test Task')
-  check((unit['onError'] == 'continue') == front, 'Frontend-only test concession')
-  build = child['tasks'].find { |t| t['name'] == 'build' }
-  args = build['params'].find { |p| p['name'] == 'build-args' }['value']
-  check(args == [front ? 'BUILD_ENVIRONMENT=dev' : 'CERT_KEYWORD=dev'], 'Keep dev build arguments')
+  check(config['fanoutPipeline'] == "application-#{scope}-build-fanout" && config['npmAuth'] == front, 'Incorrect build scope/workspaces')
+  check(config['workspaceSize'] == '3Gi', 'Incorrect storage settings')
+  check(documents.none? { |d| d['kind'] == 'Pipeline' && d.dig('metadata', 'name') == "application-#{scope}-dispatch" }, 'No parent dispatcher PipelineRun')
+  check(documents.none? { |d| d['kind'] == 'Pipeline' && d.dig('metadata', 'name') == "application-#{scope}-service-build" }, 'No per-service child PipelineRuns')
+  fanout = get.call('Pipeline', config['fanoutPipeline'])['spec']
+  check(fanout['tasks'].last['name'] == 'update-gitops' && !fanout['tasks'].last.key?('when'), 'GitOps must be in the main fanout')
+  config['catalog'].each do |service|
+    name = service['name']
+    lane = ['resolve-source'] + %w[clone test build scan gate sign].map { |stage| "#{stage}-#{name}" }
+    lane.each_cons(2) { |a, b| check(fanout['tasks'].find { |t| t['name'] == b }['runAfter'] == [a], 'Broken working lane') }
+    unit = fanout['tasks'].find { |t| t['name'] == 'test-' + name }
+    check(unit['taskRef']['name'] == (front ? 'frontend-unit-test' : 'unit-test'), 'Incorrect test Task')
+    check((unit['onError'] == 'continue') == front, 'Frontend-only test concession')
+    build = fanout['tasks'].find { |t| t['name'] == 'build-' + name }
+    args = build['params'].find { |p| p['name'] == 'build-args' }['value']
+    check(args == [front ? 'BUILD_ENVIRONMENT=dev' : 'CERT_KEYWORD=dev'], 'Keep dev build arguments')
+  end
+  check(fanout['tasks'].none? { |t| t['name'].start_with?('verify-') }, 'Verify belongs to promotion')
   updater = tasks.fetch(scope + '-gitops-update')
   env = updater['stepTemplate']['env'].to_h { |e| [e['name'], e['value']] }
   check(env['VALUES_FILE'] == "app-chart/#{scope}.yaml" && env['GITOPS_BRANCH'] == 'dev', 'Incorrect GitOps target')
   check(env['GITOPS_URL'].end_with?('/RedHat_HelmCharts'), 'Incorrect accessible GitOps repo')
-  select = tasks.fetch(scope + '-dispatch-select')
-  check(select['steps'].last['script'].include?('function selectServices'), 'Empty selector script')
-  check(tasks.fetch(scope + '-dispatch-run')['steps'][0]['script'].include?('async function dispatch'), 'Empty dispatcher script')
-  run = runs.find { |r| r.dig('spec', 'pipelineRef', 'name') == "application-#{scope}-dispatch" }
-  check(run && run['spec']['taskRunTemplate']['serviceAccountName'] == scope + '-dispatcher', 'Incorrect example parent')
-  check(run['spec']['workspaces'].none? { |w| w['volumeClaimTemplate'] }, 'Parent must allocate no PVC')
-  run['spec']['params'].each { |p| check(parent['params'].any? { |v| v['name'] == p['name'] }, 'Unknown sample run parameter') }
+  launcher = tasks.fetch(scope + '-build-dispatch')
+  check(launcher['steps'].last['script'].include?('function makeFanoutRun'), 'Missing selected-only builder')
+  check(launcher['params'].find { |p| p['name'] == 'services' }['default'] == 'all', 'CSV input needs usable default')
+  run = runs.find { |r| r.dig('spec', 'taskRef', 'name') == scope + '-build-dispatch' }
+  check(run && run['kind'] == 'TaskRun' && run['spec']['serviceAccountName'] == scope + '-dispatcher', 'Incorrect launcher example')
+  check(run['spec']['workspaces'].none? { |w| w['volumeClaimTemplate'] }, 'Launcher must allocate no PVC')
+  run['spec']['params'].each { |p| check(launcher['params'].any? { |v| v['name'] == p['name'] }, 'Unknown sample run parameter') }
   listener = get.call('EventListener', scope + '-pr')
   check(listener.to_json.include?('lastMergeTargetCommit') && !listener.to_json.include?('compareSecret'), 'PR diff inputs and requested auth mode')
   template = get.call('TriggerTemplate', scope + '-azure-pr')
   triggered = template['spec']['resourcetemplates'][0]['spec']
-  check(triggered['pipelineRef']['name'] == "application-#{scope}-dispatch", 'PR must use same dispatcher as manual')
+  check(template['spec']['resourcetemplates'][0]['kind'] == 'TaskRun' && triggered['taskRef']['name'] == scope + '-build-dispatch', 'PR must use same launcher as manual')
   check(triggered['params'].find { |p| p['name'] == 'selection-mode' }['value'] == 'diff', 'PR must select from diff')
   route = get.call('Route', scope + '-pr-webhook')['spec']
   check(route['to']['name'] == 'el-' + scope + '-pr' && route['tls']['termination'] == 'edge', 'Route must reach correct listener')
@@ -100,4 +102,4 @@ end
   _, _, result = Open3.capture3(*command, '--set-json', key + '=' + value)
   check(!result.success?, 'Invalid frontend dispatcher settings must fail rendering')
 end
-puts 'Passed single-values backend/frontend dispatcher, child stages, GitOps, CSV contract, run examples, triggers, RBAC and shell checks'
+puts 'Passed single-values selected-only fanout templates, working stages, GitOps, CSV launcher, PR routing, RBAC and shell checks'

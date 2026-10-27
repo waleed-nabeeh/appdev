@@ -15,7 +15,7 @@ metadata:
   namespace: {{ $root.Release.Namespace }}
 rules:
   - apiGroups: [tekton.dev]
-    resources: [pipelineruns]
+    resources: [{{ ternary "taskruns" "pipelineruns" $root.Values.applicationBuild.singleRun }}]
     verbs: [create]
 {{- if $settings.dispatch.triggers.authRequired }}
   - apiGroups: [""]
@@ -88,13 +88,21 @@ spec:
     - name: target-short
   resourcetemplates:
     - apiVersion: tekton.dev/v1
-      kind: PipelineRun
+      kind: {{ ternary "TaskRun" "PipelineRun" $root.Values.applicationBuild.singleRun }}
       metadata:
         name: {{ $scope }}-pr-$(tt.params.pr-id)-$(tt.params.source-short)-$(tt.params.target-short)
         namespace: {{ $root.Release.Namespace }}
         labels:
           customer.mofa.gov.sa/trigger: azure-pr
+          app.kubernetes.io/component: {{ $scope }}
+          app.kubernetes.io/part-of: application-build
       spec:
+{{- if $root.Values.applicationBuild.singleRun }}
+        taskRef:
+          name: {{ $scope }}-build-dispatch
+        serviceAccountName: {{ $scope }}-dispatcher
+        timeout: 20m0s
+{{- else }}
         pipelineRef:
           name: application-{{ $scope }}-dispatch
         taskRunTemplate:
@@ -102,6 +110,7 @@ spec:
         timeouts:
           pipeline: 12h0m0s
           tasks: 11h50m0s
+{{- end }}
         params:
           - {name: services, value: ""}
           - {name: selection-mode, value: diff}

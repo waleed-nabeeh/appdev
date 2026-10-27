@@ -1,21 +1,18 @@
-# Starts both scopes. Replace services: all with comma-separated allowed names.
+# Launches one build PipelineRun per scope, with only selected lanes. Replace services: all with comma-separated allowed names.
 ---
 apiVersion: tekton.dev/v1
-kind: PipelineRun
+kind: TaskRun
 metadata:
-  generateName: backend-build-dispatch-
+  generateName: backend-dispatch-
   namespace: devops
   labels:
     app.kubernetes.io/component: backend
     app.kubernetes.io/part-of: application-build
 spec:
-  pipelineRef:
-    name: application-backend-dispatch
-  taskRunTemplate:
-    serviceAccountName: backend-dispatcher
-  timeouts:
-    pipeline: 12h0m0s
-    tasks: 11h50m0s
+  taskRef:
+    name: backend-build-dispatch
+  serviceAccountName: backend-dispatcher
+  timeout: 20m0s
   params:
   - name: services
     value: all
@@ -31,21 +28,18 @@ spec:
       secretName: git-credentials
 ---
 apiVersion: tekton.dev/v1
-kind: PipelineRun
+kind: TaskRun
 metadata:
-  generateName: frontend-build-dispatch-
+  generateName: frontend-dispatch-
   namespace: devops
   labels:
     app.kubernetes.io/component: frontend
     app.kubernetes.io/part-of: application-build
 spec:
-  pipelineRef:
-    name: application-frontend-dispatch
-  taskRunTemplate:
-    serviceAccountName: frontend-dispatcher
-  timeouts:
-    pipeline: 12h0m0s
-    tasks: 11h50m0s
+  taskRef:
+    name: frontend-build-dispatch
+  serviceAccountName: frontend-dispatcher
+  timeout: 20m0s
   params:
   - name: services
     value: all

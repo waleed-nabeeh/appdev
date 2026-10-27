@@ -1,4 +1,4 @@
-{{- if .Values.frontendRelease.enabled }}
+{{- if and .Values.frontendRelease.enabled (not .Values.applicationBuild.singleRun) }}
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:

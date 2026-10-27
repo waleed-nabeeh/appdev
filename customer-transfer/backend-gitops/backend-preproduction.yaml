@@ -1,0 +1,1743 @@
+# Helm values for RedHat_argocd. Auto-sync is disabled for the initial Git-only test.
+# Initial tags are reference tags, not verified hub Quay artifacts.
+# Preprod Route hosts do not configure the Argo CD destination cluster.
+argocd-applications:
+  applications:
+
+    # pre-acl-service
+    pre-acl-service:
+      name: pre-acl-service
+      project: preproduction-core-apps
+      destination:
+        namespace: pre-backend
+      source:
+        sourceType: helm
+        chart: app-chart
+        targetRevision: 1.0.0
+      syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      autoSync: false
+      overrideValues:
+        nameOverride: acl-service
+        fullnameOverride: acl-service
+        global:
+          nameOverride: acl-service
+          fullnameOverride: acl-service
+          serviceAccountName: default
+        workload:
+          kind: Deployment
+          replicas: 1
+        image:
+          repository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/acl-service
+          tag: "7af5d95a"
+          pullPolicy: IfNotPresent
+          pullSecrets:
+          - name: pullsecret
+        containerPorts:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        envFrom:
+          secrets:
+          - name: acl-service-pre-external
+        extraVolumes:
+        - name: appsettings-pre
+          secret:
+            secretName: acl-service-appsettings
+            defaultMode: 256
+        extraVolumeMounts:
+        - name: appsettings-pre
+          mountPath: "/app/appsettings.pre.json"
+          subPath: appsettings.pre.json
+          readOnly: true
+        podSecurityContext: {}
+        securityContext: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        probes:
+          liveness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+            successThreshold: 1
+          readiness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          startup:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+            successThreshold: 1
+        service:
+          enabled: true
+          type: ClusterIP
+          ports:
+          - name: http
+            port: 8080
+            targetPort: http
+            protocol: TCP
+        route:
+          enabled: true
+          host: acl-service-dev.apps.int.pre-visa-ocp.mofa.gov.sa
+          path: "/"
+          port:
+            targetPort: http
+          tls:
+            enabled: true
+
+    # pre-realtime-service
+    pre-realtime-service:
+      name: pre-realtime-service
+      project: preproduction-core-apps
+      destination:
+        namespace: pre-backend
+      source:
+        sourceType: helm
+        chart: app-chart
+        targetRevision: 1.0.0
+      syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      autoSync: false
+      overrideValues:
+        nameOverride: realtime-service
+        fullnameOverride: realtime-service
+        global:
+          nameOverride: realtime-service
+          fullnameOverride: realtime-service
+          serviceAccountName: default
+        workload:
+          kind: Deployment
+          replicas: 1
+        image:
+          repository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/realtime-service
+          tag: "7af5d95a"
+          pullPolicy: IfNotPresent
+          pullSecrets:
+          - name: pullsecret
+        containerPorts:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        envFrom:
+          secrets:
+          - name: realtime-service-pre-external
+        extraVolumes:
+        - name: appsettings-pre
+          secret:
+            secretName: realtime-service-appsettings
+            defaultMode: 256
+        extraVolumeMounts:
+        - name: appsettings-pre
+          mountPath: "/app/appsettings.pre.json"
+          subPath: appsettings.pre.json
+          readOnly: true
+        podSecurityContext: {}
+        securityContext: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        probes:
+          liveness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+            successThreshold: 1
+          readiness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          startup:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+            successThreshold: 1
+        service:
+          enabled: true
+          type: ClusterIP
+          ports:
+          - name: http
+            port: 8080
+            targetPort: http
+            protocol: TCP
+        route:
+          enabled: true
+          host: realtime-service-dev.apps.int.pre-visa-ocp.mofa.gov.sa
+          path: "/"
+          port:
+            targetPort: http
+          tls:
+            enabled: true
+
+    # pre-visitvisa-service
+    pre-visitvisa-service:
+      name: pre-visitvisa-service
+      project: preproduction-core-apps
+      destination:
+        namespace: pre-backend
+      source:
+        sourceType: helm
+        chart: app-chart
+        targetRevision: 1.0.0
+      syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      autoSync: false
+      overrideValues:
+        nameOverride: visitvisa-service
+        fullnameOverride: visitvisa-service
+        global:
+          nameOverride: visitvisa-service
+          fullnameOverride: visitvisa-service
+          serviceAccountName: default
+        workload:
+          kind: Deployment
+          replicas: 1
+        image:
+          repository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/visitvisa-service
+          tag: "7af5d95a"
+          pullPolicy: IfNotPresent
+          pullSecrets:
+          - name: pullsecret
+        containerPorts:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        envFrom:
+          secrets:
+          - name: visitvisa-service-pre-external
+        extraVolumes:
+        - name: appsettings-pre
+          secret:
+            secretName: visitvisa-service-appsettings
+            defaultMode: 256
+        extraVolumeMounts:
+        - name: appsettings-pre
+          mountPath: "/app/appsettings.pre.json"
+          subPath: appsettings.pre.json
+          readOnly: true
+        podSecurityContext: {}
+        securityContext: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        probes:
+          liveness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+            successThreshold: 1
+          readiness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          startup:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+            successThreshold: 1
+        service:
+          enabled: true
+          type: ClusterIP
+          ports:
+          - name: http
+            port: 8080
+            targetPort: http
+            protocol: TCP
+        route:
+          enabled: true
+          host: visitvisa-service-dev.apps.int.pre-visa-ocp.mofa.gov.sa
+          path: "/"
+          port:
+            targetPort: http
+          tls:
+            enabled: true
+
+    # pre-applicant-service
+    pre-applicant-service:
+      name: pre-applicant-service
+      project: preproduction-core-apps
+      destination:
+        namespace: pre-backend
+      source:
+        sourceType: helm
+        chart: app-chart
+        targetRevision: 1.0.0
+      syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      autoSync: false
+      overrideValues:
+        nameOverride: applicant-service
+        fullnameOverride: applicant-service
+        global:
+          nameOverride: applicant-service
+          fullnameOverride: applicant-service
+          serviceAccountName: default
+        workload:
+          kind: Deployment
+          replicas: 1
+        image:
+          repository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/applicant-service
+          tag: "7af5d95a"
+          pullPolicy: IfNotPresent
+          pullSecrets:
+          - name: pullsecret
+        containerPorts:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        envFrom:
+          secrets:
+          - name: applicant-service-pre-external
+        extraVolumes:
+        - name: appsettings-pre
+          secret:
+            secretName: applicant-service-appsettings
+            defaultMode: 256
+        extraVolumeMounts:
+        - name: appsettings-pre
+          mountPath: "/app/appsettings.pre.json"
+          subPath: appsettings.pre.json
+          readOnly: true
+        podSecurityContext: {}
+        securityContext: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        probes:
+          liveness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+            successThreshold: 1
+          readiness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          startup:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+            successThreshold: 1
+        service:
+          enabled: true
+          type: ClusterIP
+          ports:
+          - name: http
+            port: 8080
+            targetPort: http
+            protocol: TCP
+        route:
+          enabled: true
+          host: applicant-service-dev.apps.int.pre-visa-ocp.mofa.gov.sa
+          path: "/"
+          port:
+            targetPort: http
+          tls:
+            enabled: true
+
+    # pre-stakeholder-service
+    pre-stakeholder-service:
+      name: pre-stakeholder-service
+      project: preproduction-core-apps
+      destination:
+        namespace: pre-backend
+      source:
+        sourceType: helm
+        chart: app-chart
+        targetRevision: 1.0.0
+      syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      autoSync: false
+      overrideValues:
+        nameOverride: stakeholder-service
+        fullnameOverride: stakeholder-service
+        global:
+          nameOverride: stakeholder-service
+          fullnameOverride: stakeholder-service
+          serviceAccountName: default
+        workload:
+          kind: Deployment
+          replicas: 1
+        image:
+          repository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/stakeholder-service
+          tag: "7af5d95a"
+          pullPolicy: IfNotPresent
+          pullSecrets:
+          - name: pullsecret
+        containerPorts:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        envFrom:
+          secrets:
+          - name: stakeholder-service-pre-external
+        extraVolumes:
+        - name: appsettings-pre
+          secret:
+            secretName: stakeholder-service-appsettings
+            defaultMode: 256
+        - name: appsettings
+          secret:
+            secretName: stakeholder-service-appsettings
+            defaultMode: 256
+        extraVolumeMounts:
+        - name: appsettings-pre
+          mountPath: "/app/appsettings.pre.json"
+          subPath: appsettings.pre.json
+          readOnly: true
+        - name: appsettings
+          mountPath: "/app/appsettings.json"
+          subPath: appsettings.json
+          readOnly: true
+        podSecurityContext: {}
+        securityContext: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        probes:
+          liveness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+            successThreshold: 1
+          readiness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          startup:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+            successThreshold: 1
+        service:
+          enabled: true
+          type: ClusterIP
+          ports:
+          - name: http
+            port: 8080
+            targetPort: http
+            protocol: TCP
+        route:
+          enabled: true
+          host: stakeholder-service-dev.apps.int.pre-visa-ocp.mofa.gov.sa
+          path: "/"
+          port:
+            targetPort: http
+          tls:
+            enabled: true
+
+    # pre-request-service
+    pre-request-service:
+      name: pre-request-service
+      project: preproduction-core-apps
+      destination:
+        namespace: pre-backend
+      source:
+        sourceType: helm
+        chart: app-chart
+        targetRevision: 1.0.0
+      syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      autoSync: false
+      overrideValues:
+        nameOverride: request-service
+        fullnameOverride: request-service
+        global:
+          nameOverride: request-service
+          fullnameOverride: request-service
+          serviceAccountName: default
+        workload:
+          kind: Deployment
+          replicas: 1
+        image:
+          repository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/request-service
+          tag: "7af5d95a"
+          pullPolicy: IfNotPresent
+          pullSecrets:
+          - name: pullsecret
+        containerPorts:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        envFrom:
+          secrets:
+          - name: request-service-pre-external
+        extraVolumes:
+        - name: appsettings-pre
+          secret:
+            secretName: request-service-appsettings
+            defaultMode: 256
+        - name: appsettings
+          secret:
+            secretName: request-service-appsettings
+            defaultMode: 256
+        extraVolumeMounts:
+        - name: appsettings-pre
+          mountPath: "/app/appsettings.pre.json"
+          subPath: appsettings.pre.json
+          readOnly: true
+        - name: appsettings
+          mountPath: "/app/appsettings.json"
+          subPath: appsettings.json
+          readOnly: true
+        podSecurityContext: {}
+        securityContext: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        probes:
+          liveness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+            successThreshold: 1
+          readiness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          startup:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+            successThreshold: 1
+        service:
+          enabled: true
+          type: ClusterIP
+          ports:
+          - name: http
+            port: 8080
+            targetPort: http
+            protocol: TCP
+        route:
+          enabled: true
+          host: request-service-dev.apps.int.pre-visa-ocp.mofa.gov.sa
+          path: "/"
+          port:
+            targetPort: http
+          tls:
+            enabled: true
+
+    # pre-notification-service
+    pre-notification-service:
+      name: pre-notification-service
+      project: preproduction-core-apps
+      destination:
+        namespace: pre-backend
+      source:
+        sourceType: helm
+        chart: app-chart
+        targetRevision: 1.0.0
+      syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      autoSync: false
+      overrideValues:
+        nameOverride: notification-service
+        fullnameOverride: notification-service
+        global:
+          nameOverride: notification-service
+          fullnameOverride: notification-service
+          serviceAccountName: default
+        workload:
+          kind: Deployment
+          replicas: 1
+        image:
+          repository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/notification-service
+          tag: "7af5d95a"
+          pullPolicy: IfNotPresent
+          pullSecrets:
+          - name: pullsecret
+        containerPorts:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        envFrom:
+          secrets:
+          - name: notification-service-pre-external
+        extraVolumes:
+        - name: appsettings-pre
+          secret:
+            secretName: notification-service-appsettings
+            defaultMode: 256
+        - name: appsettings
+          secret:
+            secretName: notification-service-appsettings
+            defaultMode: 256
+        extraVolumeMounts:
+        - name: appsettings-pre
+          mountPath: "/app/appsettings.pre.json"
+          subPath: appsettings.pre.json
+          readOnly: true
+        - name: appsettings
+          mountPath: "/app/appsettings.json"
+          subPath: appsettings.json
+          readOnly: true
+        podSecurityContext: {}
+        securityContext: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        probes:
+          liveness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+            successThreshold: 1
+          readiness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          startup:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+            successThreshold: 1
+        service:
+          enabled: true
+          type: ClusterIP
+          ports:
+          - name: http
+            port: 8080
+            targetPort: http
+            protocol: TCP
+        route:
+          enabled: true
+          host: notification-service-dev.apps.int.pre-visa-ocp.mofa.gov.sa
+          path: "/"
+          port:
+            targetPort: http
+          tls:
+            enabled: true
+
+    # pre-event-service
+    pre-event-service:
+      name: pre-event-service
+      project: preproduction-core-apps
+      destination:
+        namespace: pre-backend
+      source:
+        sourceType: helm
+        chart: app-chart
+        targetRevision: 1.0.0
+      syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      autoSync: false
+      overrideValues:
+        nameOverride: event-service
+        fullnameOverride: event-service
+        global:
+          nameOverride: event-service
+          fullnameOverride: event-service
+          serviceAccountName: default
+        workload:
+          kind: Deployment
+          replicas: 1
+        image:
+          repository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/event-service
+          tag: "7af5d95a"
+          pullPolicy: IfNotPresent
+          pullSecrets:
+          - name: pullsecret
+        containerPorts:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        envFrom:
+          secrets:
+          - name: event-service-pre-external
+        extraVolumes:
+        - name: appsettings-pre
+          secret:
+            secretName: event-service-appsettings
+            defaultMode: 256
+        - name: appsettings
+          secret:
+            secretName: event-service-appsettings
+            defaultMode: 256
+        extraVolumeMounts:
+        - name: appsettings-pre
+          mountPath: "/app/appsettings.pre.json"
+          subPath: appsettings.pre.json
+          readOnly: true
+        - name: appsettings
+          mountPath: "/app/appsettings.json"
+          subPath: appsettings.json
+          readOnly: true
+        podSecurityContext: {}
+        securityContext: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        probes:
+          liveness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+            successThreshold: 1
+          readiness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          startup:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+            successThreshold: 1
+        service:
+          enabled: true
+          type: ClusterIP
+          ports:
+          - name: http
+            port: 8080
+            targetPort: http
+            protocol: TCP
+        route:
+          enabled: true
+          host: event-service-dev.apps.int.pre-visa-ocp.mofa.gov.sa
+          path: "/"
+          port:
+            targetPort: http
+          tls:
+            enabled: true
+
+    # pre-document-service
+    pre-document-service:
+      name: pre-document-service
+      project: preproduction-core-apps
+      destination:
+        namespace: pre-backend
+      source:
+        sourceType: helm
+        chart: app-chart
+        targetRevision: 1.0.0
+      syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      autoSync: false
+      overrideValues:
+        nameOverride: document-service
+        fullnameOverride: document-service
+        global:
+          nameOverride: document-service
+          fullnameOverride: document-service
+          serviceAccountName: default
+        workload:
+          kind: Deployment
+          replicas: 1
+        image:
+          repository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/document-service
+          tag: "7af5d95a"
+          pullPolicy: IfNotPresent
+          pullSecrets:
+          - name: pullsecret
+        containerPorts:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        envFrom:
+          secrets:
+          - name: document-service-pre-external
+        extraVolumes:
+        - name: appsettings-pre
+          secret:
+            secretName: document-service-appsettings
+            defaultMode: 256
+        - name: appsettings
+          secret:
+            secretName: document-service-appsettings
+            defaultMode: 256
+        extraVolumeMounts:
+        - name: appsettings-pre
+          mountPath: "/app/appsettings.pre.json"
+          subPath: appsettings.pre.json
+          readOnly: true
+        - name: appsettings
+          mountPath: "/app/appsettings.json"
+          subPath: appsettings.json
+          readOnly: true
+        podSecurityContext: {}
+        securityContext: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        probes:
+          liveness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+            successThreshold: 1
+          readiness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          startup:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+            successThreshold: 1
+        service:
+          enabled: true
+          type: ClusterIP
+          ports:
+          - name: http
+            port: 8080
+            targetPort: http
+            protocol: TCP
+        route:
+          enabled: true
+          host: document-service-dev.apps.int.pre-visa-ocp.mofa.gov.sa
+          path: "/"
+          port:
+            targetPort: http
+          tls:
+            enabled: true
+
+    # pre-gateway-service
+    pre-gateway-service:
+      name: pre-gateway-service
+      project: preproduction-core-apps
+      destination:
+        namespace: pre-backend
+      source:
+        sourceType: helm
+        chart: app-chart
+        targetRevision: 1.0.0
+      syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      autoSync: false
+      overrideValues:
+        nameOverride: gateway-service
+        fullnameOverride: gateway-service
+        global:
+          nameOverride: gateway-service
+          fullnameOverride: gateway-service
+          serviceAccountName: default
+        workload:
+          kind: Deployment
+          replicas: 1
+        image:
+          repository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/gateway-service
+          tag: "7af5d95a"
+          pullPolicy: IfNotPresent
+          pullSecrets:
+          - name: pullsecret
+        containerPorts:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        envFrom:
+          secrets:
+          - name: gateway-service-pre-external
+        extraVolumes:
+        - name: appsettings-pre
+          secret:
+            secretName: gateway-service-appsettings
+            defaultMode: 256
+        - name: appsettings
+          secret:
+            secretName: gateway-service-appsettings
+            defaultMode: 256
+        extraVolumeMounts:
+        - name: appsettings-pre
+          mountPath: "/app/appsettings.pre.json"
+          subPath: appsettings.pre.json
+          readOnly: true
+        - name: appsettings
+          mountPath: "/app/appsettings.json"
+          subPath: appsettings.json
+          readOnly: true
+        podSecurityContext: {}
+        securityContext: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        probes:
+          liveness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+            successThreshold: 1
+          readiness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          startup:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+            successThreshold: 1
+        service:
+          enabled: true
+          type: ClusterIP
+          ports:
+          - name: http
+            port: 8080
+            targetPort: http
+            protocol: TCP
+        route:
+          enabled: true
+          host: gateway-service-dev.apps.int.pre-visa-ocp.mofa.gov.sa
+          path: "/"
+          port:
+            targetPort: http
+          tls:
+            enabled: true
+
+    # pre-language-service
+    pre-language-service:
+      name: pre-language-service
+      project: preproduction-core-apps
+      destination:
+        namespace: pre-backend
+      source:
+        sourceType: helm
+        chart: app-chart
+        targetRevision: 1.0.0
+      syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      autoSync: false
+      overrideValues:
+        nameOverride: language-service
+        fullnameOverride: language-service
+        global:
+          nameOverride: language-service
+          fullnameOverride: language-service
+          serviceAccountName: default
+        workload:
+          kind: Deployment
+          replicas: 1
+        image:
+          repository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/language-service
+          tag: "7af5d95a"
+          pullPolicy: IfNotPresent
+          pullSecrets:
+          - name: pullsecret
+        containerPorts:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        envFrom:
+          secrets:
+          - name: language-service-pre-external
+        extraVolumes:
+        - name: appsettings-pre
+          secret:
+            secretName: language-service-appsettings
+            defaultMode: 256
+        - name: appsettings
+          secret:
+            secretName: language-service-appsettings
+            defaultMode: 256
+        extraVolumeMounts:
+        - name: appsettings-pre
+          mountPath: "/app/appsettings.pre.json"
+          subPath: appsettings.pre.json
+          readOnly: true
+        - name: appsettings
+          mountPath: "/app/appsettings.json"
+          subPath: appsettings.json
+          readOnly: true
+        podSecurityContext: {}
+        securityContext: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        probes:
+          liveness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+            successThreshold: 1
+          readiness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          startup:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+            successThreshold: 1
+        service:
+          enabled: true
+          type: ClusterIP
+          ports:
+          - name: http
+            port: 8080
+            targetPort: http
+            protocol: TCP
+        route:
+          enabled: true
+          host: language-service-dev.apps.int.pre-visa-ocp.mofa.gov.sa
+          path: "/"
+          port:
+            targetPort: http
+          tls:
+            enabled: true
+
+    # pre-identity-service
+    pre-identity-service:
+      name: pre-identity-service
+      project: preproduction-core-apps
+      destination:
+        namespace: pre-backend
+      source:
+        sourceType: helm
+        chart: app-chart
+        targetRevision: 1.0.0
+      syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      autoSync: false
+      overrideValues:
+        nameOverride: identity-service
+        fullnameOverride: identity-service
+        global:
+          nameOverride: identity-service
+          fullnameOverride: identity-service
+          serviceAccountName: default
+        workload:
+          kind: Deployment
+          replicas: 1
+        image:
+          repository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/identity-service
+          tag: "7af5d95a"
+          pullPolicy: IfNotPresent
+          pullSecrets:
+          - name: pullsecret
+        containerPorts:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        envFrom:
+          secrets:
+          - name: identity-service-pre-external
+        extraVolumes:
+        - name: appsettings-pre
+          secret:
+            secretName: identity-service-appsettings
+            defaultMode: 256
+        - name: appsettings
+          secret:
+            secretName: identity-service-appsettings
+            defaultMode: 256
+        extraVolumeMounts:
+        - name: appsettings-pre
+          mountPath: "/app/appsettings.pre.json"
+          subPath: appsettings.pre.json
+          readOnly: true
+        - name: appsettings
+          mountPath: "/app/appsettings.json"
+          subPath: appsettings.json
+          readOnly: true
+        podSecurityContext: {}
+        securityContext: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        probes:
+          liveness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+            successThreshold: 1
+          readiness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          startup:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+            successThreshold: 1
+        service:
+          enabled: true
+          type: ClusterIP
+          ports:
+          - name: http
+            port: 8080
+            targetPort: http
+            protocol: TCP
+        route:
+          enabled: true
+          host: identity-service-dev.apps.int.pre-visa-ocp.mofa.gov.sa
+          path: "/"
+          port:
+            targetPort: http
+          tls:
+            enabled: true
+
+    # pre-core-service
+    pre-core-service:
+      name: pre-core-service
+      project: preproduction-core-apps
+      destination:
+        namespace: pre-backend
+      source:
+        sourceType: helm
+        chart: app-chart
+        targetRevision: 1.0.0
+      syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      autoSync: false
+      overrideValues:
+        nameOverride: core-service
+        fullnameOverride: core-service
+        global:
+          nameOverride: core-service
+          fullnameOverride: core-service
+          serviceAccountName: default
+        workload:
+          kind: Deployment
+          replicas: 1
+        image:
+          repository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/core-service
+          tag: "7af5d95a"
+          pullPolicy: IfNotPresent
+          pullSecrets:
+          - name: pullsecret
+        containerPorts:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        envFrom:
+          secrets:
+          - name: core-service-pre-external
+        extraVolumes:
+        - name: appsettings-pre
+          secret:
+            secretName: core-service-appsettings
+            defaultMode: 256
+        - name: appsettings
+          secret:
+            secretName: core-service-appsettings
+            defaultMode: 256
+        extraVolumeMounts:
+        - name: appsettings-pre
+          mountPath: "/app/appsettings.pre.json"
+          subPath: appsettings.pre.json
+          readOnly: true
+        - name: appsettings
+          mountPath: "/app/appsettings.json"
+          subPath: appsettings.json
+          readOnly: true
+        podSecurityContext: {}
+        securityContext: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        probes:
+          liveness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+            successThreshold: 1
+          readiness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          startup:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+            successThreshold: 1
+        service:
+          enabled: true
+          type: ClusterIP
+          ports:
+          - name: http
+            port: 8080
+            targetPort: http
+            protocol: TCP
+        route:
+          enabled: true
+          host: core-service-dev.apps.int.pre-visa-ocp.mofa.gov.sa
+          path: "/"
+          port:
+            targetPort: http
+          tls:
+            enabled: true
+
+    # pre-audit-logging-service
+    pre-audit-logging-service:
+      name: pre-audit-logging-service
+      project: preproduction-core-apps
+      destination:
+        namespace: pre-backend
+      source:
+        sourceType: helm
+        chart: app-chart
+        targetRevision: 1.0.0
+      syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      autoSync: false
+      overrideValues:
+        nameOverride: audit-logging-service
+        fullnameOverride: audit-logging-service
+        global:
+          nameOverride: audit-logging-service
+          fullnameOverride: audit-logging-service
+          serviceAccountName: default
+        workload:
+          kind: Deployment
+          replicas: 1
+        image:
+          repository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/audit-logging-service
+          tag: "7af5d95a"
+          pullPolicy: IfNotPresent
+          pullSecrets:
+          - name: pullsecret
+        containerPorts:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        envFrom:
+          secrets:
+          - name: audit-logging-service-pre-external
+        extraVolumes:
+        - name: appsettings-pre
+          secret:
+            secretName: audit-logging-service-appsettings
+            defaultMode: 256
+        - name: appsettings
+          secret:
+            secretName: audit-logging-service-appsettings
+            defaultMode: 256
+        extraVolumeMounts:
+        - name: appsettings-pre
+          mountPath: "/app/appsettings.pre.json"
+          subPath: appsettings.pre.json
+          readOnly: true
+        - name: appsettings
+          mountPath: "/app/appsettings.json"
+          subPath: appsettings.json
+          readOnly: true
+        podSecurityContext: {}
+        securityContext: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        probes:
+          liveness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+            successThreshold: 1
+          readiness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          startup:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+            successThreshold: 1
+        service:
+          enabled: true
+          type: ClusterIP
+          ports:
+          - name: http
+            port: 8080
+            targetPort: http
+            protocol: TCP
+        route:
+          enabled: true
+          host: audit-logging-service-dev.apps.int.pre-visa-ocp.mofa.gov.sa
+          path: "/"
+          port:
+            targetPort: http
+          tls:
+            enabled: true
+
+    # pre-administration-service
+    pre-administration-service:
+      name: pre-administration-service
+      project: preproduction-core-apps
+      destination:
+        namespace: pre-backend
+      source:
+        sourceType: helm
+        chart: app-chart
+        targetRevision: 1.0.0
+      syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      autoSync: false
+      overrideValues:
+        nameOverride: administration-service
+        fullnameOverride: administration-service
+        global:
+          nameOverride: administration-service
+          fullnameOverride: administration-service
+          serviceAccountName: default
+        workload:
+          kind: Deployment
+          replicas: 1
+        image:
+          repository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/administration-service
+          tag: "7af5d95a"
+          pullPolicy: IfNotPresent
+          pullSecrets:
+          - name: pullsecret
+        containerPorts:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        envFrom:
+          secrets:
+          - name: administration-service-pre-external
+        extraVolumes:
+        - name: appsettings-pre
+          secret:
+            secretName: administration-service-appsettings
+            defaultMode: 256
+        - name: appsettings
+          secret:
+            secretName: administration-service-appsettings
+            defaultMode: 256
+        extraVolumeMounts:
+        - name: appsettings-pre
+          mountPath: "/app/appsettings.pre.json"
+          subPath: appsettings.pre.json
+          readOnly: true
+        - name: appsettings
+          mountPath: "/app/appsettings.json"
+          subPath: appsettings.json
+          readOnly: true
+        podSecurityContext: {}
+        securityContext: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        probes:
+          liveness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+            successThreshold: 1
+          readiness:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          startup:
+            enabled: true
+            type: httpGet
+            httpGet:
+              path: "/healthz"
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+            successThreshold: 1
+        service:
+          enabled: true
+          type: ClusterIP
+          ports:
+          - name: http
+            port: 8080
+            targetPort: http
+            protocol: TCP
+        route:
+          enabled: true
+          host: administration-service-dev.apps.int.pre-visa-ocp.mofa.gov.sa
+          path: "/"
+          port:
+            targetPort: http
+          tls:
+            enabled: true

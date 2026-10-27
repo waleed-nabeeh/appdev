@@ -1,0 +1,188 @@
+# Helm values for RedHat_argocd. Auto-sync is disabled for the initial Git-only test.
+# Initial tags are reference tags, not verified hub Quay artifacts.
+# Preprod Route hosts do not configure the Argo CD destination cluster.
+argocd-applications:
+  applications:
+
+    # pre-operational-portal
+    pre-operational-portal:
+      name: pre-operational-portal
+      project: preproduction-core-apps
+      destination:
+        namespace: pre-frontend
+      source:
+        sourceType: helm
+        chart: app-chart
+        targetRevision: 1.0.0
+      syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      autoSync: false
+      overrideValues:
+        nameOverride: operational-portal
+        fullnameOverride: operational-portal
+        global:
+          nameOverride: operational-portal
+          fullnameOverride: operational-portal
+          serviceAccountName: default
+        workload:
+          kind: Deployment
+          replicas: 1
+        image:
+          repository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/operational-portal
+          tag: "314a57e8"
+          pullPolicy: IfNotPresent
+          pullSecrets:
+          - name: pullsecret
+        containerPorts:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        podSecurityContext: {}
+        securityContext: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        probes: {}
+        service:
+          enabled: true
+          type: ClusterIP
+          ports:
+          - name: http
+            port: 8080
+            targetPort: http
+            protocol: TCP
+        route:
+          enabled: true
+          host: operational-portal-dev.apps.int.pre-visa-ocp.mofa.gov.sa
+          path: "/"
+          port:
+            targetPort: http
+          tls:
+            enabled: true
+
+    # pre-applicant-portal
+    pre-applicant-portal:
+      name: pre-applicant-portal
+      project: preproduction-core-apps
+      destination:
+        namespace: pre-frontend
+      source:
+        sourceType: helm
+        chart: app-chart
+        targetRevision: 1.0.0
+      syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      autoSync: false
+      overrideValues:
+        nameOverride: applicant-portal
+        fullnameOverride: applicant-portal
+        global:
+          nameOverride: applicant-portal
+          fullnameOverride: applicant-portal
+          serviceAccountName: default
+        workload:
+          kind: Deployment
+          replicas: 1
+        image:
+          repository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/applicant-portal
+          tag: "314a57e8"
+          pullPolicy: IfNotPresent
+          pullSecrets:
+          - name: pullsecret
+        containerPorts:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        podSecurityContext: {}
+        securityContext: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        probes: {}
+        service:
+          enabled: true
+          type: ClusterIP
+          ports:
+          - name: http
+            port: 8080
+            targetPort: http
+            protocol: TCP
+        route:
+          enabled: true
+          host: applicant-portal-dev.apps.int.pre-visa-ocp.mofa.gov.sa
+          path: "/applicant-portal/"
+          port:
+            targetPort: http
+          tls:
+            enabled: true
+
+    # pre-admin-portal
+    pre-admin-portal:
+      name: pre-admin-portal
+      project: preproduction-core-apps
+      destination:
+        namespace: pre-frontend
+      source:
+        sourceType: helm
+        chart: app-chart
+        targetRevision: 1.0.0
+      syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      autoSync: false
+      overrideValues:
+        nameOverride: admin-portal
+        fullnameOverride: admin-portal
+        global:
+          nameOverride: admin-portal
+          fullnameOverride: admin-portal
+          serviceAccountName: default
+        workload:
+          kind: Deployment
+          replicas: 1
+        image:
+          repository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/admin-portal
+          tag: "314a57e8"
+          pullPolicy: IfNotPresent
+          pullSecrets:
+          - name: pullsecret
+        containerPorts:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        podSecurityContext: {}
+        securityContext: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        probes: {}
+        service:
+          enabled: true
+          type: ClusterIP
+          ports:
+          - name: http
+            port: 8080
+            targetPort: http
+            protocol: TCP
+        route:
+          enabled: true
+          host: admin-portal-dev.apps.int.pre-visa-ocp.mofa.gov.sa
+          path: "/"
+          port:
+            targetPort: http
+          tls:
+            enabled: true

@@ -3,6 +3,9 @@
 {{- $scope := .scope }}
 {{- $settings := .settings }}
 {{- $frontend := eq $scope "frontend" }}
+{{- if and $root.Values.applicationBuild.singleRun (not $settings.dispatch.gitops.enabled) }}
+{{- fail (printf "%s single-run fanout requires its GitOps stage enabled" $scope) }}
+{{- end }}
 {{- $catalog := $root.Files.Get (printf "files/%s-services.json" $scope) | fromJsonArray }}
 {{- $enabled := list }}
 {{- range $service := $catalog }}
@@ -31,8 +34,12 @@ metadata:
   name: {{ $scope }}-dispatch-config
   namespace: {{ $root.Release.Namespace }}
 data:
+{{- if $root.Values.applicationBuild.singleRun }}
+  backend-dispatch.js: |
+{{ $root.Files.Get "files/backend-dispatch.js" | indent 4 }}
+{{- end }}
   config.json: |
-    {{ dict "scope" $scope "childPipeline" (printf "application-%s-service-build" $scope) "npmAuth" $frontend "catalog" $enabled "imageRepository" $settings.imageRepository "buildServiceAccount" $root.Values.serviceAccount.name "workspaceSize" $settings.workspaceSize "maxParallel" (int $settings.dispatch.maxParallel) "timeoutSeconds" (int $settings.dispatch.timeoutSeconds) "childTimeout" $settings.dispatch.childTimeout | toJson }}
+    {{ dict "scope" $scope "fanoutPipeline" (printf "application-%s-build-fanout" $scope) "childPipeline" (printf "application-%s-service-build" $scope) "npmAuth" $frontend "catalog" $enabled "imageRepository" $settings.imageRepository "buildServiceAccount" $root.Values.serviceAccount.name "workspaceSize" $settings.workspaceSize "maxParallel" (int $settings.dispatch.maxParallel) "timeoutSeconds" (int $settings.dispatch.timeoutSeconds) "childTimeout" $settings.dispatch.childTimeout | toJson }}
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -51,9 +58,16 @@ rules:
   - apiGroups: [tekton.dev]
     resources: [pipelineruns]
     verbs: [get, create, patch]
+{{- if $root.Values.applicationBuild.singleRun }}
+  - apiGroups: [tekton.dev]
+    resources: [pipelines]
+    resourceNames: [application-{{ $scope }}-build-fanout]
+    verbs: [get]
+{{- else }}
   - apiGroups: [""]
     resources: [configmaps]
     verbs: [get, create]
+{{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -72,13 +86,13 @@ roleRef:
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
-  name: {{ $scope }}-dispatch-select
+  name: {{ ternary (printf "%s-build-dispatch" $scope) (printf "%s-dispatch-select" $scope) $root.Values.applicationBuild.singleRun }}
   namespace: {{ $root.Release.Namespace }}
 spec:
   params:
-    - {name: services, type: string}
+    - {name: services, type: string, default: all, description: "Comma-separated allowed service names or all"}
     - {name: selection-mode, type: string, default: manual}
-    - {name: source-revision, type: string}
+    - {name: source-revision, type: string, default: {{ $settings.sourceRevision | quote }}}
     - {name: source-commit, type: string, default: ""}
     - {name: target-commit, type: string, default: ""}
   workspaces:
@@ -86,6 +100,9 @@ spec:
   results:
     - name: services
     - name: commit
+{{- if $root.Values.applicationBuild.singleRun }}
+    - name: pipeline-run
+{{- end }}
   volumes:
     - name: work
       emptyDir: {}
@@ -110,14 +127,21 @@ spec:
         - {name: SOURCE_URL, value: {{ $settings.sourceUrl | quote }}}
       script: |
 {{ $root.Files.Get "files/backend-select-source.sh" | indent 8 }}
-    - name: select
+    - name: {{ ternary "create-fanout" "select" $root.Values.applicationBuild.singleRun }}
       image: {{ $root.Values.images.nodejs24 | quote }}
       env:
         - {name: ACTION, value: select}
         - {name: SERVICES, value: $(params.services)}
+{{- if $root.Values.applicationBuild.singleRun }}
+        - {name: REVISION, value: $(params.source-revision)}
+        - {name: DISPATCHER_NAME, value: $(context.taskRun.name)}
+        - {name: DISPATCHER_UID, value: $(context.taskRun.uid)}
+        - {name: NAMESPACE, value: {{ $root.Release.Namespace | quote }}}
+{{- end }}
       script: |
         #!/usr/bin/env node
-{{ $root.Files.Get "files/backend-dispatch.js" | indent 8 }}
+{{ $root.Files.Get (ternary "files/build-fanout-dispatch.js" "files/backend-dispatch.js" $root.Values.applicationBuild.singleRun) | indent 8 }}
+{{- if not $root.Values.applicationBuild.singleRun }}
 ---
 apiVersion: tekton.dev/v1
 kind: Task
@@ -318,6 +342,7 @@ spec:
         - {name: source-commit, value: $(tasks.select.results.commit)}
       workspaces:
         - {name: git-credentials, workspace: git-credentials}
+{{- end }}
 {{- end }}
 {{- end }}
 

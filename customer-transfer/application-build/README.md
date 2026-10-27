@@ -1,25 +1,30 @@
-# Backend and frontend application builds
+# Backend and frontend builds in one graph
 
-This is the current customer entry point. One `values.yaml` installs both scopes,
-their dispatchers, shared build Tasks, GitOps updaters, RBAC and Azure PR triggers.
-Do not combine it with the earlier example values files or add `--set` flags.
-Existing fixed fanout Pipelines remain available for comparison; use the dispatcher
-runs below for runtime service selection and selected-service PVC allocation.
+Use the existing Helm chart `pipelines/chart`, release `release-pipeline`, namespace
+`devops`, with this folder's **single values.yaml**. No extra values files or
+`--set` arguments are needed.
 
-| Scope | Parent Pipeline | Child Pipeline | Source branch | GitOps file |
+The dispatcher is a short TaskRun that accepts a comma-separated service list.
+It reads the Helm-installed fanout Pipeline, keeps only the selected lanes, then
+creates **one build PipelineRun for that scope**. That run shows:
+
+**Service selection → parallel clone/test/build/scan/gate/sign lanes → update-gitops**
+
+Unselected services have no lanes, TaskRuns, results or PVCs in the generated run.
+There are no per-service child PipelineRuns and no parent dispatcher PipelineRun.
+The generated run stores its selected graph in `spec.pipelineSpec`, so later Helm
+changes cannot add or remove its lanes. Its `tekton.dev/pipeline` label records
+which Helm-installed template was used. The live console layout still requires
+customer validation.
+
+| Scope | Dispatcher Task | Helm-installed fanout template | Source branch | GitOps file |
 | --- | --- | --- | --- | --- |
-| Backend | `application-backend-dispatch` | `application-backend-service-build` | `test` | `app-chart/backend.yaml` |
-| Frontend | `application-frontend-dispatch` | `application-frontend-service-build` | `pre-prod` | `app-chart/frontend.yaml` |
+| Backend | `backend-build-dispatch` | `application-backend-build-fanout` | `test` | `app-chart/backend.yaml` |
+| Frontend | `frontend-build-dispatch` | `application-frontend-build-fanout` | `pre-prod` | `app-chart/frontend.yaml` |
 
-Both update `RedHat_HelmCharts`, branch `dev`. The application source branch and
-GitOps branch are separate. Keep build arguments `CERT_KEYWORD=dev` and
-`BUILD_ENVIRONMENT=dev` until the customer Dockerfiles support preprod inputs.
-Infrastructure settings, approved image references, signing URLs, proxy Secret,
-service allowlists and trigger settings live in `values.yaml`.
+## Apply and test both scopes
 
-## Apply and run both scopes
-
-From the customer appdev checkout, using the existing release:
+From the customer appdev checkout:
 
 ```bash
 git pull --ff-only origin develop
@@ -30,121 +35,109 @@ helm upgrade --install release-pipeline ./pipelines/chart -n devops \
   -f customer-transfer/application-build/values.yaml
 ```
 
-Only after the upgrade succeeds, start both scopes:
+After the upgrade succeeds, launch both builds:
 
 ```bash
-oc create --dry-run=server -f customer-transfer/application-build/pipelineruns.yaml
-oc create -f customer-transfer/application-build/pipelineruns.yaml
-oc -n devops get pipelineruns --sort-by=.metadata.creationTimestamp
-```
-
-The run file contains two documents, one parent per scope. Keep only the desired
-document when testing a single scope. Helm installation itself starts no builds.
-The default `services: all` means the enabled 14 backend services or three portals,
-not every service in the full reference catalog.
-
-## Essential run inputs
-
-Edit the two PipelineRun parameter sections before `oc create`, or enter the same
-inputs in the OpenShift console. No Helm upgrade is needed to select fewer services.
-
-| Parameter | Manual value | Purpose |
-| --- | --- | --- |
-| `services` | `all`, or `acl-service,core-service` / `admin-portal,applicant-portal` | Comma-separated names from that scope's allowlist; spaces are trimmed, duplicates deduplicated, unknown/empty names rejected. |
-| `source-revision` | `test` / `pre-prod` | Prepared application source branch. |
-| `source-commit` | Empty, or full 40-character SHA | Empty resolves the branch HEAD once; every selected build checks out that commit. Image tags are its bare first eight characters. |
-| `selection-mode` | `manual` | Uses the supplied service list. PRs use `diff` instead. |
-| `target-commit` | Empty/omitted for manual; full target SHA for `diff` | Merge-base comparison for PR selection. |
-
-The frontend names are `admin-portal`, `applicant-portal`, `operational-portal`.
-The backend names are `acl-service`, `administration-service`,
-`audit-logging-service`, `core-service`, `identity-service`, `language-service`,
-`document-service`, `event-service`, `notification-service`, `request-service`,
-`stakeholder-service`, `applicant-service`, `visitvisa-service`, `realtime-service`.
-The allowlists are the `selectedServices` lists in this one values file.
-
-For example, changing backend `services` to `acl-service,core-service` creates two
-child runs and two 3Gi PVCs. Changing frontend `services` to `admin-portal` creates
-one child run and one 3Gi PVC. Each child runs clone, test, build/push, ACS scan,
-policy gate and sign. Frontend unit-test failure is temporarily allowed; backend
-tests, all builds, ACS and signing failures block the release. Verify belongs to
-promotion. The parent updates GitOps only after every selected child succeeds,
-using their validated image digests and source SHA. No GitOps run switch or
-separate base-check Task is used in either dispatcher.
-
-## GitOps and storage
-
-`git-credentials` must read the source repositories and read/write
-`RedHat_HelmCharts/dev`. The two YAML files must already exist with matching
-application image repositories. The updater changes only selected
-`<service>-dev.overrideValues.image.tag` entries; other settings and unselected
-services remain unchanged. The YAML serializer can normalize comments/formatting.
-Backend/frontend updates to different files can be rebased safely; a concurrent
-change to the same file after checkout is rejected. A build finishing later can
-publish its older source tag, so serialize overlapping releases of the same
-services when moving beyond this manual test.
-
-Argo CD must watch and sync these values for deployment. This flow commits Git;
-it does not invoke Argo CD or package/push an OCI Helm chart.
-
-Parents allocate no PVC. Children allocate one 3Gi PVC each, labeled
-`pipeline=backend-dispatch` or `pipeline=frontend-dispatch`, plus parent and service
-labels. Each parent allows three active child builds by default: together up to
-six active children / 18Gi. Completed children retain their claims until owner
-PipelineRuns are pruned/deleted; a full 14+3 run still requests 51Gi in total over
-its lifetime. This does not install or enable a pruner. The existing retention
-guidance is in [the GitOps README](../backend-gitops/README.md#pvc-retention-and-cleanup).
-
-## PR integration
-
-Both routes are installed by this values file:
-
-- Backend: `https://backend-pr-webhook-devops.apps.hub-visa-ocp.mofa.gov.sa/`
-- Frontend: `https://frontend-pr-webhook-devops.apps.hub-visa-ocp.mofa.gov.sa/`
-
-Confirm actual hosts with `oc -n devops get route backend-pr-webhook frontend-pr-webhook`.
-The frontend route now points directly at the dispatcher EventListener; this
-configuration disables the old frontend validation/proxy webhook stack. Current
-restricted-network test settings require no webhook authentication, as requested.
-Azure service hooks for PR created/updated must use the corresponding source repo
-and target branch above. The filters accept only active, non-fork PRs with valid
-source/target commit IDs and the configured repository/target branch.
-
-The TriggerTemplate starts the same parent with `selection-mode: diff`, source
-branch, source SHA and target SHA. Backend service-directory changes select the
-affected executable project; frontend app/deployment directories select the
-affected portal. Shared, unmapped or build metadata changes select all enabled
-services conservatively. Missing shallow merge-base history also selects all.
-A no-change diff creates no child builds and leaves GitOps tags unchanged.
-Azure service-hook delivery and live controller reconciliation still need the
-customer test; a local render does not prove either works.
-
-## Inspect one parent
-
-```bash
-oc -n devops get pipelines application-backend-dispatch application-frontend-dispatch
-oc -n devops get eventlisteners backend-pr frontend-pr
+oc create --dry-run=server -f customer-transfer/application-build/dispatches.yaml
+oc create -f customer-transfer/application-build/dispatches.yaml
 oc -n devops get pipelineruns -l app.kubernetes.io/part-of=application-build
 ```
 
-Set `RUN` to the created parent name to inspect its children and GitOps logs:
+The file contains two dispatcher TaskRun documents, each defaulting to `services:
+all`. That means the currently enabled 14 backend services or three frontends.
+Helm itself starts no builds. The dispatcher logs and its `pipeline-run` result
+identify the created run, named `backend-build-fanout-...` or
+`frontend-build-fanout-...`. Open that **PipelineRun** for the selected-lane graph.
+A successful dispatcher TaskRun means the build was created; check the build
+PipelineRun's own Succeeded condition for the build/GitOps outcome.
 
-```bash
-RUN=backend-build-dispatch-REPLACE_WITH_CREATED_SUFFIX
-oc -n devops get pipelineruns -l "customer.mofa.gov.sa/batch=$RUN"
-oc -n devops logs -l "tekton.dev/pipelineRun=$RUN,tekton.dev/pipelineTask=update-gitops" \
-  --all-containers=true --tail=100 --prefix=true
-oc -n devops get pvc -l pipeline=backend-dispatch
-oc -n devops get pvc -l pipeline=frontend-dispatch
+## Choose services for each run
+
+Edit `dispatches.yaml` before `oc create`. For a two-service backend example:
+
+```yaml
+- name: services
+  value: "acl-service,core-service"
 ```
 
-Locally validated with Helm lint/render, Task/Pipeline/result/workspace/RBAC
-reference checks, JavaScript dispatcher/GitOps simulations in V8 with mocked
-filesystem/API access, and real local Git race tests. The customer's Node image
-and live OpenShift Pipelines 1.23.2 controller still require runtime validation.
-No customer builds, registry writes or Argo deployments were executed here.
+For a single frontend, use `value: "admin-portal"`; for two, use
+`value: "admin-portal,applicant-portal"`. No Helm upgrade is needed to choose fewer
+services. Keep only one TaskRun document to launch a single scope. To change the
+service selection, launch a new dispatcher TaskRun; editing the recorded services
+parameter on an already-generated build run does not regenerate its graph.
 
-The trigger resources reuse the established EventListener/Binding/Template pattern
-in [Red Hat's pipeline documentation](https://docs.redhat.com/en/documentation/red_hat_openshift_pipelines/1.22/html/creating_cicd_pipelines/index).
-That documentation is for 1.22; the installed version reported by the customer is
-1.23.2. No new version-specific Pipelines feature is required by this change.
+| Input | Manual use |
+| --- | --- |
+| `services` | `all` or comma-separated allowed names; spaces trimmed, duplicates deduplicated, unknown/empty names rejected. |
+| `source-revision` | Prepared source branch: backend `test`, frontend `pre-prod`. |
+| `source-commit` | Empty resolves branch HEAD once; optionally supply a full 40-character SHA to rebuild the same source. |
+| `selection-mode` | `manual` for the supplied list; `diff` for PR integration. |
+| `target-commit` | Omit for manual; full target SHA required for `diff`. |
+
+The allowed names are the `selectedServices` lists in `values.yaml`. Backend
+currently enables `acl-service`, `administration-service`, `audit-logging-service`,
+`core-service`, `identity-service`, `language-service`, `document-service`,
+`event-service`, `notification-service`, `request-service`, `stakeholder-service`,
+`applicant-service`, `visitvisa-service`, `realtime-service`. Frontend enables
+`admin-portal`, `applicant-portal`, `operational-portal`.
+
+The backend catalog supports 17 services. Add prepared services to the allowed
+list and apply Helm before selecting more than the current 14. Gateway, Payment
+and AuthServer remain excluded by default; confirm their source Dockerfiles and
+GitOps application entries before enabling them. Empty backend `selectedServices`
+enables all 17 catalog entries. Names must match the catalog exactly.
+
+## Build, GitOps and storage
+
+Each lane reuses the working build Tasks, with `CERT_KEYWORD=dev` for backend and
+`BUILD_ENVIRONMENT=dev` for frontend. Tags are the bare first eight source commit
+characters. Frontend unit-test failure remains temporarily allowed; build, scan,
+gate and sign failures block GitOps. Signature verification belongs to promotion.
+
+The final GitOps Task receives only selected build results and updates only their
+image tags in `RedHat_HelmCharts`, branch `dev`, in the scope's file above.
+`git-credentials` must have source read and GitOps write access, and the target
+entries must already exist with matching image repositories. Backend/frontend
+writes to different files can coexist; a same-file push race fails for review.
+Argo CD must watch and sync these values for deployment. This flow updates Git;
+it does not publish an OCI chart or invoke Argo CD.
+
+The dispatcher uses emptyDir and no PVC. The build allocates one isolated **3Gi
+PVC per selected service**, labeled `pipeline=backend-build-fanout` or
+`pipeline=frontend-build-fanout`, plus `service`. Two selected services request 6Gi;
+14 backend plus three frontend services request 51Gi. All selected lanes can run
+in parallel as in the working fanout; the earlier child-dispatch `maxParallel`
+setting does not limit this graph. Completed runs retain PVCs until pruned or
+deleted. Pruning the short-lived dispatcher will not delete the build run.
+No pruner is installed by this change.
+
+## PR integration and checks
+
+The existing routes are Helm-maintained and feed the same dispatcher Tasks:
+
+- `https://backend-pr-webhook-devops.apps.hub-visa-ocp.mofa.gov.sa/`
+- `https://frontend-pr-webhook-devops.apps.hub-visa-ocp.mofa.gov.sa/`
+
+Azure PR created/updated payloads supply the source branch, source SHA and target
+SHA, with `selection-mode: diff`. Shared/unmapped changes or insufficient merge-base
+history select all enabled services conservatively. A no-change diff creates no
+build run. Auth remains disabled for this restricted-network test as requested.
+The frontend route points directly at its listener, replacing the old proxy flow.
+Azure service hooks and live controller reconciliation still need customer testing.
+
+```bash
+oc -n devops get tasks backend-build-dispatch frontend-build-dispatch
+oc -n devops get taskruns -l app.kubernetes.io/part-of=application-build
+oc -n devops get pipelineruns -l app.kubernetes.io/part-of=application-build
+oc -n devops get eventlisteners backend-pr frontend-pr
+oc -n devops get route backend-pr-webhook frontend-pr-webhook
+```
+
+Local validation covers Helm rendering, generated 1/2/14/17-backend and 1/2/3-frontend
+graphs, Task/results/workspace bindings, selected-only PVCs and GitOps data,
+namespace RBAC, launch retry/no-op handling, shell syntax and Git push races.
+JavaScript simulations use V8 with mocked API/filesystem access. No customer
+build, registry write or Argo deployment was executed here.
+
+References: [embedded Pipeline specifications](https://tekton.dev/docs/pipelines/pipelineruns/#specifying-a-pipeline),
+[TaskRun context variables](https://tekton.dev/docs/pipelines/variables/).
