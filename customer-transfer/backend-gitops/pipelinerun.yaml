@@ -3,24 +3,126 @@ kind: PipelineRun
 metadata:
   generateName: backend-gitops-test-
   namespace: devops
+  labels:
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: customer-build-fanout
 spec:
   pipelineRef:
-    name: application-backend-dispatch
+    name: application-backend-build-fanout
   taskRunTemplate:
-    serviceAccountName: backend-dispatcher
+    serviceAccountName: pipeline
   timeouts:
-    pipeline: 12h0m0s
-    tasks: 11h50m0s
+    pipeline: 4h0m0s
+    tasks: 3h50m0s
   params:
-    - name: services
-      value: all
+    - name: source-revision
+      value: "test"
+    - name: source-commit
+      value: ""
     - name: update-gitops
       value: "true"
-    - name: selection-mode
-      value: manual
-    - name: source-revision
-      value: test
   workspaces:
     - name: git-credentials
       secret:
         secretName: git-credentials
+    - name: registry-auth
+      secret:
+        secretName: registry-auth
+    - name: source-acl-service
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: "3Gi"
+    - name: source-administration-service
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: "3Gi"
+    - name: source-audit-logging-service
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: "3Gi"
+    - name: source-core-service
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: "3Gi"
+    - name: source-identity-service
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: "3Gi"
+    - name: source-language-service
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: "3Gi"
+    - name: source-document-service
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: "3Gi"
+    - name: source-event-service
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: "3Gi"
+    - name: source-notification-service
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: "3Gi"
+    - name: source-request-service
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: "3Gi"
+    - name: source-stakeholder-service
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: "3Gi"
+    - name: source-applicant-service
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: "3Gi"
+    - name: source-visitvisa-service
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: "3Gi"
+    - name: source-realtime-service
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: "3Gi"

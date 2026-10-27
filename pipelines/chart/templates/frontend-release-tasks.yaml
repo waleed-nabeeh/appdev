@@ -108,6 +108,8 @@ spec:
         chmod -R go-rwx "$HOME"
         git config --global credential.helper store
         git clone --single-branch --branch "$GITOPS_BRANCH" "$GITOPS_URL" /work/repo
+        # The Node image may use a different UID; only share the checkout.
+        chmod -R g+rwX /work/repo
 {{- if eq (default "json" .Values.frontendRelease.gitops.format) "yaml" }}
         if ! git -C /work/repo merge-base --is-ancestor "$EXPECTED_BASE" HEAD || ! git -C /work/repo diff --quiet "$EXPECTED_BASE" HEAD -- "$RELEASE_FILE"; then
 {{- else }}

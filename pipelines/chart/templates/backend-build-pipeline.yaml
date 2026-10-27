@@ -1,6 +1,7 @@
 {{- if .Values.backendBuild.enabled }}
 {{- $catalog := .Files.Get "files/backend-services.json" | fromJsonArray }}
 {{- $selected := .Values.backendBuild.selectedServices }}
+{{- $gitops := and .Values.backendBuild.dispatch.enabled .Values.backendBuild.dispatch.gitops.enabled }}
 {{- $known := list }}
 {{- $services := list }}
 {{- range $service := $catalog }}
@@ -34,12 +35,17 @@ spec:
   results:
     - name: commit
     - name: tag
+  volumes:
+    - name: work
+      emptyDir: {}
   steps:
     - name: resolve
       image: {{ .Values.images.git | quote }}
+      volumeMounts:
+        - {name: work, mountPath: /work}
       env:
         - name: HOME
-          value: /tekton/home
+          value: /work/home
         - name: SOURCE_URL
           value: {{ .Values.backendBuild.sourceUrl | quote }}
         - name: REVISION
@@ -80,6 +86,11 @@ spec:
     - name: source-commit
       type: string
       default: ""
+{{- if $gitops }}
+    - name: update-gitops
+      type: string
+      default: "false"
+{{- end }}
   results:
     - name: source-commit
       value: $(tasks.resolve-source.results.commit)
@@ -109,9 +120,24 @@ spec:
       workspaces:
         - name: git-credentials
           workspace: git-credentials
+{{- if $gitops }}
+    - name: gitops-base
+      runAfter: [resolve-source]
+      when:
+        - {input: $(params.update-gitops), operator: in, values: ["true"]}
+      taskRef:
+        name: backend-gitops-base
+      workspaces:
+        - name: git-credentials
+          workspace: git-credentials
+{{- end }}
 {{- range $service := $services }}
     - name: clone-{{ $service.name }}
+{{- if $gitops }}
+      runAfter: [resolve-source, gitops-base]
+{{- else }}
       runAfter: [resolve-source]
+{{- end }}
       taskRef:
         name: clone
       params:
@@ -182,6 +208,34 @@ spec:
         - name: registry-auth
           workspace: registry-auth
 {{- end }}
+{{- if $gitops }}
+{{- $names := list }}
+{{- $images := dict }}
+{{- range $service := $services }}
+{{- $names = append $names $service.name }}
+{{- $repository := printf "%s/%s" $.Values.backendBuild.imageRepository $service.name }}
+{{- $_ := set $images $service.name (dict "repository" $repository "tag" "$(tasks.resolve-source.results.tag)" "digest" (printf "$(tasks.build-%s.results.image-digest)" $service.name) "image" (printf "%s@$(tasks.build-%s.results.image-digest)" $repository $service.name)) }}
+{{- end }}
+    - name: update-gitops
+      runAfter:
+{{- range $service := $services }}
+        - sign-{{ $service.name }}
+{{- end }}
+      when:
+        - {input: $(params.update-gitops), operator: in, values: ["true"]}
+      taskRef:
+        name: backend-gitops-update
+      params:
+        - name: source-commit
+          value: $(tasks.resolve-source.results.commit)
+        - name: expected-base
+          value: $(tasks.gitops-base.results.commit)
+        - name: release-json
+          value: {{ dict "schemaVersion" 1 "succeeded" true "sourceCommit" "$(tasks.resolve-source.results.commit)" "selected" $names "images" $images "failed" (list) "notStarted" (list) | toJson | quote }}
+      workspaces:
+        - name: git-credentials
+          workspace: git-credentials
+{{- end }}
 ---
 # Store only a run template in Helm. Applying the release never starts builds.
 apiVersion: v1
@@ -190,12 +244,17 @@ metadata:
   name: backend-build-run-template
   namespace: {{ .Release.Namespace }}
 data:
-  pipelinerun.yaml: |
+{{- $modes := list false }}
+{{- if $gitops }}
+{{- $modes = append $modes true }}
+{{- end }}
+{{- range $update := $modes }}
+  {{ ternary "gitops-pipelinerun.yaml" "pipelinerun.yaml" $update }}: |
     apiVersion: tekton.dev/v1
     kind: PipelineRun
     metadata:
-      generateName: backend-build-
-      namespace: {{ .Release.Namespace }}
+      generateName: {{ ternary "backend-gitops-test-" "backend-build-" $update }}
+      namespace: {{ $.Release.Namespace }}
       labels:
         app.kubernetes.io/component: backend
         app.kubernetes.io/part-of: customer-build-fanout
@@ -203,15 +262,19 @@ data:
       pipelineRef:
         name: application-backend-build-fanout
       taskRunTemplate:
-        serviceAccountName: {{ .Values.serviceAccount.name }}
+        serviceAccountName: {{ $.Values.serviceAccount.name }}
       timeouts:
         pipeline: 4h0m0s
         tasks: 3h50m0s
       params:
         - name: source-revision
-          value: {{ .Values.backendBuild.sourceRevision | quote }}
+          value: {{ $.Values.backendBuild.sourceRevision | quote }}
         - name: source-commit
           value: ""
+{{- if $update }}
+        - name: update-gitops
+          value: "true"
+{{- end }}
       workspaces:
         - name: git-credentials
           secret:
@@ -227,5 +290,6 @@ data:
               resources:
                 requests:
                   storage: {{ $.Values.backendBuild.workspaceSize | quote }}
+{{- end }}
 {{- end }}
 {{- end }}

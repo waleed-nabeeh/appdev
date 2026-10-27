@@ -24,11 +24,16 @@ spec:
     - name: git-credentials
   results:
     - name: commit
+  volumes:
+    - name: work
+      emptyDir: {}
   steps:
     - name: resolve
       image: {{ .Values.images.git | quote }}
+      volumeMounts:
+        - {name: work, mountPath: /work}
       env:
-        - {name: HOME, value: /tekton/home}
+        - {name: HOME, value: /work/home}
         - {name: GITOPS_URL, value: {{ .Values.backendBuild.dispatch.gitops.repository | quote }}}
         - {name: GITOPS_BRANCH, value: {{ .Values.backendBuild.dispatch.gitops.revision | quote }}}
       script: |
@@ -51,7 +56,8 @@ metadata:
   namespace: {{ .Release.Namespace }}
 spec:
   params:
-    - {name: release-record, type: string}
+    - {name: release-record, type: string, default: ""}
+    - {name: release-json, type: string, default: ""}
     - {name: source-commit, type: string}
     - {name: expected-base, type: string}
   results:
@@ -87,6 +93,9 @@ spec:
         chmod -R go-rwx "$HOME"
         git config --global credential.helper store
         git clone --single-branch --branch "$GITOPS_BRANCH" "$GITOPS_URL" /work/repo
+        # Git and Node images can run with different UIDs in the same Pod.
+        # Share the checkout with their group; keep credential HOME private.
+        chmod -R g+rwX /work/repo
         if ! git -C /work/repo merge-base --is-ancestor "$EXPECTED_BASE" HEAD || ! git -C /work/repo diff --quiet "$EXPECTED_BASE" HEAD -- "$VALUES_FILE"; then
           echo 'Backend GitOps file changed since this batch began. No update pushed; review and rerun.' >&2
           exit 1
@@ -95,6 +104,7 @@ spec:
       image: {{ .Values.images.nodejs24 | quote }}
       env:
         - {name: RELEASE_RECORD, value: $(params.release-record)}
+        - {name: RELEASE_JSON, value: $(params.release-json)}
         - {name: SOURCE_COMMIT, value: $(params.source-commit)}
         - {name: NAMESPACE, value: {{ .Release.Namespace | quote }}}
       script: |

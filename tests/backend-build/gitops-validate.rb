@@ -5,7 +5,8 @@ overlay = ['-f', 'customer-transfer/backend-build-fanout/values-backend.yaml']
 before = render(*overlay)
 after = render(*overlay, '-f', 'customer-transfer/backend-gitops/values-gitops.yaml')
 before.each do |old|
-  next if old['kind'] == 'Pipeline' && old['metadata']['name'] == 'application-backend-dispatch'
+  next if old['kind'] == 'Pipeline' && %w[application-backend-dispatch application-backend-build-fanout].include?(old['metadata']['name'])
+  next if old['kind'] == 'ConfigMap' && old['metadata']['name'] == 'backend-build-run-template'
   check(after.find { |d| d['kind'] == old['kind'] && d['metadata']['name'] == old['metadata']['name'] } == old, 'Unrelated resource changed')
 end
 pipeline = after.find { |d| d['kind'] == 'Pipeline' && d['metadata']['name'] == 'application-backend-dispatch' }
@@ -32,6 +33,76 @@ pipeline.to_json.scan(/\$\(tasks\.([^.]+)\.results\.([^)]+)\)/).each do |name, r
   task = tasks.find { |t| t['name'] == name }
   check(task && definitions[task['taskRef']['name']].fetch('results', []).any? { |r| r['name'] == result }, 'Missing result producer')
 end
+# Preserve all working build lanes; only add GitOps dependencies and tasks.
+fanout_name = 'application-backend-build-fanout'
+old_fanout = before.find { |d| d['kind'] == 'Pipeline' && d['metadata']['name'] == fanout_name }
+fanout = after.find { |d| d['kind'] == 'Pipeline' && d['metadata']['name'] == fanout_name }
+old_fanout['spec']['tasks'].each do |old|
+  current = fanout['spec']['tasks'].find { |t| t['name'] == old['name'] }
+  expected = Marshal.load(Marshal.dump(old))
+  expected['runAfter'] = ['resolve-source', 'gitops-base'] if old['name'].start_with?('clone-')
+  check(current == expected, "Working backend stage changed: #{old['name']}")
+end
+old_cm = before.find { |d| d['kind'] == 'ConfigMap' && d['metadata']['name'] == 'backend-build-run-template' }
+new_cm = after.find { |d| d['kind'] == 'ConfigMap' && d['metadata']['name'] == 'backend-build-run-template' }
+check(old_cm['data']['pipelinerun.yaml'] == new_cm['data']['pipelinerun.yaml'], 'Existing build-only run changed')
+check(YAML.load_file('customer-transfer/backend-gitops/pipelinerun.yaml') == YAML.safe_load(new_cm['data']['gitops-pipelinerun.yaml']), 'Customer run drifted from Helm template')
+[nil, 'acl-service', 'acl-service,core-service'].each do |selection|
+  extra = selection ? ['--set', "backendBuild.selectedServices={#{selection}}"] : []
+  documents = render(*overlay, '-f', 'customer-transfer/backend-gitops/values-gitops.yaml', *extra)
+  p = documents.find { |d| d['kind'] == 'Pipeline' && d['metadata']['name'] == fanout_name }
+  ptasks = p['spec']['tasks']
+  update = ptasks.find { |t| t['name'] == 'update-gitops' }
+  record = JSON.parse(update['params'].find { |v| v['name'] == 'release-json' }['value'])
+  selected = ptasks.select { |t| t['name'].start_with?('build-') }.map { |t| t['name'].delete_prefix('build-') }
+  check(record['selected'] == selected && record['images'].keys.sort == selected.sort, 'GitOps selected services mismatch')
+  check(update['runAfter'].sort == selected.map { |s| 'sign-' + s }.sort, 'GitOps must wait for every sign task')
+  check(record['succeeded'] && record['failed'].empty? && record['notStarted'].empty?, 'Wrong successful release record')
+  check(record['sourceCommit'] == '$(tasks.resolve-source.results.commit)', 'Wrong source result')
+  selected.each do |s|
+    image = record['images'][s]
+    check(image['tag'] == '$(tasks.resolve-source.results.tag)', 'Tag must come from source SHA')
+    check(image['digest'] == "$(tasks.build-#{s}.results.image-digest)", 'Digest must come from build result')
+    check(image['image'] == image['repository'] + '@' + image['digest'], 'Invalid digest reference')
+  end
+  check(p['spec']['params'].find { |v| v['name'] == 'update-gitops' }['default'] == 'false', 'GitOps must default off per run')
+  %w[gitops-base update-gitops].each do |name|
+    check(ptasks.find { |t| t['name'] == name }['when'] == [{'input' => '$(params.update-gitops)', 'operator' => 'in', 'values' => ['true']}], 'Missing opt-in guard')
+  end
+  ptasks.each do |t|
+    definition = definitions.fetch(t['taskRef']['name'])
+    provided = t.fetch('params', []).map { |v| v['name'] }
+    check((provided - definition.fetch('params', []).map { |v| v['name'] }).empty?, 'Unknown fanout Task param')
+    definition.fetch('params', []).reject { |v| v.key?('default') }.each { |v| check(provided.include?(v['name']), 'Missing required fanout param') }
+    definition.fetch('workspaces', []).reject { |v| v['optional'] }.each { |v| check(t.fetch('workspaces', []).any? { |w| w['name'] == v['name'] }, 'Missing workspace binding') }
+    t.fetch('runAfter', []).each { |dep| check(ptasks.any? { |other| other['name'] == dep }, 'Unknown dependency') }
+  end
+  p.to_json.scan(/\$\(tasks\.([^.]+)\.results\.([^)]+)\)/).each do |name, result|
+    task = ptasks.find { |t| t['name'] == name }
+    check(task && definitions[task['taskRef']['name']].fetch('results', []).any? { |v| v['name'] == result }, 'Missing fanout result producer')
+  end
+  cm = documents.find { |d| d['kind'] == 'ConfigMap' && d['metadata']['name'] == 'backend-build-run-template' }
+  run = YAML.safe_load(cm['data']['gitops-pipelinerun.yaml'])
+  check(run.dig('spec', 'pipelineRef', 'name') == fanout_name, 'GitOps test must use fixed fanout')
+  check(run.dig('spec', 'taskRunTemplate', 'serviceAccountName') == 'pipeline', 'Use working pipeline service account')
+  check(run['spec']['params'].any? { |v| v['name'] == 'update-gitops' && v['value'] == 'true' }, 'Test must enable update')
+  check(run['spec']['workspaces'].map { |w| w['name'] }.sort == p['spec']['workspaces'].map { |w| w['name'] }.sort, 'Subset run workspace mismatch')
+  claims = run['spec']['workspaces'].select { |w| w['volumeClaimTemplate'] }
+  check(claims.size == selected.size && claims.all? { |w| w.dig('volumeClaimTemplate', 'spec', 'resources', 'requests', 'storage') == '3Gi' }, 'Wrong subset PVC allocation')
+end
+%w[backend-build-resolve backend-gitops-base].each do |name|
+  definition = definitions.fetch(name)
+  step = definition['steps'][0]
+  check(step['env'].any? { |e| e['name'] == 'HOME' && e['value'] == '/work/home' }, 'Resolver HOME must be privately created')
+  check(definition['volumes'].any? { |v| v['name'] == 'work' && v['emptyDir'] == {} }, 'Missing writable scratch volume')
+  check(step['volumeMounts'].any? { |v| v['name'] == 'work' && v['mountPath'] == '/work' }, 'Missing HOME scratch mount')
+end
+%w[backend-gitops-update frontend-release-update].each do |name|
+  clone = definitions.fetch(name)['steps'].find { |s| s['name'] == 'clone' }['script']
+  check(clone.include?('chmod -R g+rwX /work/repo'), 'Node updater needs group write on checkout')
+  check(!clone.include?('chmod -R g+rwX "$HOME"'), 'Credentials must remain private')
+end
+puts 'Passed fixed fanout GitOps opt-in, unchanged build lanes, 14/1/2-service result wiring and permission regression checks'
 Dir.mktmpdir do |tmp|
   definitions.select { |name, _| name.start_with?('backend-gitops-') }.each do |name, spec|
     spec['steps'].each do |step|

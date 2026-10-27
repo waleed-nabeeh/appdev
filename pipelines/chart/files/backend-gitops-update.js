@@ -33,13 +33,20 @@ if (require.main === module) {
     const fs = require('node:fs');
     const path = require('node:path');
     const yaml = require('/config/js-yaml.js');
-    const {kubeClient} = require('/config/backend-dispatch.js');
-    const api = kubeClient(fs, require('node:https'));
-    const recordName = process.env.RELEASE_RECORD;
-    check(/^backend-result-[a-f0-9]{16}$/.test(recordName), 'Invalid batch record name');
-    const cm = await api('GET', '/api/v1/namespaces/' + process.env.NAMESPACE + '/configmaps/' + recordName);
-    check(cm.immutable === true, 'Batch record must be immutable');
-    const record = JSON.parse(cm.data['release.json']);
+    let record;
+    if (process.env.RELEASE_JSON) {
+      check(!process.env.RELEASE_RECORD, 'Provide only one release input');
+      // Fixed fanout passes its build Task results directly, without API access.
+      record = JSON.parse(process.env.RELEASE_JSON);
+    } else {
+      const {kubeClient} = require('/config/backend-dispatch.js');
+      const api = kubeClient(fs, require('node:https'));
+      const recordName = process.env.RELEASE_RECORD;
+      check(/^backend-result-[a-f0-9]{16}$/.test(recordName), 'Invalid batch record name');
+      const cm = await api('GET', '/api/v1/namespaces/' + process.env.NAMESPACE + '/configmaps/' + recordName);
+      check(cm.immutable === true, 'Batch record must be immutable');
+      record = JSON.parse(cm.data['release.json']);
+    }
     const config = JSON.parse(fs.readFileSync('/config/config.json', 'utf8'));
     const repo = fs.realpathSync('/work/repo');
     const relative = process.env.VALUES_FILE;

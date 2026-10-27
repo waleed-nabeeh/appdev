@@ -2,7 +2,8 @@
 
 For runtime comma-separated selection, the new dispatcher, copy-paste curl test
 and labeled PVC cleanup, use [README-dispatch.md](README-dispatch.md).
-The fixed fanout below remains available and unchanged as the working fallback.
+The fixed fanout below remains available. For the same build lanes followed by
+a selected-service GitOps tag update, use [the GitOps test](../backend-gitops/README.md).
 
 Current customer selection: **14 services**, matching the /services folders
 shown on the customer's `test` branch on 2026-10-25. Payment is not shown there;
@@ -19,8 +20,9 @@ Helm release: `release-pipeline`, namespace: `devops`.
 New Pipeline: `application-backend-build-fanout`.
 
 Each selected service runs `clone -> test -> build/push -> ACS scan -> gate -> sign`.
-There is deliberately NO verification, GitOps update, OCI chart push, or Argo
-deployment in this build-only Pipeline. Verification belongs in promotion.
+The default run remains build-only. GitOps updates require the separate overlay
+and explicit `update-gitops: "true"` run parameter described in the GitOps test.
+There is no verification, OCI chart push or direct Argo sync. Verification belongs in promotion.
 The all-service promotion/OCI publishing flow is not delivered by this change.
 Existing ACL and frontend resources are left unchanged.
 

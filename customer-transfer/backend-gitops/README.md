@@ -35,7 +35,12 @@ artifacts in hub Quay. Auto-sync is false for the first Git-update-only test.
 Do not sync applications until the images and environment configuration are ready.
 Gateway and frontend tags remain unchanged by the 14-service backend run.
 
-## Run backend and frontend fanout
+## Run backend fanout with GitOps
+
+The backend test now uses **application-backend-build-fanout**, the working
+14-lane Pipeline, with the existing `pipeline` service account. It adds a GitOps
+base check before cloning and one GitOps update after all selected signing tasks.
+It does not launch the dispatcher parent or child PipelineRuns.
 
 1. Confirm both values files exist at the destination above. The customer's latest
    screenshot already shows them; do not overwrite existing updated tags with starter files.
@@ -43,9 +48,11 @@ Gateway and frontend tags remain unchanged by the 14-service backend run.
    `RedHat_HelmCharts` on `dev`. Branch policy must permit this automation
    commit; the Task does not create an Azure PR or bypass branch policy.
 3. From appdev apply the Helm overlay, retaining your existing frontend/trigger
-   overlays or flags. No changes to the working child build stages are required:
+   overlays or flags. The clone/test/build/scan/gate/sign stages are reused:
 
 ```bash
+git pull --ff-only origin develop
+
 helm lint pipelines/chart \
   -f customer-transfer/devops-apply/values-devops.yaml \
   -f customer-transfer/backend-build-fanout/values-backend.yaml \
@@ -57,14 +64,42 @@ helm upgrade --install release-pipeline ./pipelines/chart -n devops \
   -f customer-transfer/backend-gitops/values-gitops.yaml
 
 oc -n devops get tasks backend-gitops-base backend-gitops-update
+oc -n devops get pipeline application-backend-build-fanout
+oc create --dry-run=server -f customer-transfer/backend-gitops/pipelinerun.yaml
 oc create -f customer-transfer/backend-gitops/pipelinerun.yaml
-oc create -f customer-transfer/frontend-release-test/pipelinerun.yaml
 ```
 
-The backend example selects `all` for the configured 14. Change `params.services`
-to `acl-service,core-service` or another allowed subset for a smaller test. Backend source
+The checked-in run is for the configured 14 services. Backend source
 is still `test`, with `CERT_KEYWORD=dev`. The GitOps destination branch is
 `dev` in RedHat_HelmCharts; these are deliberately separate settings.
+
+For a smaller test, set `backendBuild.selectedServices` in your Helm overlay
+(for example `[acl-service, core-service]`) and repeat the upgrade. Then create
+the run from Helm's generated ConfigMap so workspace bindings match the selection:
+
+```bash
+oc -n devops get configmap backend-build-run-template \
+  -o jsonpath='{.data.gitops-pipelinerun\.yaml}' > /tmp/backend-gitops-run.yaml
+oc create --dry-run=server -f /tmp/backend-gitops-run.yaml
+oc create -f /tmp/backend-gitops-run.yaml
+```
+
+Use either the checked-in 14-service run or the generated run, not both.
+This fixed fanout selects services at Helm render time. Runtime comma-separated
+selection remains available separately through the dispatcher.
+Each selected service has one isolated 3Gi PVC: 42Gi requested for 14 services,
+6Gi for two. The GitOps tasks use `emptyDir` and add no PVCs.
+The dispatcher's `maxParallel` setting does not limit this fixed fanout.
+
+If your backend webhook is already enabled, preserve these flags on the upgrade:
+`--set backendBuild.dispatch.triggers.enabled=true --set backendBuild.dispatch.triggers.authRequired=false`.
+Helm changes do not restart a failed run: create a new run with the command above.
+
+To retest frontend separately after applying this release:
+
+```bash
+oc create -f customer-transfer/frontend-release-test/pipelinerun.yaml
+```
 
 The frontend run builds all three portals from `pre-prod`, using
 `BUILD_ENVIRONMENT=dev`. The overlay enables ACS scan and gate for all three,
@@ -72,17 +107,18 @@ then sign and update of `app-chart/frontend.yaml`. Frontend unit tests
 still allow failure temporarily; scan/gate failures block GitOps. Verification is
 disabled in this test overlay for promotion later, not bypassed inside a verify Task.
 
-The dispatcher captures the GitOps branch SHA before starting children. After
-every selected child succeeds through scan, gate and sign, `update-gitops`:
+The backend `gitops-base` task captures the GitOps branch SHA before cloning
+sources. After every selected lane succeeds through scan, gate and sign,
+`update-gitops`:
 
 1. Clones RedHat_HelmCharts/dev and checks its target file has not changed during builds.
-2. Reads the immutable successful batch ConfigMap and validates service names,
-   full source SHA, eight-character tag, hub repository and recorded image digest.
+2. Takes the selected service list and image digests from the fanout's Task results
+   and validates service names, full source SHA, eight-character tag and hub repository.
 3. Parses backend.yaml and updates only
    `argocd-applications.applications.<service>-dev.overrideValues.image.tag`.
 4. Commits only backend.yaml and pushes without force.
 
-If a child fails, no GitOps task runs. Missing app entries, mismatched repositories,
+If a lane fails, the final GitOps update does not run. Missing app entries, mismatched repositories,
 incomplete records or concurrent changes to the SAME GitOps file fail closed.
 A no-change diff creates no image updates. Backend and frontend can run together:
 changes to the other file are allowed. On a push race, the Task fetches and rebases
@@ -98,7 +134,7 @@ unchanged. No npm downloads, yq installation or extra PVC is needed at runtime.
 
 ```bash
 oc -n devops get pipelineruns --sort-by=.metadata.creationTimestamp
-read -r -p 'Parent PipelineRun name: ' RUN
+read -r -p 'Backend PipelineRun name: ' RUN
 oc -n devops get taskruns -l "tekton.dev/pipelineRun=$RUN"
 oc -n devops logs -l "tekton.dev/pipelineRun=$RUN,tekton.dev/pipelineTask=update-gitops" \
   --all-containers=true --tail=100 --prefix=true
@@ -107,13 +143,14 @@ oc -n devops logs -l "tekton.dev/pipelineRun=$RUN,tekton.dev/pipelineTask=update
 In RedHat_HelmCharts, inspect the commit on dev. For the two-service example,
 only ACL and Core image tag values should change to the source commit's first
 eight characters. Other backend tags and the entire frontend.yaml stay unchanged.
-For `all`, 14 backend tags change and Gateway remains untouched.
+For the default selection, 14 backend tags change and Gateway remains untouched.
 
 GitOps updates require BOTH Helm `backendBuild.dispatch.gitops.enabled: true` and
 PipelineRun `update-gitops: "true"`. Existing manual runs and Azure PR templates
 default to false, so enabling the Task does not turn the unauthenticated webhook
-into a deployment endpoint. The fixed 14-lane fanout remains build-only; use the
-dispatcher PipelineRun for this update test.
+into a deployment endpoint. Despite the existing `dispatch.gitops` setting name,
+the same configuration now enables GitOps Tasks for both backend Pipelines.
+The fixed fanout passes results directly and needs no additional API RBAC.
 
 The overlay explicitly switches `application-frontend-release-test` from its old
 JSON release record to frontend.yaml. The older validation/PR pipeline is not
@@ -151,9 +188,10 @@ rendered Applications and environment settings, sync the parent, then the intend
 child applications. Enable automated sync deliberately only after validation.
 The backend updater never changes autoSync or root configuration.
 
-Signature verification remains promotion work; this build-only tag update does
+Signature verification remains promotion work; this build-and-tag-update run does
 not claim verified promotion. Tags are eight-character SHA strings, not digest
-pins. Digests remain in the batch record. Verify and deploy by digest in the
+pins. Digests remain in the build Task/Pipeline results (or the dispatcher batch
+record when using that separate flow). Verify and deploy by digest in the
 promotion workflow before claiming immutable production delivery.
 
 For rollback, revert the reviewed GitOps commit and sync only the intended apps.
@@ -164,6 +202,8 @@ overwrite the current GitOps files with these starter files after successful run
 
 ```bash
 ruby tests/backend-build/gitops-validate.rb
+ruby tests/backend-build/dispatch-validate.rb
+ruby tests/frontend-release/validate.rb
 node tests/backend-build/gitops.test.cjs
 ```
 
@@ -172,5 +212,16 @@ CLI, so the JavaScript tests were executed in the tool's V8 runtime using the sa
 bundled YAML parser and actual input files. Real container execution, Azure Git
 permissions and Argo sync still need customer validation.
 
+The reported `chmod: /tekton/home: Operation not permitted` is addressed by
+creating a private `/work/home` directory on an `emptyDir` in the backend resolvers.
+The frontend `EACCES` when writing frontend.yaml is addressed in both updaters:
+the Git clone step grants group read/write access to its checkout before the
+Node step edits it. Credential HOME stays private. No root UID or extra SCC
+grant is added. The customer's shared group permissions still need a live run;
+if EACCES persists, collect `id` in both step images and `ls -ld` on the checkout
+and target file to check their actual UID/GID and modes.
+
 References: [Argo CD Helm values](https://argo-cd.readthedocs.io/en/stable/user-guide/helm/),
-[app-of-apps](https://argo-cd.readthedocs.io/en/stable/operator-manual/cluster-bootstrapping/).
+[app-of-apps](https://argo-cd.readthedocs.io/en/stable/operator-manual/cluster-bootstrapping/),
+[Tekton Task result dependencies](https://tekton.dev/docs/pipelines/pipelines/#using-results),
+[Red Hat container file permissions](https://developers.redhat.com/blog/2020/10/26/adapting-docker-and-kubernetes-containers-to-run-on-red-hat-openshift-container-platform).

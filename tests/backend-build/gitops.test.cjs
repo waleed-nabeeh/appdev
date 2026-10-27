@@ -47,3 +47,55 @@ wrong['argocd-applications'].applications[catalog[0].name + '-dev'].overrideValu
 reject(() => updateCore(wrong, one, config, sha));
 check(apps['acl-service-dev'].overrideValues.extraVolumes[0].secret.defaultMode === 256, 'Preserve secret file permissions');
 console.log('Passed backend/frontend split, 0/1/2/14-service updates, YAML round-trip and rejection checks');
+
+// Exercise the deployed entry point with an in-memory filesystem/API. Fixed
+// fanout must never require a service-account token or a ConfigMap API request.
+async function checkEntry(env, expectedCalls, expectedError, immutable = true) {
+  const source = fs.readFileSync('pipelines/chart/files/backend-gitops-update.js', 'utf8');
+  const filename = '/work/repo/app-chart/backend.yaml';
+  let calls = 0;
+  let written;
+  let error;
+  const proc = {env: {SOURCE_COMMIT: sha, VALUES_FILE: 'app-chart/backend.yaml', NAMESPACE: 'devops', ...env}};
+  const mod = {exports: {}};
+  const mockFs = {
+    realpathSync: p => p,
+    readFileSync: p => {
+      if (p === '/config/config.json') return JSON.stringify(config);
+      if (p === filename) return yaml.dump(core, {schema: yaml.JSON_SCHEMA});
+      throw new Error('Unexpected filesystem read: ' + p);
+    },
+    writeFileSync: (p, data) => { check(p === filename, 'Unexpected write path'); written = yaml.load(data, {schema: yaml.JSON_SCHEMA}); }
+  };
+  const req = name => {
+    if (name === 'node:fs') return mockFs;
+    if (name === 'node:path') return require('node:path');
+    if (name === '/config/js-yaml.js') return yaml;
+    if (name === 'node:https') { check(expectedCalls > 0, 'Fixed fanout must not initialize API access'); return {}; }
+    if (name === '/config/backend-dispatch.js') return {kubeClient: () => async (method, url) => {
+      calls++;
+      check(method === 'GET' && url === '/api/v1/namespaces/devops/configmaps/backend-result-' + 'a'.repeat(16), 'Wrong batch lookup');
+      return {immutable, data: {'release.json': JSON.stringify(one)}};
+    }};
+    throw new Error('Unexpected dependency: ' + name);
+  };
+  req.main = mod;
+  new Function('module', 'require', 'process', 'console', source)(mod, req, proc, {log() {}, error(message) { error = message; }});
+  // Allow the async ConfigMap branch and its catch handler to finish.
+  for (let i = 0; i < 8; i++) await Promise.resolve();
+  check(calls === expectedCalls, 'Unexpected Kubernetes API calls');
+  if (expectedError) {
+    check(proc.exitCode === 1 && error && !written, 'Invalid input must fail without writing');
+  } else {
+    check(!proc.exitCode && !error, error || 'Unexpected entry point failure');
+    check(JSON.stringify(written) === JSON.stringify(updateCore(core, one, config, sha)), 'Entry point did not update only selected tags');
+  }
+}
+(async () => {
+  await checkEntry({RELEASE_JSON: JSON.stringify(one)}, 0, false);
+  await checkEntry({RELEASE_RECORD: 'backend-result-' + 'a'.repeat(16)}, 1, false);
+  await checkEntry({RELEASE_JSON: JSON.stringify(one), RELEASE_RECORD: 'backend-result-' + 'a'.repeat(16)}, 0, true);
+  await checkEntry({RELEASE_JSON: '{'}, 0, true);
+  await checkEntry({RELEASE_RECORD: 'backend-result-' + 'a'.repeat(16)}, 1, true, false);
+  console.log('Passed fixed-fanout input without API access, dispatcher compatibility and invalid-input rejection');
+})().catch(error => { console.error(error); process.exitCode = 1; });
