@@ -38,8 +38,8 @@ Gateway and frontend tags remain unchanged by the 14-service backend run.
 ## Run backend fanout with GitOps
 
 The backend test now uses **application-backend-build-fanout**, the working
-14-lane Pipeline, with the existing `pipeline` service account. It adds a GitOps
-base check before cloning and one GitOps update after all selected signing tasks.
+14-lane Pipeline, with the existing `pipeline` service account. It adds one
+GitOps update after all selected signing tasks, with no separate base-check task.
 It does not launch the dispatcher parent or child PipelineRuns.
 With this overlay installed, `update-gitops` is a normal stage in
 `application-backend-build-fanout`, including console starts and the ordinary
@@ -112,11 +112,9 @@ then sign and update of `app-chart/frontend.yaml`. Frontend unit tests
 still allow failure temporarily; scan/gate failures block GitOps. Verification is
 disabled in this test overlay for promotion later, not bypassed inside a verify Task.
 
-The backend `gitops-base` task captures the GitOps branch SHA before cloning
-sources. After every selected lane succeeds through scan, gate and sign,
-`update-gitops`:
+After every selected lane succeeds through scan, gate and sign, `update-gitops`:
 
-1. Clones RedHat_HelmCharts/dev and checks its target file has not changed during builds.
+1. Clones the current RedHat_HelmCharts/dev branch.
 2. Takes the selected service list and image digests from the fanout's Task results
    and validates service names, full source SHA, eight-character tag and hub repository.
 3. Parses backend.yaml and updates only
@@ -124,7 +122,10 @@ sources. After every selected lane succeeds through scan, gate and sign,
 4. Commits only backend.yaml and pushes without force.
 
 If a lane fails, the final GitOps update does not run. Missing app entries, mismatched repositories,
-incomplete records or concurrent changes to the SAME GitOps file fail closed.
+incomplete records or concurrent changes to the SAME GitOps file after the updater
+clones it fail closed. Changes completed before that clone are used as the starting
+point; this flow does not prevent an older build finishing later from publishing
+its selected tags. Run releases for the same services in the intended order.
 A no-change diff creates no image updates. Backend and frontend can run together:
 changes to the other file are allowed. On a push race, the Task fetches and rebases
 its single update commit only when the target file is unchanged, then retries up

@@ -40,7 +40,6 @@ fanout = after.find { |d| d['kind'] == 'Pipeline' && d['metadata']['name'] == fa
 old_fanout['spec']['tasks'].each do |old|
   current = fanout['spec']['tasks'].find { |t| t['name'] == old['name'] }
   expected = Marshal.load(Marshal.dump(old))
-  expected['runAfter'] = ['resolve-source', 'gitops-base'] if old['name'].start_with?('clone-')
   check(current == expected, "Working backend stage changed: #{old['name']}")
 end
 old_cm = before.find { |d| d['kind'] == 'ConfigMap' && d['metadata']['name'] == 'backend-build-run-template' }
@@ -66,9 +65,9 @@ check(YAML.load_file('customer-transfer/backend-gitops/pipelinerun.yaml') == YAM
     check(image['image'] == image['repository'] + '@' + image['digest'], 'Invalid digest reference')
   end
   check(p['spec']['params'].none? { |v| v['name'] == 'update-gitops' }, 'Fixed fanout must not require a GitOps run switch')
-  %w[gitops-base update-gitops].each do |name|
-    check(!ptasks.find { |t| t['name'] == name }.key?('when'), 'GitOps must be a normal stage without a run guard')
-  end
+  check(ptasks.none? { |t| t['name'] == 'gitops-base' }, 'Fixed fanout must not start a separate base check')
+  check(!update.key?('when'), 'GitOps must be a normal stage without a run guard')
+  check(update['params'].none? { |v| v['name'] == 'expected-base' }, 'Fixed fanout must use the current GitOps branch at update time')
   ptasks.each do |t|
     definition = definitions.fetch(t['taskRef']['name'])
     provided = t.fetch('params', []).map { |v| v['name'] }
@@ -103,7 +102,7 @@ end
   check(clone.include?('chmod -R g+rwX /work/repo'), 'Node updater needs group write on checkout')
   check(!clone.include?('chmod -R g+rwX "$HOME"'), 'Credentials must remain private')
 end
-puts 'Passed fixed fanout GitOps opt-in, unchanged build lanes, 14/1/2-service result wiring and permission regression checks'
+puts 'Passed final GitOps stage, unchanged build lanes, 14/1/2-service result wiring and permission regression checks'
 Dir.mktmpdir do |tmp|
   definitions.select { |name, _| name.start_with?('backend-gitops-') }.each do |name, spec|
     spec['steps'].each do |step|

@@ -115,22 +115,9 @@ spec:
       workspaces:
         - name: git-credentials
           workspace: git-credentials
-{{- if $gitops }}
-    - name: gitops-base
-      runAfter: [resolve-source]
-      taskRef:
-        name: backend-gitops-base
-      workspaces:
-        - name: git-credentials
-          workspace: git-credentials
-{{- end }}
 {{- range $service := $services }}
     - name: clone-{{ $service.name }}
-{{- if $gitops }}
-      runAfter: [resolve-source, gitops-base]
-{{- else }}
       runAfter: [resolve-source]
-{{- end }}
       taskRef:
         name: clone
       params:
@@ -219,8 +206,6 @@ spec:
       params:
         - name: source-commit
           value: $(tasks.resolve-source.results.commit)
-        - name: expected-base
-          value: $(tasks.gitops-base.results.commit)
         - name: release-json
           value: {{ dict "schemaVersion" 1 "succeeded" true "sourceCommit" "$(tasks.resolve-source.results.commit)" "selected" $names "images" $images "failed" (list) "notStarted" (list) | toJson | quote }}
       workspaces:

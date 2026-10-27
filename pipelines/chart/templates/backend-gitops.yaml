@@ -59,7 +59,7 @@ spec:
     - {name: release-record, type: string, default: ""}
     - {name: release-json, type: string, default: ""}
     - {name: source-commit, type: string}
-    - {name: expected-base, type: string}
+    - {name: expected-base, type: string, default: ""}
   results:
     - name: commit
   workspaces:
@@ -96,9 +96,11 @@ spec:
         # Git and Node images can run with different UIDs in the same Pod.
         # Share the checkout with their group; keep credential HOME private.
         chmod -R g+rwX /work/repo
-        if ! git -C /work/repo merge-base --is-ancestor "$EXPECTED_BASE" HEAD || ! git -C /work/repo diff --quiet "$EXPECTED_BASE" HEAD -- "$VALUES_FILE"; then
-          echo 'Backend GitOps file changed since this batch began. No update pushed; review and rerun.' >&2
-          exit 1
+        if [ -n "$EXPECTED_BASE" ]; then
+          if ! git -C /work/repo merge-base --is-ancestor "$EXPECTED_BASE" HEAD || ! git -C /work/repo diff --quiet "$EXPECTED_BASE" HEAD -- "$VALUES_FILE"; then
+            echo 'Backend GitOps file changed since this batch began. No update pushed; review and rerun.' >&2
+            exit 1
+          fi
         fi
     - name: update-yaml
       image: {{ .Values.images.nodejs24 | quote }}
