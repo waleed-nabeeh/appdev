@@ -89,7 +89,7 @@ spec:
 {{- if $gitops }}
     - name: update-gitops
       type: string
-      default: "false"
+      default: "true"
 {{- end }}
   results:
     - name: source-commit
@@ -285,6 +285,10 @@ data:
 {{- range $service := $services }}
         - name: source-{{ $service.name }}
           volumeClaimTemplate:
+            metadata:
+              labels:
+                pipeline: backend-build-fanout
+                service: {{ $service.name }}
             spec:
               accessModes: [ReadWriteOnce]
               resources:

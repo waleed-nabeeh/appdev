@@ -65,7 +65,7 @@ check(YAML.load_file('customer-transfer/backend-gitops/pipelinerun.yaml') == YAM
     check(image['digest'] == "$(tasks.build-#{s}.results.image-digest)", 'Digest must come from build result')
     check(image['image'] == image['repository'] + '@' + image['digest'], 'Invalid digest reference')
   end
-  check(p['spec']['params'].find { |v| v['name'] == 'update-gitops' }['default'] == 'false', 'GitOps must default off per run')
+  check(p['spec']['params'].find { |v| v['name'] == 'update-gitops' }['default'] == 'true', 'Fixed fanout GitOps must default on when the overlay is enabled')
   %w[gitops-base update-gitops].each do |name|
     check(ptasks.find { |t| t['name'] == name }['when'] == [{'input' => '$(params.update-gitops)', 'operator' => 'in', 'values' => ['true']}], 'Missing opt-in guard')
   end
@@ -89,6 +89,7 @@ check(YAML.load_file('customer-transfer/backend-gitops/pipelinerun.yaml') == YAM
   check(run['spec']['workspaces'].map { |w| w['name'] }.sort == p['spec']['workspaces'].map { |w| w['name'] }.sort, 'Subset run workspace mismatch')
   claims = run['spec']['workspaces'].select { |w| w['volumeClaimTemplate'] }
   check(claims.size == selected.size && claims.all? { |w| w.dig('volumeClaimTemplate', 'spec', 'resources', 'requests', 'storage') == '3Gi' }, 'Wrong subset PVC allocation')
+  check(claims.all? { |w| w.dig('volumeClaimTemplate', 'metadata', 'labels', 'pipeline') == 'backend-build-fanout' }, 'Missing PVC identification label')
 end
 %w[backend-build-resolve backend-gitops-base].each do |name|
   definition = definitions.fetch(name)

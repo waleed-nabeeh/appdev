@@ -20,8 +20,9 @@ Helm release: `release-pipeline`, namespace: `devops`.
 New Pipeline: `application-backend-build-fanout`.
 
 Each selected service runs `clone -> test -> build/push -> ACS scan -> gate -> sign`.
-The default run remains build-only. GitOps updates require the separate overlay
-and explicit `update-gitops: "true"` run parameter described in the GitOps test.
+Without the GitOps overlay, the default run remains build-only. With that overlay,
+GitOps updates default to true for new fixed-fanout runs, including console starts.
+An explicit `update-gitops: "false"` parameter skips the update for a single run.
 There is no verification, OCI chart push or direct Argo sync. Verification belongs in promotion.
 The all-service promotion/OCI publishing flow is not delivered by this change.
 Existing ACL and frontend resources are left unchanged.

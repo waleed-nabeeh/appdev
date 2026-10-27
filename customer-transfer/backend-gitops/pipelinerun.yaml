@@ -30,6 +30,10 @@ spec:
         secretName: registry-auth
     - name: source-acl-service
       volumeClaimTemplate:
+        metadata:
+          labels:
+            pipeline: backend-build-fanout
+            service: acl-service
         spec:
           accessModes: [ReadWriteOnce]
           resources:
@@ -37,6 +41,10 @@ spec:
               storage: "3Gi"
     - name: source-administration-service
       volumeClaimTemplate:
+        metadata:
+          labels:
+            pipeline: backend-build-fanout
+            service: administration-service
         spec:
           accessModes: [ReadWriteOnce]
           resources:
@@ -44,6 +52,10 @@ spec:
               storage: "3Gi"
     - name: source-audit-logging-service
       volumeClaimTemplate:
+        metadata:
+          labels:
+            pipeline: backend-build-fanout
+            service: audit-logging-service
         spec:
           accessModes: [ReadWriteOnce]
           resources:
@@ -51,6 +63,10 @@ spec:
               storage: "3Gi"
     - name: source-core-service
       volumeClaimTemplate:
+        metadata:
+          labels:
+            pipeline: backend-build-fanout
+            service: core-service
         spec:
           accessModes: [ReadWriteOnce]
           resources:
@@ -58,6 +74,10 @@ spec:
               storage: "3Gi"
     - name: source-identity-service
       volumeClaimTemplate:
+        metadata:
+          labels:
+            pipeline: backend-build-fanout
+            service: identity-service
         spec:
           accessModes: [ReadWriteOnce]
           resources:
@@ -65,6 +85,10 @@ spec:
               storage: "3Gi"
     - name: source-language-service
       volumeClaimTemplate:
+        metadata:
+          labels:
+            pipeline: backend-build-fanout
+            service: language-service
         spec:
           accessModes: [ReadWriteOnce]
           resources:
@@ -72,6 +96,10 @@ spec:
               storage: "3Gi"
     - name: source-document-service
       volumeClaimTemplate:
+        metadata:
+          labels:
+            pipeline: backend-build-fanout
+            service: document-service
         spec:
           accessModes: [ReadWriteOnce]
           resources:
@@ -79,6 +107,10 @@ spec:
               storage: "3Gi"
     - name: source-event-service
       volumeClaimTemplate:
+        metadata:
+          labels:
+            pipeline: backend-build-fanout
+            service: event-service
         spec:
           accessModes: [ReadWriteOnce]
           resources:
@@ -86,6 +118,10 @@ spec:
               storage: "3Gi"
     - name: source-notification-service
       volumeClaimTemplate:
+        metadata:
+          labels:
+            pipeline: backend-build-fanout
+            service: notification-service
         spec:
           accessModes: [ReadWriteOnce]
           resources:
@@ -93,6 +129,10 @@ spec:
               storage: "3Gi"
     - name: source-request-service
       volumeClaimTemplate:
+        metadata:
+          labels:
+            pipeline: backend-build-fanout
+            service: request-service
         spec:
           accessModes: [ReadWriteOnce]
           resources:
@@ -100,6 +140,10 @@ spec:
               storage: "3Gi"
     - name: source-stakeholder-service
       volumeClaimTemplate:
+        metadata:
+          labels:
+            pipeline: backend-build-fanout
+            service: stakeholder-service
         spec:
           accessModes: [ReadWriteOnce]
           resources:
@@ -107,6 +151,10 @@ spec:
               storage: "3Gi"
     - name: source-applicant-service
       volumeClaimTemplate:
+        metadata:
+          labels:
+            pipeline: backend-build-fanout
+            service: applicant-service
         spec:
           accessModes: [ReadWriteOnce]
           resources:
@@ -114,6 +162,10 @@ spec:
               storage: "3Gi"
     - name: source-visitvisa-service
       volumeClaimTemplate:
+        metadata:
+          labels:
+            pipeline: backend-build-fanout
+            service: visitvisa-service
         spec:
           accessModes: [ReadWriteOnce]
           resources:
@@ -121,6 +173,10 @@ spec:
               storage: "3Gi"
     - name: source-realtime-service
       volumeClaimTemplate:
+        metadata:
+          labels:
+            pipeline: backend-build-fanout
+            service: realtime-service
         spec:
           accessModes: [ReadWriteOnce]
           resources:

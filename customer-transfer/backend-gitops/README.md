@@ -41,6 +41,11 @@ The backend test now uses **application-backend-build-fanout**, the working
 14-lane Pipeline, with the existing `pipeline` service account. It adds a GitOps
 base check before cloning and one GitOps update after all selected signing tasks.
 It does not launch the dispatcher parent or child PipelineRuns.
+With this overlay installed, `update-gitops` defaults to **true** for new
+`application-backend-build-fanout` runs, including console starts and the ordinary
+Helm-generated run template. An explicit false value still skips the update.
+An existing run or a rerun that copies old parameters can retain false; create
+a fresh run or explicitly set true in that case.
 
 1. Confirm both values files exist at the destination above. The customer's latest
    screenshot already shows them; do not overwrite existing updated tags with starter files.
@@ -145,10 +150,11 @@ only ACL and Core image tag values should change to the source commit's first
 eight characters. Other backend tags and the entire frontend.yaml stay unchanged.
 For the default selection, 14 backend tags change and Gateway remains untouched.
 
-GitOps updates require BOTH Helm `backendBuild.dispatch.gitops.enabled: true` and
-PipelineRun `update-gitops: "true"`. Existing manual runs and Azure PR templates
-default to false, so enabling the Task does not turn the unauthenticated webhook
-into a deployment endpoint. Despite the existing `dispatch.gitops` setting name,
+GitOps tasks require Helm `backendBuild.dispatch.gitops.enabled: true` (with
+`backendBuild.dispatch.enabled` enabled by values-backend.yaml). In the fixed
+fanout, new runs now default `update-gitops` to true; setting it explicitly to false
+skips GitOps. The separate dispatcher/Azure PR flow still defaults to false.
+Despite the existing `dispatch.gitops` setting name,
 the same configuration now enables GitOps Tasks for both backend Pipelines.
 The fixed fanout passes results directly and needs no additional API RBAC.
 
@@ -197,6 +203,68 @@ promotion workflow before claiming immutable production delivery.
 For rollback, revert the reviewed GitOps commit and sync only the intended apps.
 Reverting tags requires the previous image artifacts to still exist. Do not
 overwrite the current GitOps files with these starter files after successful runs.
+
+## PVC retention and cleanup
+
+Keep the 3Gi workspaces isolated per service and per run. A shared named RWO PVC
+can make parallel runs wait on attachment or overwrite each other's checkout.
+With 14 lanes the active run requests 42Gi; pruning removes accumulation from old
+runs but does not reduce that active capacity. To reduce peak use, select fewer
+services or use the separate dispatcher with a concurrency limit.
+
+New fixed-fanout PVCs carry `pipeline=backend-build-fanout` and `service` labels:
+
+```bash
+oc -n devops get pvc -l pipeline=backend-build-fanout
+oc -n devops get pvc -o custom-columns=NAME:.metadata.name,OWNER:.metadata.ownerReferences[0].name,SIZE:.spec.resources.requests.storage
+```
+
+Recommended retention for this test: prune completed PipelineRuns older than
+24 hours, hourly. Template-created PVCs have owner references and are garbage
+collected when their owning PipelineRun is deleted. This removes run history,
+TaskRuns and Pod logs as well, so archive results/logs needed for promotion first.
+An explicit full rerun creates fresh PVCs. Old PVCs without owner references
+need a separate review; namespace annotations do not clean arbitrary PVCs.
+
+The customer reports OpenShift Pipelines 1.23.2. First inspect the active pruner:
+
+```bash
+oc get tektonconfig config -o jsonpath='{.spec.pruner}{"\n"}{.spec.tektonpruner}{"\n"}'
+oc -n openshift-pipelines get deployments,cronjobs
+```
+
+If the Operator's scheduled/job-based pruner is active, the namespace admin can
+apply this policy to devops only. It affects all completed PipelineRuns in devops,
+including frontend, not just the backend test. It does not change other namespaces:
+
+```bash
+oc annotate namespace devops --overwrite \
+  operator.tekton.dev/prune.skip="false" \
+  operator.tekton.dev/prune.resources="pipelinerun" \
+  operator.tekton.dev/prune.strategy="keep-since" \
+  operator.tekton.dev/prune.keep-since="1440" \
+  operator.tekton.dev/prune.schedule="0 * * * *"
+
+oc -n openshift-pipelines get cronjobs,jobs
+oc -n devops get pipelineruns --sort-by=.metadata.creationTimestamp
+oc -n devops get pvc
+```
+
+Use only the active pruner mechanism. If `spec.tektonpruner` shows the event-driven
+pruner enabled, configure retention through that existing controller instead;
+do not enable a second pruner. If neither pruner is active, the platform admin
+must enable/configure it before namespace annotations can have an effect.
+No pruner or namespace modification is applied automatically by this Helm chart.
+The 1.23 English configuration page was unavailable during preparation; the
+scheduled annotation syntax was checked against accessible Red Hat 1.22 docs.
+Confirm the installed pruner mode before applying these commands.
+
+StorageClass reclaim policy also matters: `Retain` can leave backing PVs after
+PVC deletion. Check it with `oc get storageclass` and have the storage admin
+handle retained volumes. PVC labels alone do not perform automatic cleanup.
+
+References: [Red Hat pruning configuration](https://docs.redhat.com/en/documentation/red_hat_openshift_pipelines/1.22/html-single/installing_and_configuring/index),
+[Tekton template PVC lifecycle](https://tekton.dev/docs/pipelines/workspaces/#volumeclaimtemplate).
 
 ## Local checks
 
