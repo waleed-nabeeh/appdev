@@ -1,5 +1,27 @@
 # Manual Three-Frontend Release Test
 
+## Current customer YAML flow
+
+Use `customer-transfer/backend-gitops/values-gitops.yaml` after the customer and
+backend values overlays for the current shared setup. It configures
+`application-frontend-release-test` to build all three portals, scan, gate, sign,
+then run `update-gitops` automatically. No GitOps PipelineRun switch is needed.
+The Task updates only the three portal image tags in
+`RedHat_HelmCharts`, branch `dev`, file `app-chart/frontend.yaml`, using the bare
+eight-character source commit. Backend values stay unchanged. Verification is
+reserved for promotion in this overlay. After the Helm upgrade succeeds, run:
+
+```bash
+oc create -f customer-transfer/frontend-release-test/pipelinerun.yaml
+```
+
+See [the shared backend/frontend instructions](../backend-gitops/README.md)
+for the complete Helm upgrade and Argo CD setup. Argo CD must watch and sync
+these values to deploy them; this Task updates Git only. The older JSON/OCI test
+below uses a different overlay and destination.
+
+## Earlier isolated JSON/OCI test
+
 This test uses bare eight-character Git commit tags (for example `a1b2c3d4`),
 checks out the full commit, and deploys the signed/verified image digests.
 All three builds use `BUILD_ENVIRONMENT=dev`, even though the source branch is
