@@ -414,7 +414,10 @@ spec:
         #!/usr/bin/env bash
         set -euo pipefail
         for attempt in $(seq 1 30); do
+          echo "RHACS scan attempt ${attempt}/30"
           if roxctl image scan --image "$(params.image)" --output json > /tmp/scan.json; then
+            cat /tmp/scan.json
+            echo "RHACS scan completed successfully"
             break
           fi
           if [[ "$attempt" == "30" ]]; then
