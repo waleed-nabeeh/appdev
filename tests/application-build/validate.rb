@@ -70,6 +70,10 @@ check(runs.size == 2, 'Expected two dispatcher TaskRun examples')
     check(clone['params'].find { |p| p['name'] == 'url' }['value'] == '$(params.source-url)', 'Clone must consume source-url')
   end
   check(fanout['tasks'].none? { |t| t['name'].start_with?('verify-') }, 'Verify belongs to promotion')
+  direct_run = YAML.load_file("customer-transfer/application-build/#{scope}-pipelinerun.yaml")
+  generated_run = YAML.safe_load(get.call('ConfigMap', scope + '-build-run-template')['data']['pipelinerun.yaml'])
+  check(direct_run['kind'] == 'PipelineRun' && direct_run.dig('spec', 'pipelineRef', 'name') == config['fanoutPipeline'], 'Manual file must directly create the scope PipelineRun')
+  check(direct_run['spec'] == generated_run['spec'], 'Manual run defaults or workspaces drifted from the Helm template')
   updater = tasks.fetch(scope + '-gitops-update')
   env = updater['stepTemplate']['env'].to_h { |e| [e['name'], e['value']] }
   check(env['VALUES_FILE'] == "app-chart/#{scope}.yaml" && env['GITOPS_BRANCH'] == 'dev', 'Incorrect GitOps target')

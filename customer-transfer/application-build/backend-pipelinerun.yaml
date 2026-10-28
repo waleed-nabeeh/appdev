@@ -1,0 +1,205 @@
+# Direct manual run for the full Helm-configured service list.
+# Use dispatches.yaml to prepare a smaller selected-only graph.
+---
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: backend-build-fanout-manual-
+  namespace: devops
+  labels:
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: application-build
+spec:
+  pipelineRef:
+    name: application-backend-build-fanout
+  taskRunTemplate:
+    serviceAccountName: pipeline
+  timeouts:
+    pipeline: 4h0m0s
+    tasks: 3h50m0s
+  params:
+  - name: services
+    value: acl-service,administration-service,audit-logging-service,core-service,identity-service,language-service,document-service,event-service,notification-service,request-service,stakeholder-service,applicant-service,visitvisa-service,realtime-service
+  - name: source-url
+    value: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Backend
+  - name: env
+    value: dev
+  - name: source-revision
+    value: test
+  - name: source-commit
+    value: ''
+  workspaces:
+  - name: git-credentials
+    secret:
+      secretName: git-credentials
+  - name: registry-auth
+    secret:
+      secretName: registry-auth
+  - name: source-acl-service
+    volumeClaimTemplate:
+      metadata:
+        labels:
+          pipeline: backend-build-fanout
+          service: acl-service
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 3Gi
+  - name: source-administration-service
+    volumeClaimTemplate:
+      metadata:
+        labels:
+          pipeline: backend-build-fanout
+          service: administration-service
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 3Gi
+  - name: source-audit-logging-service
+    volumeClaimTemplate:
+      metadata:
+        labels:
+          pipeline: backend-build-fanout
+          service: audit-logging-service
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 3Gi
+  - name: source-core-service
+    volumeClaimTemplate:
+      metadata:
+        labels:
+          pipeline: backend-build-fanout
+          service: core-service
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 3Gi
+  - name: source-identity-service
+    volumeClaimTemplate:
+      metadata:
+        labels:
+          pipeline: backend-build-fanout
+          service: identity-service
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 3Gi
+  - name: source-language-service
+    volumeClaimTemplate:
+      metadata:
+        labels:
+          pipeline: backend-build-fanout
+          service: language-service
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 3Gi
+  - name: source-document-service
+    volumeClaimTemplate:
+      metadata:
+        labels:
+          pipeline: backend-build-fanout
+          service: document-service
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 3Gi
+  - name: source-event-service
+    volumeClaimTemplate:
+      metadata:
+        labels:
+          pipeline: backend-build-fanout
+          service: event-service
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 3Gi
+  - name: source-notification-service
+    volumeClaimTemplate:
+      metadata:
+        labels:
+          pipeline: backend-build-fanout
+          service: notification-service
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 3Gi
+  - name: source-request-service
+    volumeClaimTemplate:
+      metadata:
+        labels:
+          pipeline: backend-build-fanout
+          service: request-service
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 3Gi
+  - name: source-stakeholder-service
+    volumeClaimTemplate:
+      metadata:
+        labels:
+          pipeline: backend-build-fanout
+          service: stakeholder-service
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 3Gi
+  - name: source-applicant-service
+    volumeClaimTemplate:
+      metadata:
+        labels:
+          pipeline: backend-build-fanout
+          service: applicant-service
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 3Gi
+  - name: source-visitvisa-service
+    volumeClaimTemplate:
+      metadata:
+        labels:
+          pipeline: backend-build-fanout
+          service: visitvisa-service
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 3Gi
+  - name: source-realtime-service
+    volumeClaimTemplate:
+      metadata:
+        labels:
+          pipeline: backend-build-fanout
+          service: realtime-service
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 3Gi

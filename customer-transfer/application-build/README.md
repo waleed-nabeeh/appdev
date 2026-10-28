@@ -36,7 +36,22 @@ helm upgrade --install release-pipeline ./pipelines/chart -n devops \
   -f customer-transfer/application-build/values.yaml
 ```
 
-After the upgrade succeeds, launch both builds:
+After the upgrade succeeds, directly create the two full-service manual PipelineRuns:
+
+```bash
+oc create -f customer-transfer/application-build/backend-pipelinerun.yaml
+oc create -f customer-transfer/application-build/frontend-pipelinerun.yaml
+oc -n devops get pipelineruns -l app.kubernetes.io/part-of=application-build
+```
+
+These are actual PipelineRun files, one per type, referencing the Helm-maintained
+backend/frontend Pipelines. They expose services, source-url, source-revision, env
+and optional source-commit, with full 14-backend/3-frontend defaults. Source URL,
+revision and env can be changed before creation. Their workspace bindings match
+the current full configured graphs, and GitOps is included.
+
+For a smaller selected-only graph, change the dispatcher inputs and launch through
+the dispatcher instead of the direct full-service examples:
 
 ```bash
 oc create --dry-run=server -f customer-transfer/application-build/dispatches.yaml
