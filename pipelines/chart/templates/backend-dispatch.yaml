@@ -28,6 +28,10 @@
 {{- if lt (int $settings.dispatch.maxParallel) 1 }}
 {{- fail "dispatch.maxParallel must be positive" }}
 {{- end }}
+{{- $manualNames := list }}
+{{- range $service := $enabled }}
+{{- $manualNames = append $manualNames $service.name }}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -90,7 +94,7 @@ metadata:
   namespace: {{ $root.Release.Namespace }}
 spec:
   params:
-    - {name: services, type: string, default: all, description: "Comma-separated allowed service names or all"}
+    - {name: services, type: string, default: {{ ternary (join "," $manualNames) "all" $root.Values.applicationBuild.singleRun | quote }}, description: "Comma-separated allowed service names or all"}
     - {name: selection-mode, type: string, default: manual}
     - {name: source-revision, type: string, default: {{ $settings.sourceRevision | quote }}}
     - {name: source-commit, type: string, default: ""}

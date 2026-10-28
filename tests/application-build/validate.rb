@@ -70,9 +70,11 @@ check(runs.size == 2, 'Expected two dispatcher TaskRun examples')
   check(env['GITOPS_URL'].end_with?('/RedHat_HelmCharts'), 'Incorrect accessible GitOps repo')
   launcher = tasks.fetch(scope + '-build-dispatch')
   check(launcher['steps'].last['script'].include?('function makeFanoutRun'), 'Missing selected-only builder')
-  check(launcher['params'].find { |p| p['name'] == 'services' }['default'] == 'all', 'CSV input needs usable default')
+  manual_names = config['catalog'].map { |s| s['name'] }
+  check(launcher['params'].find { |p| p['name'] == 'services' }['default'] == manual_names.join(','), 'Manual chart default must list every enabled service')
   run = runs.find { |r| r.dig('spec', 'taskRef', 'name') == scope + '-build-dispatch' }
   check(run && run['kind'] == 'TaskRun' && run['spec']['serviceAccountName'] == scope + '-dispatcher', 'Incorrect launcher example')
+  check(run['spec']['params'].find { |p| p['name'] == 'services' }['value'].split(',') == manual_names, 'Manual example must list every enabled service')
   check(run['spec']['workspaces'].none? { |w| w['volumeClaimTemplate'] }, 'Launcher must allocate no PVC')
   run['spec']['params'].each { |p| check(launcher['params'].any? { |v| v['name'] == p['name'] }, 'Unknown sample run parameter') }
   listener = get.call('EventListener', scope + '-pr')

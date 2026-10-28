@@ -43,8 +43,10 @@ oc create -f customer-transfer/application-build/dispatches.yaml
 oc -n devops get pipelineruns -l app.kubernetes.io/part-of=application-build
 ```
 
-The file contains two dispatcher TaskRun documents, each defaulting to `services:
-all`. That means the currently enabled 14 backend services or three frontends.
+The file contains two dispatcher TaskRun documents with explicit comma-separated
+lists of all 14 enabled backend services and all three frontends. The Helm-installed
+dispatcher Tasks also default to these full lists. Remove names to select fewer;
+`all` remains an optional shorthand for the enabled list.
 Helm itself starts no builds. The dispatcher logs and its `pipeline-run` result
 identify the created run, named `backend-build-fanout-...` or
 `frontend-build-fanout-...`. Open that **PipelineRun** for the selected-lane graph.

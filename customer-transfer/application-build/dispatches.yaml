@@ -1,4 +1,4 @@
-# Launches one build PipelineRun per scope, with only selected lanes. Replace services: all with comma-separated allowed names.
+# Manual defaults list every enabled service explicitly. Remove names for a smaller run.
 ---
 apiVersion: tekton.dev/v1
 kind: TaskRun
@@ -15,7 +15,7 @@ spec:
   timeout: 20m0s
   params:
   - name: services
-    value: all
+    value: "acl-service,administration-service,audit-logging-service,core-service,identity-service,language-service,document-service,event-service,notification-service,request-service,stakeholder-service,applicant-service,visitvisa-service,realtime-service"
   - name: selection-mode
     value: manual
   - name: source-revision
@@ -42,7 +42,7 @@ spec:
   timeout: 20m0s
   params:
   - name: services
-    value: all
+    value: "admin-portal,applicant-portal,operational-portal"
   - name: selection-mode
     value: manual
   - name: source-revision
