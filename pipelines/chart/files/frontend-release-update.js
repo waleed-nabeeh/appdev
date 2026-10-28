@@ -41,7 +41,8 @@ if (require.main === module) {
     const record = {schemaVersion: 1, succeeded: true, selected: services, failed: [], notStarted: [], sourceCommit: release.sourceCommit,
       images: Object.fromEntries(services.map(name => [name, {...release.images[name], image: release.images[name].repository + '@' + release.images[name].digest}]))};
     const previous = yaml.load(fs.readFileSync(file, 'utf8'), {schema: yaml.JSON_SCHEMA, maxDepth: 100});
-    const updated = updateCore(previous, record, {catalog: services.map(name => ({name})), imageRepository: process.env.IMAGE_REPOSITORY}, release.sourceCommit);
+    const updated = updateCore(previous, record, {catalog: services.map(name => ({name})), imageRepository: process.env.IMAGE_REPOSITORY,
+      applicationNamePrefix: process.env.APPLICATION_NAME_PREFIX, applicationNameSuffix: process.env.APPLICATION_NAME_SUFFIX}, release.sourceCommit);
     if (JSON.stringify(updated) !== JSON.stringify(previous)) fs.writeFileSync(file, yaml.dump(updated, {schema: yaml.JSON_SCHEMA, noRefs: true, lineWidth: -1, quotingType: '"'}));
   } else {
     const previous = JSON.parse(fs.readFileSync(file, 'utf8'));

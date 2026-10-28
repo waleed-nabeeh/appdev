@@ -45,6 +45,30 @@ for (const count of [0, 1, 2, 14]) {
   check(JSON.stringify(yaml.load(yaml.dump(updated, {schema: yaml.JSON_SCHEMA}), {schema: yaml.JSON_SCHEMA})) === JSON.stringify(updated), 'YAML round-trip changed values');
 }
 const one = record([catalog[0].name]);
+// Current customer files use pre- app names; service/image names stay unchanged.
+for (const [scope, activeConfig, counts] of [
+  ['backend', config, [0, 1, 2, 14]], ['frontend', frontendConfig, [0, 1, 2, 3]]
+]) {
+  const preproduction = yaml.load(fs.readFileSync('customer-transfer/backend-gitops/' + scope + '-preproduction.yaml', 'utf8'), {schema: yaml.JSON_SCHEMA});
+  const original = JSON.stringify(preproduction);
+  const mappedConfig = {...activeConfig, applicationNamePrefix: 'pre-', applicationNameSuffix: ''};
+  for (const count of counts) {
+    const selected = activeConfig.catalog.slice(0, count).map(s => s.name);
+    const expected = JSON.parse(original);
+    for (const name of selected) expected['argocd-applications'].applications['pre-' + name].overrideValues.image.tag = sha.slice(0, 8);
+    const updated = updateCore(preproduction, record(selected), mappedConfig, sha);
+    check(JSON.stringify(updated) === JSON.stringify(expected), 'Preproduction changed unrelated settings: ' + scope + '/' + count);
+    check(JSON.stringify(preproduction) === original, 'Preproduction input was mutated');
+    check(JSON.stringify(yaml.load(yaml.dump(updated, {schema: yaml.JSON_SCHEMA}), {schema: yaml.JSON_SCHEMA})) === JSON.stringify(expected), 'Preproduction YAML round-trip failed');
+  }
+  const name = activeConfig.catalog[0].name;
+  const missing = JSON.parse(original);
+  // An old development entry must never serve as fallback for a missing pre- app.
+  missing['argocd-applications'].applications[name + '-dev'] = missing['argocd-applications'].applications['pre-' + name];
+  delete missing['argocd-applications'].applications['pre-' + name];
+  reject(() => updateCore(missing, record([name]), mappedConfig, sha));
+}
+reject(() => updateCore(core, one, {...config, applicationNamePrefix: 7}, sha));
 reject(() => updateCore(core, {...one, succeeded: false}, config, sha));
 reject(() => updateCore(core, {...one, failed: [{service: catalog[0].name}]}, config, sha));
 reject(() => updateCore(core, {...one, selected: [catalog[0].name, catalog[0].name]}, config, sha));
@@ -57,7 +81,7 @@ const wrong = JSON.parse(before);
 wrong['argocd-applications'].applications[catalog[0].name + '-dev'].overrideValues.image.repository = 'wrong/repository';
 reject(() => updateCore(wrong, one, config, sha));
 check(apps['acl-service-dev'].overrideValues.extraVolumes[0].secret.defaultMode === 256, 'Preserve secret file permissions');
-console.log('Passed backend/frontend split, 0/1/2/14-service updates, YAML round-trip and rejection checks');
+console.log('Passed backend/frontend development and preproduction mapping, subset updates, YAML round-trip and rejection checks');
 
 // Exercise the deployed entry point with an in-memory filesystem/API. Fixed
 // fanout must never require a service-account token or a ConfigMap API request.

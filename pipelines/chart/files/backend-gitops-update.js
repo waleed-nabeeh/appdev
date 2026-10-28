@@ -11,13 +11,16 @@ function updateCore(document, record, config, expectedCommit) {
   const output = JSON.parse(JSON.stringify(document));
   const apps = output['argocd-applications']?.applications;
   check(apps && typeof apps === 'object' && !Array.isArray(apps), 'Expected argocd-applications.applications in GitOps values');
+  const prefix = config.applicationNamePrefix ?? '';
+  const suffix = config.applicationNameSuffix ?? '-dev';
+  check(typeof prefix === 'string' && typeof suffix === 'string', 'Invalid GitOps application naming');
   for (const name of record.selected) {
     check(config.catalog.some(s => s.name === name), 'Unknown or disabled service: ' + name);
     const image = images[name];
     const repository = config.imageRepository + '/' + name;
     check(image && image.repository === repository && image.tag === expectedCommit.slice(0, 8), 'Unexpected image identity: ' + name);
     check(typeof image.digest === 'string' && image.digest.length === 71 && /^sha256:[a-f0-9]{64}$/.test(image.digest) && image.image === repository + '@' + image.digest, 'Invalid image digest: ' + name);
-    const key = name + '-dev';
+    const key = prefix + name + suffix;
     check(Object.hasOwn(apps, key), 'Missing GitOps application: ' + key);
     const target = apps[key].overrideValues?.image;
     check(target && target.repository === repository && typeof target.tag === 'string', 'GitOps repository mismatch: ' + key);

@@ -28,6 +28,8 @@ backendBuild:
       repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_HelmCharts
       revision: dev
       valuesFile: app-chart/backend.yaml
+      applicationNamePrefix: ""
+      applicationNameSuffix: "-dev"
     triggers:
       enabled: false
       authRequired: true
@@ -53,6 +55,8 @@ frontendRelease:
       repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_HelmCharts
       revision: dev
       valuesFile: app-chart/frontend.yaml
+      applicationNamePrefix: ""
+      applicationNameSuffix: "-dev"
     triggers:
       enabled: false
       authRequired: true
@@ -68,6 +72,8 @@ frontendRelease:
     repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_argocd
     revision: dev
     releaseFile: tekton-frontend-test/releases/frontend.json
+    applicationNamePrefix: ""
+    applicationNameSuffix: "-dev"
 
 frontendPr:
   enabled: false

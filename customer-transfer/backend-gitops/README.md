@@ -20,14 +20,23 @@ an OCI chart. No local reference repository is modified by this configuration.
 
 | From this folder | Customer GitOps destination | Contents |
 | --- | --- | --- |
-| `backend.yaml` | `app-chart/backend.yaml` | 15 existing backend definitions |
-| `frontend.yaml` | `app-chart/frontend.yaml` | Three frontend portals |
+| `backend-preproduction.yaml` | `app-chart/backend.yaml` | 15 backend definitions with `pre-` application names |
+| `frontend-preproduction.yaml` | `app-chart/frontend.yaml` | Three frontend portals with `pre-` application names |
 
 Create/paste these two files in Azure Repos on branch **dev**, not in
 the backend source repo. These are Helm values files, not manifests for `oc apply`.
 They replace the requested combined core.yaml with the agreed split. Integration
 services are excluded. Payment and AuthServer are not in the reference core-apps
 file, so no deployment definitions were invented for them.
+
+The current [single application-build values file](../application-build/values.yaml)
+uses `applicationNamePrefix: "pre-"` and `applicationNameSuffix: ""` for both
+dispatchers. For example, service input `acl-service` maps to application key
+`pre-acl-service`; `operational-portal` maps to `pre-operational-portal`.
+Only selected entries are updated, and missing entries fail without falling back
+to development names. Do not overwrite already updated customer tags with starter
+files on every run. The older `backend.yaml`/`frontend.yaml` fixtures and standalone
+overlays below retain the legacy `<service>-dev` naming through chart defaults.
 
 The normal `argocd-applications.applications` YAML structure is retained.
 Repositories use `quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/<service>`.
@@ -121,8 +130,10 @@ After every selected lane succeeds through scan, gate and sign, `update-gitops`:
 1. Clones the current RedHat_HelmCharts/dev branch.
 2. Takes the selected service list and image digests from the fanout's Task results
    and validates service names, full source SHA, eight-character tag and hub repository.
-3. Parses backend.yaml and updates only
-   `argocd-applications.applications.<service>-dev.overrideValues.image.tag`.
+3. Parses backend.yaml and updates only the selected application's
+   `overrideValues.image.tag` under `argocd-applications.applications`.
+   The current single application-build values use `pre-<service>` keys;
+   the older standalone overlays use the chart default `<service>-dev` keys.
 4. Commits only backend.yaml and pushes without force.
 
 If a lane fails, the final GitOps update does not run. Missing app entries, mismatched repositories,
@@ -302,6 +313,7 @@ References: [Argo CD Helm values](https://argo-cd.readthedocs.io/en/stable/user-
 
 `backend-preproduction.yaml` and `frontend-preproduction.yaml` are included as
 customer-supplied transfer files (15 backend applications and three frontends).
-They are preserved as supplied. Their inclusion does not retarget the current
-build updater, which still writes `app-chart/backend.yaml` and
-`app-chart/frontend.yaml` in RedHat_HelmCharts/dev.
+They are preserved as supplied. Copy their contents into `app-chart/backend.yaml`
+and `app-chart/frontend.yaml` in RedHat_HelmCharts/dev if those files are not yet
+prepared. The current single application-build values configure the updater to
+match their `pre-` application keys while keeping these same destination paths.

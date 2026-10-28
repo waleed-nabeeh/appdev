@@ -43,7 +43,7 @@ data:
 {{ $root.Files.Get "files/backend-dispatch.js" | indent 4 }}
 {{- end }}
   config.json: |
-    {{ dict "scope" $scope "sourceUrl" $settings.sourceUrl "env" $settings.env "fanoutPipeline" (printf "application-%s-build-fanout" $scope) "childPipeline" (printf "application-%s-service-build" $scope) "npmAuth" $frontend "catalog" $enabled "imageRepository" $settings.imageRepository "buildServiceAccount" $root.Values.serviceAccount.name "workspaceSize" $settings.workspaceSize "maxParallel" (int $settings.dispatch.maxParallel) "timeoutSeconds" (int $settings.dispatch.timeoutSeconds) "childTimeout" $settings.dispatch.childTimeout | toJson }}
+    {{ dict "scope" $scope "sourceUrl" $settings.sourceUrl "env" $settings.env "fanoutPipeline" (printf "application-%s-build-fanout" $scope) "childPipeline" (printf "application-%s-service-build" $scope) "npmAuth" $frontend "catalog" $enabled "imageRepository" $settings.imageRepository "applicationNamePrefix" $settings.dispatch.gitops.applicationNamePrefix "applicationNameSuffix" $settings.dispatch.gitops.applicationNameSuffix "buildServiceAccount" $root.Values.serviceAccount.name "workspaceSize" $settings.workspaceSize "maxParallel" (int $settings.dispatch.maxParallel) "timeoutSeconds" (int $settings.dispatch.timeoutSeconds) "childTimeout" $settings.dispatch.childTimeout | toJson }}
 ---
 apiVersion: v1
 kind: ServiceAccount

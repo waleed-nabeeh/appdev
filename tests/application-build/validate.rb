@@ -48,6 +48,12 @@ check(runs.size == 2, 'Expected two dispatcher TaskRun examples')
   check(config['scope'] == scope && config['catalog'].size == (front ? 3 : 14), 'Incorrect allowed catalog')
   check(config['fanoutPipeline'] == "application-#{scope}-build-fanout" && config['npmAuth'] == front, 'Incorrect build scope/workspaces')
   check(config['workspaceSize'] == '3Gi', 'Incorrect storage settings')
+  check(config['applicationNamePrefix'] == 'pre-' && config['applicationNameSuffix'] == '', 'GitOps must target pre- application names')
+  gitops_apps = YAML.load_file("customer-transfer/backend-gitops/#{scope}-preproduction.yaml").fetch('argocd-applications').fetch('applications')
+  config['catalog'].each do |service|
+    image = gitops_apps.fetch('pre-' + service['name']).fetch('overrideValues').fetch('image')
+    check(image['repository'] == config['imageRepository'] + '/' + service['name'], 'Preproduction image repository mismatch')
+  end
   check(documents.none? { |d| d['kind'] == 'Pipeline' && d.dig('metadata', 'name') == "application-#{scope}-dispatch" }, 'No parent dispatcher PipelineRun')
   check(documents.none? { |d| d['kind'] == 'Pipeline' && d.dig('metadata', 'name') == "application-#{scope}-service-build" }, 'No per-service child PipelineRuns')
   fanout = get.call('Pipeline', config['fanoutPipeline'])['spec']

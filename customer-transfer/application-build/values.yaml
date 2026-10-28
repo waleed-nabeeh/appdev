@@ -62,6 +62,8 @@ backendBuild:
       repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_HelmCharts
       revision: dev
       valuesFile: app-chart/backend.yaml
+      applicationNamePrefix: "pre-"
+      applicationNameSuffix: ""
 frontendRelease:
   enabled: true
   env: dev
@@ -76,6 +78,8 @@ frontendRelease:
     revision: dev
     releaseFile: app-chart/frontend.yaml
     format: yaml
+    applicationNamePrefix: "pre-"
+    applicationNameSuffix: ""
   selectedServices:
   - admin-portal
   - applicant-portal
@@ -88,6 +92,8 @@ frontendRelease:
       repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_HelmCharts
       revision: dev
       valuesFile: app-chart/frontend.yaml
+      applicationNamePrefix: "pre-"
+      applicationNameSuffix: ""
     triggers:
       enabled: true
       authRequired: false

@@ -30,6 +30,16 @@ The console interaction still needs live validation on the customer cluster.
 | Backend | `application-backend-build` | 14 services, source branch `test`, env `dev` | `application-backend-build-fanout` | `app-chart/backend.yaml` |
 | Frontend | `application-frontend-build` | 3 portals, source branch `pre-prod`, env `dev` | `application-frontend-build-fanout` | `app-chart/frontend.yaml` |
 
+Both GitOps files are updated in **RedHat_HelmCharts**, branch **dev**. Their
+application keys use the preproduction prefix: `acl-service` updates
+`pre-acl-service.overrideValues.image.tag`, and `operational-portal` updates
+`pre-operational-portal.overrideValues.image.tag`, under
+`argocd-applications.applications`. The single values file sets
+`dispatch.gitops.applicationNamePrefix: "pre-"` and `applicationNameSuffix: ""`
+for both scopes. Keep service inputs and Quay image names without that prefix.
+Only selected services' tags change; a missing `pre-` entry fails the update.
+Existing applications must already be present in the two destination files.
+
 ## Apply Helm and test from the CLI
 
 From the customer appdev checkout:

@@ -94,6 +94,8 @@ spec:
 {{- if eq (default "json" .Values.frontendRelease.gitops.format) "yaml" }}
       - {name: GITOPS_FORMAT, value: yaml}
       - {name: VALUES_FILE, value: {{ .Values.frontendRelease.gitops.releaseFile | quote }}}
+      - {name: APPLICATION_NAME_PREFIX, value: {{ .Values.frontendRelease.gitops.applicationNamePrefix | quote }}}
+      - {name: APPLICATION_NAME_SUFFIX, value: {{ .Values.frontendRelease.gitops.applicationNameSuffix | quote }}}
 {{- end }}
       - name: EXPECTED_BASE
         value: $(params.gitops-base)
