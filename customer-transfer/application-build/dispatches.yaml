@@ -16,6 +16,10 @@ spec:
   params:
   - name: services
     value: "acl-service,administration-service,audit-logging-service,core-service,identity-service,language-service,document-service,event-service,notification-service,request-service,stakeholder-service,applicant-service,visitvisa-service,realtime-service"
+  - name: source-url
+    value: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Backend
+  - name: env
+    value: dev
   - name: selection-mode
     value: manual
   - name: source-revision
@@ -43,6 +47,10 @@ spec:
   params:
   - name: services
     value: "admin-portal,applicant-portal,operational-portal"
+  - name: source-url
+    value: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Frontend
+  - name: env
+    value: dev
   - name: selection-mode
     value: manual
   - name: source-revision

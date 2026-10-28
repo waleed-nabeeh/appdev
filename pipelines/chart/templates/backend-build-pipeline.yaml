@@ -8,10 +8,12 @@
 {{- $gitops := and $settings.dispatch.enabled $settings.dispatch.gitops.enabled }}
 {{- $known := list }}
 {{- $services := list }}
+{{- $manualNames := list }}
 {{- range $service := $catalog }}
 {{- $known = append $known $service.name }}
 {{- if or (empty $selected) (has $service.name $selected) }}
 {{- $services = append $services $service }}
+{{- $manualNames = append $manualNames $service.name }}
 {{- end }}
 {{- end }}
 {{- if ne (len $selected) (len (uniq $selected)) }}
@@ -37,6 +39,11 @@ spec:
     - name: services
       type: string
       default: ""
+{{- if $root.Values.applicationBuild.singleRun }}
+    - {name: url, type: string, default: {{ $settings.sourceUrl | quote }}}
+    - {name: env, type: string, default: {{ $settings.env | quote }}}
+    - {name: expected-services, type: string, default: ""}
+{{- end }}
   workspaces:
     - name: git-credentials
   results:
@@ -54,7 +61,15 @@ spec:
         - name: HOME
           value: /work/home
         - name: SOURCE_URL
+{{- if $root.Values.applicationBuild.singleRun }}
+          value: $(params.url)
+        - name: BUILD_ENV
+          value: $(params.env)
+        - name: EXPECTED_SERVICES
+          value: $(params.expected-services)
+{{- else }}
           value: {{ $settings.sourceUrl | quote }}
+{{- end }}
         - name: REVISION
           value: $(params.revision)
         - name: COMMIT
@@ -64,6 +79,13 @@ spec:
       script: |
         #!/bin/sh
         set -eu
+{{- if $root.Values.applicationBuild.singleRun }}
+        printf '%s' "$SOURCE_URL" | grep -Eq '^https://[A-Za-z0-9.-]+(:[0-9]+)?/[A-Za-z0-9._~%/-]+$' || { echo 'Invalid HTTPS source-url' >&2; exit 1; }
+        printf '%s' "$BUILD_ENV" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$' || { echo 'Invalid env' >&2; exit 1; }
+        if [ -n "$EXPECTED_SERVICES" ] && [ "$SERVICES" != "$EXPECTED_SERVICES" ]; then
+          echo 'Services differ from the prepared graph. Launch the dispatcher with the new selection.' >&2; exit 1
+        fi
+{{- end }}
         mkdir -p "$HOME"
         cp -R "$(workspaces.git-credentials.path)"/. "$HOME"/
         chmod -R go-rwx "$HOME"
@@ -90,6 +112,11 @@ metadata:
     app.kubernetes.io/component: {{ $scope }}
 spec:
   params:
+{{- if $root.Values.applicationBuild.singleRun }}
+    - {name: services, type: string, default: {{ join "," $manualNames | quote }}}
+    - {name: source-url, type: string, default: {{ $settings.sourceUrl | quote }}}
+    - {name: env, type: string, default: {{ $settings.env | quote }}}
+{{- end }}
     - name: source-revision
       type: string
       default: {{ $settings.sourceRevision | quote }}
@@ -125,6 +152,12 @@ spec:
           value: $(params.source-revision)
         - name: commit
           value: $(params.source-commit)
+{{- if $root.Values.applicationBuild.singleRun }}
+        - {name: services, value: $(params.services)}
+        - {name: expected-services, value: {{ join "," $manualNames | quote }}}
+        - {name: url, value: $(params.source-url)}
+        - {name: env, value: $(params.env)}
+{{- end }}
       workspaces:
         - name: git-credentials
           workspace: git-credentials
@@ -135,7 +168,11 @@ spec:
         name: clone
       params:
         - name: url
+{{- if $root.Values.applicationBuild.singleRun }}
+          value: $(params.source-url)
+{{- else }}
           value: {{ $settings.sourceUrl | quote }}
+{{- end }}
         - name: revision
           value: $(params.source-revision)
         - name: commit
@@ -174,7 +211,11 @@ spec:
         - name: containerfile
           value: {{ $service.containerfile | quote }}
         - name: build-args
+{{- if $root.Values.applicationBuild.singleRun }}
+          value: [{{ printf "%s=$(params.env)" (ternary "BUILD_ENVIRONMENT" "CERT_KEYWORD" $frontend) | quote }}]
+{{- else }}
           value: {{ $settings.buildArgs | toJson }}
+{{- end }}
       workspaces:
         - name: source
           workspace: source-{{ $service.name }}
@@ -264,6 +305,11 @@ data:
         pipeline: 4h0m0s
         tasks: 3h50m0s
       params:
+{{- if $root.Values.applicationBuild.singleRun }}
+        - {name: services, value: {{ join "," $manualNames | quote }}}
+        - {name: source-url, value: {{ $settings.sourceUrl | quote }}}
+        - {name: env, value: {{ $settings.env | quote }}}
+{{- end }}
         - name: source-revision
           value: {{ $settings.sourceRevision | quote }}
         - name: source-commit

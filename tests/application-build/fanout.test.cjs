@@ -25,9 +25,14 @@ function verify(docs, scope, count) {
   check(run.spec.pipelineSpec && !run.spec.pipelineRef, 'One embedded graph must be fixed before run creation');
   check(!run.metadata.ownerReferences, 'Pruning the launcher must not delete an active build');
   const spec = run.spec.pipelineSpec;
+  const values = Object.fromEntries(run.spec.params.map(p => [p.name, p.value]));
+  const defaults = Object.fromEntries(spec.params.map(p => [p.name, p.default]));
+  check(values.services === selected.join(',') && values['source-url'] === config.sourceUrl && values.env === 'dev', 'Generated PipelineRun inputs');
+  check(JSON.stringify(defaults) === JSON.stringify(values), 'Prepared PipelineRun must contain matching editable defaults');
   const tasks = spec.tasks;
   check(tasks.length === 2 + count * 6, 'Only selected lanes plus selection and GitOps');
   check(tasks[0].name === 'dispatch-service-selection' && tasks.at(-1).name === 'update-gitops', 'Selection to GitOps graph');
+  check(tasks[0].params.find(p => p.name === 'expected-services').value === selected.join(','), 'Must reject selection edits after graph preparation');
   check(tasks.every(t => !t.when), 'No skipped/unselected lanes');
   const definitions = new Map(docs.filter(d => d.kind === 'Task').map(d => [d.metadata.name, d.spec]));
   const names = new Set(tasks.map(t => t.name));
@@ -55,6 +60,10 @@ function verify(docs, scope, count) {
     check(!JSON.stringify(spec).includes(service.name), 'Unselected service appears in the graph');
   }
   check(run.spec.workspaces.some(w => w.name === 'npm-auth') === (scope === 'frontend'), 'Frontend-only npm credentials');
+  for (const service of selected) {
+    check(tasks.find(t => t.name === 'clone-' + service).params.find(p => p.name === 'url').value === '$(params.source-url)', 'Editable source-url must reach every clone');
+    check(tasks.find(t => t.name === 'build-' + service).params.find(p => p.name === 'build-args').value.join() === (scope === 'backend' ? 'CERT_KEYWORD=$(params.env)' : 'BUILD_ENVIRONMENT=$(params.env)'), 'env must reach every build argument');
+  }
   return {run, config, template, selected};
 }
 for (const count of [1, 2, 14]) verify(documents, 'backend', count);
@@ -65,6 +74,13 @@ reject(() => makeFanoutRun(template, config, ['not-a-service'], commit, 'test', 
 reject(() => makeFanoutRun(template, config, [selected[0], selected[0]], commit, 'test', dispatcher));
 reject(() => makeFanoutRun(template, config, selected, 'bad', 'test', dispatcher));
 reject(() => makeFanoutRun(template, config, selected, commit, 'test\n', dispatcher));
+for (const sourceUrl of ['http://git.example/backend', 'https://user:password@git.example/backend', 'https://git.example/a"$(id)']) {
+  reject(() => makeFanoutRun(template, config, selected, commit, 'test', dispatcher, {sourceUrl}));
+}
+reject(() => makeFanoutRun(template, config, selected, commit, 'test', dispatcher, {env: 'dev$(id)'}));
+const override = makeFanoutRun(template, config, selected, commit, 'feature/build', dispatcher, {sourceUrl: 'https://git.example/team/backend', env: 'pre-prod'});
+check(override.spec.params.find(p => p.name === 'source-url').value === 'https://git.example/team/backend', 'Editable source-url override');
+check(override.spec.params.find(p => p.name === 'env').value === 'pre-prod' && override.spec.pipelineSpec.params.find(p => p.name === 'env').default === 'pre-prod', 'Editable env override/default');
 const missing = JSON.parse(JSON.stringify(template)); missing.spec.tasks = missing.spec.tasks.filter(t => t.name !== 'gate-' + selected[0]);
 reject(() => makeFanoutRun(missing, config, selected, commit, 'test', dispatcher));
 module.exports = (async () => {
@@ -87,5 +103,10 @@ module.exports = (async () => {
   try { await launchFanout(async (method, path) => path.includes('/pipelines/') ? template : method === 'POST' ? conflictApi(method, path) : different, config, selected, commit, 'test', dispatcher); }
   catch (_) { rejected = true; }
   check(rejected, 'Conflicting retry must not reuse a different run');
+  const envChanged = JSON.parse(JSON.stringify(run)); envChanged.spec.params.find(p => p.name === 'env').value = 'pre-prod';
+  rejected = false;
+  try { await launchFanout(async (method, path) => path.includes('/pipelines/') ? template : method === 'POST' ? conflictApi(method, path) : envChanged, config, selected, commit, 'test', dispatcher); }
+  catch (_) { rejected = true; }
+  check(rejected, 'Retry must reject an existing run with changed env');
   console.log('Passed selected-only 1/2/14/17-backend and 1/2/3-frontend graphs, working Task references, PVCs, GitOps wiring, one-run launch, retry and no-op checks');
 })();

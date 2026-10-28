@@ -113,6 +113,10 @@ spec:
 {{- end }}
         params:
           - {name: services, value: ""}
+{{- if $root.Values.applicationBuild.singleRun }}
+          - {name: source-url, value: {{ $settings.sourceUrl | quote }}}
+          - {name: env, value: {{ $settings.env | quote }}}
+{{- end }}
           - {name: selection-mode, value: diff}
           - {name: source-revision, value: $(tt.params.source-revision)}
           - {name: source-commit, value: $(tt.params.source-commit)}

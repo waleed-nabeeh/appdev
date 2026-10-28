@@ -43,7 +43,7 @@ data:
 {{ $root.Files.Get "files/backend-dispatch.js" | indent 4 }}
 {{- end }}
   config.json: |
-    {{ dict "scope" $scope "fanoutPipeline" (printf "application-%s-build-fanout" $scope) "childPipeline" (printf "application-%s-service-build" $scope) "npmAuth" $frontend "catalog" $enabled "imageRepository" $settings.imageRepository "buildServiceAccount" $root.Values.serviceAccount.name "workspaceSize" $settings.workspaceSize "maxParallel" (int $settings.dispatch.maxParallel) "timeoutSeconds" (int $settings.dispatch.timeoutSeconds) "childTimeout" $settings.dispatch.childTimeout | toJson }}
+    {{ dict "scope" $scope "sourceUrl" $settings.sourceUrl "env" $settings.env "fanoutPipeline" (printf "application-%s-build-fanout" $scope) "childPipeline" (printf "application-%s-service-build" $scope) "npmAuth" $frontend "catalog" $enabled "imageRepository" $settings.imageRepository "buildServiceAccount" $root.Values.serviceAccount.name "workspaceSize" $settings.workspaceSize "maxParallel" (int $settings.dispatch.maxParallel) "timeoutSeconds" (int $settings.dispatch.timeoutSeconds) "childTimeout" $settings.dispatch.childTimeout | toJson }}
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -95,6 +95,10 @@ metadata:
 spec:
   params:
     - {name: services, type: string, default: {{ ternary (join "," $manualNames) "all" $root.Values.applicationBuild.singleRun | quote }}, description: "Comma-separated allowed service names or all"}
+{{- if $root.Values.applicationBuild.singleRun }}
+    - {name: source-url, type: string, default: {{ $settings.sourceUrl | quote }}}
+    - {name: env, type: string, default: {{ $settings.env | quote }}}
+{{- end }}
     - {name: selection-mode, type: string, default: manual}
     - {name: source-revision, type: string, default: {{ $settings.sourceRevision | quote }}}
     - {name: source-commit, type: string, default: ""}
@@ -128,8 +132,19 @@ spec:
         - {name: REVISION, value: $(params.source-revision)}
         - {name: COMMIT, value: $(params.source-commit)}
         - {name: TARGET_COMMIT, value: $(params.target-commit)}
+{{- if $root.Values.applicationBuild.singleRun }}
+        - {name: SOURCE_URL, value: $(params.source-url)}
+        - {name: BUILD_ENV, value: $(params.env)}
+{{- else }}
         - {name: SOURCE_URL, value: {{ $settings.sourceUrl | quote }}}
+{{- end }}
       script: |
+{{- if $root.Values.applicationBuild.singleRun }}
+        #!/bin/sh
+        set -eu
+        printf '%s' "$SOURCE_URL" | grep -Eq '^https://[A-Za-z0-9.-]+(:[0-9]+)?/[A-Za-z0-9._~%/-]+$' || { echo 'Invalid HTTPS source-url' >&2; exit 1; }
+        printf '%s' "$BUILD_ENV" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$' || { echo 'Invalid env' >&2; exit 1; }
+{{- end }}
 {{ $root.Files.Get "files/backend-select-source.sh" | indent 8 }}
     - name: {{ ternary "create-fanout" "select" $root.Values.applicationBuild.singleRun }}
       image: {{ $root.Values.images.nodejs24 | quote }}
@@ -138,6 +153,8 @@ spec:
         - {name: SERVICES, value: $(params.services)}
 {{- if $root.Values.applicationBuild.singleRun }}
         - {name: REVISION, value: $(params.source-revision)}
+        - {name: SOURCE_URL, value: $(params.source-url)}
+        - {name: BUILD_ENV, value: $(params.env)}
         - {name: DISPATCHER_NAME, value: $(context.taskRun.name)}
         - {name: DISPATCHER_UID, value: $(context.taskRun.uid)}
         - {name: NAMESPACE, value: {{ $root.Release.Namespace | quote }}}

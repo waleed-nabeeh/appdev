@@ -51,6 +51,10 @@ check(runs.size == 2, 'Expected two dispatcher TaskRun examples')
   check(documents.none? { |d| d['kind'] == 'Pipeline' && d.dig('metadata', 'name') == "application-#{scope}-dispatch" }, 'No parent dispatcher PipelineRun')
   check(documents.none? { |d| d['kind'] == 'Pipeline' && d.dig('metadata', 'name') == "application-#{scope}-service-build" }, 'No per-service child PipelineRuns')
   fanout = get.call('Pipeline', config['fanoutPipeline'])['spec']
+  defaults = fanout['params'].to_h { |p| [p['name'], p['default']] }
+  check(defaults['source-url'] == config['sourceUrl'] && defaults['env'] == 'dev', 'Missing Pipeline source-url/env defaults')
+  check(defaults['services'] == config['catalog'].map { |s| s['name'] }.join(','), 'Missing Pipeline services default')
+  check(!defaults.key?('build-args'), 'Expose env instead of a build argument parameter')
   check(fanout['tasks'].last['name'] == 'update-gitops' && !fanout['tasks'].last.key?('when'), 'GitOps must be in the main fanout')
   config['catalog'].each do |service|
     name = service['name']
@@ -61,7 +65,9 @@ check(runs.size == 2, 'Expected two dispatcher TaskRun examples')
     check((unit['onError'] == 'continue') == front, 'Frontend-only test concession')
     build = fanout['tasks'].find { |t| t['name'] == 'build-' + name }
     args = build['params'].find { |p| p['name'] == 'build-args' }['value']
-    check(args == [front ? 'BUILD_ENVIRONMENT=dev' : 'CERT_KEYWORD=dev'], 'Keep dev build arguments')
+    check(args == [front ? 'BUILD_ENVIRONMENT=$(params.env)' : 'CERT_KEYWORD=$(params.env)'], 'env must control build arguments')
+    clone = fanout['tasks'].find { |t| t['name'] == 'clone-' + name }
+    check(clone['params'].find { |p| p['name'] == 'url' }['value'] == '$(params.source-url)', 'Clone must consume source-url')
   end
   check(fanout['tasks'].none? { |t| t['name'].start_with?('verify-') }, 'Verify belongs to promotion')
   updater = tasks.fetch(scope + '-gitops-update')
@@ -72,9 +78,13 @@ check(runs.size == 2, 'Expected two dispatcher TaskRun examples')
   check(launcher['steps'].last['script'].include?('function makeFanoutRun'), 'Missing selected-only builder')
   manual_names = config['catalog'].map { |s| s['name'] }
   check(launcher['params'].find { |p| p['name'] == 'services' }['default'] == manual_names.join(','), 'Manual chart default must list every enabled service')
+  check(launcher['params'].find { |p| p['name'] == 'source-url' }['default'] == defaults['source-url'], 'Launcher source-url default drift')
+  check(launcher['params'].find { |p| p['name'] == 'env' }['default'] == defaults['env'], 'Launcher env default drift')
   run = runs.find { |r| r.dig('spec', 'taskRef', 'name') == scope + '-build-dispatch' }
   check(run && run['kind'] == 'TaskRun' && run['spec']['serviceAccountName'] == scope + '-dispatcher', 'Incorrect launcher example')
   check(run['spec']['params'].find { |p| p['name'] == 'services' }['value'].split(',') == manual_names, 'Manual example must list every enabled service')
+  check(run['spec']['params'].find { |p| p['name'] == 'source-url' }['value'] == defaults['source-url'], 'Manual source-url drift')
+  check(run['spec']['params'].find { |p| p['name'] == 'env' }['value'] == 'dev', 'Manual env must default dev')
   check(run['spec']['workspaces'].none? { |w| w['volumeClaimTemplate'] }, 'Launcher must allocate no PVC')
   run['spec']['params'].each { |p| check(launcher['params'].any? { |v| v['name'] == p['name'] }, 'Unknown sample run parameter') }
   listener = get.call('EventListener', scope + '-pr')
@@ -83,6 +93,8 @@ check(runs.size == 2, 'Expected two dispatcher TaskRun examples')
   triggered = template['spec']['resourcetemplates'][0]['spec']
   check(template['spec']['resourcetemplates'][0]['kind'] == 'TaskRun' && triggered['taskRef']['name'] == scope + '-build-dispatch', 'PR must use same launcher as manual')
   check(triggered['params'].find { |p| p['name'] == 'selection-mode' }['value'] == 'diff', 'PR must select from diff')
+  check(triggered['params'].find { |p| p['name'] == 'source-url' }['value'] == defaults['source-url'], 'PR source-url default drift')
+  check(triggered['params'].find { |p| p['name'] == 'env' }['value'] == 'dev', 'PR env default drift')
   route = get.call('Route', scope + '-pr-webhook')['spec']
   check(route['to']['name'] == 'el-' + scope + '-pr' && route['tls']['termination'] == 'edge', 'Route must reach correct listener')
   role = get.call('Role', scope + '-dispatcher')['rules']
@@ -98,6 +110,28 @@ Dir.mktmpdir do |tmp|
       _, err, result = Open3.capture3('bash', '-n', file)
       check(result.success?, err)
     end
+  end
+  # A pinned commit exercises the real resolver without contacting a Git server.
+  credentials = File.join(tmp, 'credentials')
+  Dir.mkdir(credentials)
+  resolver = tasks.fetch('backend-build-resolve')['steps'][0]['script']
+  commit_file = File.join(tmp, 'commit')
+  tag_file = File.join(tmp, 'tag')
+  resolver = resolver.gsub('$(workspaces.git-credentials.path)', credentials)
+                     .gsub('$(results.commit.path)', commit_file)
+                     .gsub('$(results.tag.path)', tag_file)
+  script = File.join(tmp, 'resolver.sh')
+  File.write(script, resolver)
+  source_sha = '12345678' + 'a' * 32
+  environment = {'HOME' => File.join(tmp, 'git-home'), 'SOURCE_URL' => 'https://git.example/team/backend',
+                 'BUILD_ENV' => 'dev', 'REVISION' => 'test', 'COMMIT' => source_sha,
+                 'SERVICES' => 'acl-service,core-service', 'EXPECTED_SERVICES' => 'acl-service,core-service'}
+  _, err, result = Open3.capture3(environment, 'sh', script)
+  check(result.success? && File.read(commit_file) == source_sha && File.read(tag_file) == '12345678', err)
+  [{'BUILD_ENV' => 'dev$(id)'}, {'SOURCE_URL' => 'https://user:password@git.example/backend'},
+   {'SERVICES' => 'acl-service'}].each do |invalid|
+    _, _, result = Open3.capture3(environment.merge(invalid), 'sh', script)
+    check(!result.success?, 'Unsafe input or changed graph selection must fail before building')
   end
 end
 [['frontendRelease.selectedServices', '["wrong-portal"]'], ['frontendRelease.selectedServices', '["admin-portal","admin-portal"]'], ['frontendRelease.dispatch.maxParallel', '0']].each do |key, value|

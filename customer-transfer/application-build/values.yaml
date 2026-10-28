@@ -1,6 +1,6 @@
 # Single customer configuration: one selected-lane build PipelineRun per scope.
 # Manual selection belongs in dispatcher TaskRun services; selectedServices is the allowed catalog.
-# Build arguments stay dev until the preprod Dockerfiles are prepared.
+# env defaults to dev; it drives CERT_KEYWORD (backend) / BUILD_ENVIRONMENT (frontend).
 ---
 images:
   git: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/alpine-git:2026-10-07
@@ -30,6 +30,7 @@ frontendPr:
   enabled: false
 backendBuild:
   enabled: true
+  env: dev
   sourceUrl: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Backend
   sourceRevision: test
   imageRepository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops
@@ -50,8 +51,6 @@ backendBuild:
   - realtime-service
   workspaceSize: 3Gi
   allowTestFailure: false
-  buildArgs:
-  - CERT_KEYWORD=dev
   dispatch:
     enabled: true
     triggers:
@@ -65,6 +64,7 @@ backendBuild:
       valuesFile: app-chart/backend.yaml
 frontendRelease:
   enabled: true
+  env: dev
   sourceUrl: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Frontend
   sourceRevision: pre-prod
   imageRepository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops
@@ -81,8 +81,6 @@ frontendRelease:
   - applicant-portal
   - operational-portal
   workspaceSize: 3Gi
-  buildArgs:
-  - BUILD_ENVIRONMENT=dev
   dispatch:
     enabled: true
     gitops:

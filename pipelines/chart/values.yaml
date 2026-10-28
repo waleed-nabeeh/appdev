@@ -6,6 +6,7 @@ applicationBuild:
 
 backendBuild:
   enabled: false
+  env: dev
   sourceUrl: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Backend
   sourceRevision: test
   imageRepository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops
@@ -35,6 +36,7 @@ backendBuild:
 
 frontendRelease:
   enabled: false
+  env: dev
   selectedServices: []
   workspaceSize: 3Gi
   buildArgs:

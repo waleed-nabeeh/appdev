@@ -1,9 +1,13 @@
 'use strict';
 
 function check(ok, message) { if (!ok) throw new Error(message); }
-function makeFanoutRun(template, config, selected, commit, revision, dispatcher) {
+function makeFanoutRun(template, config, selected, commit, revision, dispatcher, inputs = {}) {
   check(['backend', 'frontend'].includes(config.scope), 'Invalid build scope');
   check(template.metadata?.name === config.fanoutPipeline, 'Unexpected fanout template');
+  const sourceUrl = inputs.sourceUrl ?? config.sourceUrl;
+  const environment = inputs.env ?? config.env ?? 'dev';
+  check(typeof sourceUrl === 'string' && /^https:\/\/[A-Za-z0-9.-]+(?::[0-9]+)?\/[A-Za-z0-9._~%/-]+$/.test(sourceUrl), 'Invalid HTTPS source-url');
+  check(typeof environment === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$/.test(environment), 'Invalid env');
   check(typeof commit === 'string' && /^[a-f0-9]{40}$/.test(commit), 'Expected full source SHA');
   check(typeof revision === 'string' && /^[A-Za-z0-9_./-]+$/.test(revision) && !revision.startsWith('-'), 'Invalid source branch');
   check(Array.isArray(selected) && selected.length > 0 && new Set(selected).size === selected.length, 'Select at least one unique service');
@@ -42,9 +46,13 @@ function makeFanoutRun(template, config, selected, commit, revision, dispatcher)
     const references = JSON.stringify(result).matchAll(/\$\(tasks\.([^.]+)\.results\.[^)]+\)/g);
     return [...references].every(match => names.has(match[1]));
   });
-  // This records the launch input; the graph was already reduced before creation.
-  spec.params = [...spec.params.filter(p => p.name !== 'services'), {name: 'services', type: 'string', default: selected.join(',')}];
-  spec.tasks.find(t => t.name === 'resolve-source').params.push({name: 'services', value: selected.join(',')});
+  const values = {services: selected.join(','), 'source-url': sourceUrl, 'source-revision': revision, env: environment, 'source-commit': commit};
+  spec.params = Object.entries(values).map(([name, value]) => ({name, type: 'string', default: value}));
+  // The chosen lanes are immutable; reject a services edit that no longer matches them.
+  const sourceTask = spec.tasks.find(t => t.name === 'resolve-source');
+  sourceTask.params = sourceTask.params.filter(p => !['services', 'expected-services', 'url', 'env'].includes(p.name));
+  sourceTask.params.push({name: 'services', value: '$(params.services)'}, {name: 'expected-services', value: selected.join(',')},
+    {name: 'url', value: '$(params.source-url)'}, {name: 'env', value: '$(params.env)'});
   spec = JSON.parse(JSON.stringify(spec).replaceAll('resolve-source', 'dispatch-service-selection'));
   const bindings = [
     {name: 'git-credentials', secret: {secretName: 'git-credentials'}},
@@ -65,15 +73,15 @@ function makeFanoutRun(template, config, selected, commit, revision, dispatcher)
     // No ownership by the short-lived launch TaskRun: pruning it must not delete a running build.
   }, spec: {pipelineSpec: spec, taskRunTemplate: {serviceAccountName: config.buildServiceAccount},
     timeouts: {pipeline: '4h0m0s', tasks: '3h50m0s'},
-    params: [{name: 'source-revision', value: revision}, {name: 'source-commit', value: commit}, {name: 'services', value: selected.join(',')}],
+    params: Object.entries(values).map(([name, value]) => ({name, value})),
     workspaces: bindings}};
 }
 
-async function launchFanout(api, config, selected, commit, revision, dispatcher) {
+async function launchFanout(api, config, selected, commit, revision, dispatcher, inputs = {}) {
   if (selected.length === 0) return null;
   const prefix = '/apis/tekton.dev/v1/namespaces/' + dispatcher.metadata.namespace;
   const template = await api('GET', prefix + '/pipelines/' + config.fanoutPipeline);
-  const run = makeFanoutRun(template, config, selected, commit, revision, dispatcher);
+  const run = makeFanoutRun(template, config, selected, commit, revision, dispatcher, inputs);
   try { return await api('POST', prefix + '/pipelineruns', run); }
   catch (error) {
     if (error.status !== 409) throw error;
@@ -82,7 +90,7 @@ async function launchFanout(api, config, selected, commit, revision, dispatcher)
       existing.metadata.annotations?.['customer.mofa.gov.sa/source-commit'] === commit &&
       existing.metadata.annotations?.['customer.mofa.gov.sa/services'] === JSON.stringify(selected), 'Existing fanout run differs; refusing to reuse it');
     const actual = Object.fromEntries((existing.spec.params || []).map(p => [p.name, p.value]));
-    check(actual['source-commit'] === commit && actual['source-revision'] === revision && actual.services === selected.join(','), 'Existing fanout inputs differ');
+    check(run.spec.params.every(p => actual[p.name] === p.value), 'Existing fanout inputs differ');
     return existing;
   }
 }
@@ -98,7 +106,8 @@ if (require.main === module) {
       selectDiff(fs.readFileSync('/work/changed', 'utf8').split('\0'), config.catalog, fs.existsSync('/work/all-services'));
     const api = kubeClient(fs, require('node:https'));
     const dispatcher = {metadata: {name: process.env.DISPATCHER_NAME, uid: process.env.DISPATCHER_UID, namespace: process.env.NAMESPACE}};
-    const run = await launchFanout(api, config, selected, commit, process.env.REVISION, dispatcher);
+    const run = await launchFanout(api, config, selected, commit, process.env.REVISION, dispatcher,
+      {sourceUrl: process.env.SOURCE_URL, env: process.env.BUILD_ENV});
     fs.writeFileSync('/tekton/results/services', JSON.stringify(selected));
     fs.writeFileSync('/tekton/results/commit', commit);
     fs.writeFileSync('/tekton/results/pipeline-run', run ? run.metadata.name : 'none');

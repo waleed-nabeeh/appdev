@@ -4,7 +4,8 @@ Use the existing Helm chart `pipelines/chart`, release `release-pipeline`, names
 `devops`, with this folder's **single values.yaml**. No extra values files or
 `--set` arguments are needed.
 
-The dispatcher is a short TaskRun that accepts a comma-separated service list.
+The dispatcher is a short TaskRun that accepts services, source-url, source-revision
+and env (default dev), and passes them to the actual build PipelineRun.
 It reads the Helm-installed fanout Pipeline, keeps only the selected lanes, then
 creates **one build PipelineRun for that scope**. That run shows:
 
@@ -53,6 +54,32 @@ identify the created run, named `backend-build-fanout-...` or
 A successful dispatcher TaskRun means the build was created; check the build
 PipelineRun's own Succeeded condition for the build/GitOps outcome.
 
+Both Helm Pipeline templates and generated PipelineRuns declare defaults for
+`services`, `source-url`, `source-revision`, `env`, and optional `source-commit`.
+The generated run shows those inputs in its Parameters tab. The dispatcher
+prepares the selected graph first; changing services afterwards fails early
+instead of silently building a different set. Change services on a new dispatcher
+TaskRun to regenerate the graph. Source URL/revision and env are normal build
+inputs, wired to source resolution, clones and build arguments.
+
+For example, the backend build run carries:
+
+```yaml
+params:
+  - name: services
+    value: "acl-service,core-service"
+  - name: source-url
+    value: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Backend
+  - name: source-revision
+    value: test
+  - name: env
+    value: dev
+```
+
+The frontend uses its own source URL, `source-revision: pre-prod`,
+`env: dev`, and portal names such as `admin-portal,applicant-portal`.
+
+
 ## Choose services for each run
 
 Edit `dispatches.yaml` before `oc create`. For a two-service backend example:
@@ -71,7 +98,9 @@ parameter on an already-generated build run does not regenerate its graph.
 | Input | Manual use |
 | --- | --- |
 | `services` | `all` or comma-separated allowed names; spaces trimmed, duplicates deduplicated, unknown/empty names rejected. |
+| `source-url` | Editable HTTPS repository URL; defaults to the matching customer backend/frontend repository. Used for source resolution and all clones. |
 | `source-revision` | Prepared source branch: backend `test`, frontend `pre-prod`. |
+| `env` | Defaults to `dev`; backend builds receive `CERT_KEYWORD=$(params.env)`, frontend builds receive `BUILD_ENVIRONMENT=$(params.env)`. |
 | `source-commit` | Empty resolves branch HEAD once; optionally supply a full 40-character SHA to rebuild the same source. |
 | `selection-mode` | `manual` for the supplied list; `diff` for PR integration. |
 | `target-commit` | Omit for manual; full target SHA required for `diff`. |
@@ -91,10 +120,15 @@ enables all 17 catalog entries. Names must match the catalog exactly.
 
 ## Build, GitOps and storage
 
-Each lane reuses the working build Tasks, with `CERT_KEYWORD=dev` for backend and
-`BUILD_ENVIRONMENT=dev` for frontend. Tags are the bare first eight source commit
+Each lane reuses the working build Tasks. Pipeline/PipelineRun inputs expose `env`,
+not a build-args array. Its default `dev` becomes `CERT_KEYWORD=dev` for backend
+and `BUILD_ENVIRONMENT=dev` for frontend; changing env changes that build argument. Tags are the bare first eight source commit
 characters. Frontend unit-test failure remains temporarily allowed; build, scan,
 gate and sign failures block GitOps. Signature verification belongs to promotion.
+
+The env parameter changes build arguments; GitOps repository, branch and file
+still come from Helm values. Tagging stays at eight source-commit characters, so
+builds of the same commit with different env values share the same image tag.
 
 The final GitOps Task receives only selected build results and updates only their
 image tags in `RedHat_HelmCharts`, branch `dev`, in the scope's file above.
