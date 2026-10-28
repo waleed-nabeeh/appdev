@@ -71,9 +71,16 @@ check(runs.size == 2, 'Expected two dispatcher TaskRun examples')
   end
   check(fanout['tasks'].none? { |t| t['name'].start_with?('verify-') }, 'Verify belongs to promotion')
   direct_run = YAML.load_file("customer-transfer/application-build/#{scope}-pipelinerun.yaml")
-  generated_run = YAML.safe_load(get.call('ConfigMap', scope + '-build-run-template')['data']['pipelinerun.yaml'])
-  check(direct_run['kind'] == 'PipelineRun' && direct_run.dig('spec', 'pipelineRef', 'name') == config['fanoutPipeline'], 'Manual file must directly create the scope PipelineRun')
-  check(direct_run['spec'] == generated_run['spec'], 'Manual run defaults or workspaces drifted from the Helm template')
+  entry_name = "application-#{scope}-build"
+  entry = get.call('Pipeline', entry_name)['spec']
+  check(direct_run['kind'] == 'PipelineRun' && direct_run.dig('spec', 'pipelineRef', 'name') == entry_name, 'Manual file must start the scope entry Pipeline')
+  check(direct_run['spec']['params'].map { |p| p['name'] } == ['services'], 'Manual PipelineRun must supply only the service list')
+  check(direct_run['spec'].fetch('workspaces', []).empty? && entry.fetch('workspaces', []).empty?, 'UI start must require no workspace inputs')
+  entry_defaults = entry['params'].to_h { |p| [p['name'], p['default']] }
+  check(direct_run['spec']['params'][0]['value'] == entry_defaults['services'], 'Manual service list must match its console default')
+  %w[services source-url source-revision env source-commit].each { |p| check(entry_defaults[p] == defaults[p], 'Console defaults must match fanout defaults') }
+  check(entry['tasks'].size == 1 && entry['tasks'][0].dig('taskRef', 'name') == scope + '-build-dispatch', 'UI entry must use the shared dispatcher')
+  check(entry['results'].any? { |r| r['name'] == 'build-pipeline-run' }, 'UI must expose the actual build run name')
   updater = tasks.fetch(scope + '-gitops-update')
   env = updater['stepTemplate']['env'].to_h { |e| [e['name'], e['value']] }
   check(env['VALUES_FILE'] == "app-chart/#{scope}.yaml" && env['GITOPS_BRANCH'] == 'dev', 'Incorrect GitOps target')
@@ -84,6 +91,8 @@ check(runs.size == 2, 'Expected two dispatcher TaskRun examples')
   check(launcher['params'].find { |p| p['name'] == 'services' }['default'] == manual_names.join(','), 'Manual chart default must list every enabled service')
   check(launcher['params'].find { |p| p['name'] == 'source-url' }['default'] == defaults['source-url'], 'Launcher source-url default drift')
   check(launcher['params'].find { |p| p['name'] == 'env' }['default'] == defaults['env'], 'Launcher env default drift')
+  check(launcher['workspaces'].find { |w| w['name'] == 'git-credentials' }['optional'], 'Dispatcher credentials must be optional workspace input')
+  check(launcher['volumes'].any? { |v| v.dig('secret', 'secretName') == 'git-credentials' }, 'Dispatcher must mount configured credentials internally')
   run = runs.find { |r| r.dig('spec', 'taskRef', 'name') == scope + '-build-dispatch' }
   check(run && run['kind'] == 'TaskRun' && run['spec']['serviceAccountName'] == scope + '-dispatcher', 'Incorrect launcher example')
   check(run['spec']['params'].find { |p| p['name'] == 'services' }['value'].split(',') == manual_names, 'Manual example must list every enabled service')
@@ -95,14 +104,16 @@ check(runs.size == 2, 'Expected two dispatcher TaskRun examples')
   check(listener.to_json.include?('lastMergeTargetCommit') && !listener.to_json.include?('compareSecret'), 'PR diff inputs and requested auth mode')
   template = get.call('TriggerTemplate', scope + '-azure-pr')
   triggered = template['spec']['resourcetemplates'][0]['spec']
-  check(template['spec']['resourcetemplates'][0]['kind'] == 'TaskRun' && triggered['taskRef']['name'] == scope + '-build-dispatch', 'PR must use same launcher as manual')
+  check(template['spec']['resourcetemplates'][0]['kind'] == 'PipelineRun' && triggered['pipelineRef']['name'] == entry_name, 'PR must use same UI entry Pipeline as manual')
   check(triggered['params'].find { |p| p['name'] == 'selection-mode' }['value'] == 'diff', 'PR must select from diff')
   check(triggered['params'].find { |p| p['name'] == 'source-url' }['value'] == defaults['source-url'], 'PR source-url default drift')
   check(triggered['params'].find { |p| p['name'] == 'env' }['value'] == 'dev', 'PR env default drift')
   route = get.call('Route', scope + '-pr-webhook')['spec']
   check(route['to']['name'] == 'el-' + scope + '-pr' && route['tls']['termination'] == 'edge', 'Route must reach correct listener')
   role = get.call('Role', scope + '-dispatcher')['rules']
-  check(role.any? { |r| r['resources'] == ['pipelineruns'] && r['verbs'].sort == %w[create get patch] }, 'Missing child run RBAC')
+  check(role.any? { |r| r['resources'] == ['pipelineruns'] && r['verbs'].sort == %w[create get] }, 'Launcher must have only get/create run permissions')
+  binding = get.call('RoleBinding', scope + '-dispatcher')
+  check(binding['subjects'].any? { |s| s['kind'] == 'ServiceAccount' && s['name'] == 'pipeline' && s['namespace'] == 'devops' }, 'Console pipeline account needs launch permissions')
 end
 check(documents.none? { |d| d.dig('metadata', 'name') == 'frontend-pr-webhook-proxy' }, 'Legacy proxy must not shadow dispatcher route')
 Dir.mktmpdir do |tmp|
@@ -137,6 +148,16 @@ Dir.mktmpdir do |tmp|
     _, _, result = Open3.capture3(environment.merge(invalid), 'sh', script)
     check(!result.success?, 'Unsafe input or changed graph selection must fail before building')
   end
+  # The console entry supplies no workspace: credentials must use the internal mount.
+  launch_work = File.join(tmp, 'launch-work')
+  Dir.mkdir(launch_work)
+  source_step = tasks.fetch('backend-build-dispatch')['steps'][0]['script']
+  source_step = source_step.gsub('/credentials/git', credentials).gsub('/work', launch_work)
+  launch_script = File.join(tmp, 'launch-source.sh')
+  File.write(launch_script, source_step)
+  _, err, result = Open3.capture3(environment.merge('HOME' => File.join(tmp, 'launch-home'),
+    'CREDENTIALS_PATH' => '', 'MODE' => 'manual', 'TARGET_COMMIT' => ''), 'sh', launch_script)
+  check(result.success? && File.read(File.join(launch_work, 'commit')) == source_sha, err)
 end
 [['frontendRelease.selectedServices', '["wrong-portal"]'], ['frontendRelease.selectedServices', '["admin-portal","admin-portal"]'], ['frontendRelease.dispatch.maxParallel', '0']].each do |key, value|
   _, _, result = Open3.capture3(*command, '--set-json', key + '=' + value)

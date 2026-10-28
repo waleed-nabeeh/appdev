@@ -1,76 +1,21 @@
-# Direct manual run for the full Helm-configured service list.
-# Use dispatches.yaml to prepare a smaller selected-only graph.
+# Manual start: only services is supplied; the entry Pipeline provides all other defaults.
 ---
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
-  generateName: frontend-build-fanout-manual-
+  generateName: frontend-build-start-
   namespace: devops
   labels:
     app.kubernetes.io/component: frontend
     app.kubernetes.io/part-of: application-build
 spec:
   pipelineRef:
-    name: application-frontend-build-fanout
+    name: application-frontend-build
   taskRunTemplate:
     serviceAccountName: pipeline
   timeouts:
-    pipeline: 4h0m0s
-    tasks: 3h50m0s
+    pipeline: 20m0s
+    tasks: 19m0s
   params:
   - name: services
     value: admin-portal,applicant-portal,operational-portal
-  - name: source-url
-    value: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Frontend
-  - name: env
-    value: dev
-  - name: source-revision
-    value: pre-prod
-  - name: source-commit
-    value: ''
-  workspaces:
-  - name: git-credentials
-    secret:
-      secretName: git-credentials
-  - name: registry-auth
-    secret:
-      secretName: registry-auth
-  - name: npm-auth
-    secret:
-      secretName: npm-auth
-  - name: source-admin-portal
-    volumeClaimTemplate:
-      metadata:
-        labels:
-          pipeline: frontend-build-fanout
-          service: admin-portal
-      spec:
-        accessModes:
-        - ReadWriteOnce
-        resources:
-          requests:
-            storage: 3Gi
-  - name: source-applicant-portal
-    volumeClaimTemplate:
-      metadata:
-        labels:
-          pipeline: frontend-build-fanout
-          service: applicant-portal
-      spec:
-        accessModes:
-        - ReadWriteOnce
-        resources:
-          requests:
-            storage: 3Gi
-  - name: source-operational-portal
-    volumeClaimTemplate:
-      metadata:
-        labels:
-          pipeline: frontend-build-fanout
-          service: operational-portal
-      spec:
-        accessModes:
-        - ReadWriteOnce
-        resources:
-          requests:
-            storage: 3Gi

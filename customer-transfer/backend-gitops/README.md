@@ -2,7 +2,7 @@
 
 For the current combined dispatcher setup, use
 [Application Builds](../application-build/README.md) with its single values file
-and dispatcher TaskRuns that each launch one selected-lane build run. The fixed fanout examples below remain available.
+and the manual/PR application-build entry Pipelines that launch selected-only build graphs. The fixed fanout examples below remain available.
 
 All deliverables are in appdev. The reference repository under `Mofa/wel` is
 READ-ONLY and has not been edited. Customer screenshot confirms:

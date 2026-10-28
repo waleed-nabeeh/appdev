@@ -61,7 +61,11 @@ metadata:
 rules:
   - apiGroups: [tekton.dev]
     resources: [pipelineruns]
+{{- if $root.Values.applicationBuild.singleRun }}
+    verbs: [get, create]
+{{- else }}
     verbs: [get, create, patch]
+{{- end }}
 {{- if $root.Values.applicationBuild.singleRun }}
   - apiGroups: [tekton.dev]
     resources: [pipelines]
@@ -82,6 +86,11 @@ subjects:
   - kind: ServiceAccount
     name: {{ $scope }}-dispatcher
     namespace: {{ $root.Release.Namespace }}
+{{- if $root.Values.applicationBuild.singleRun }}
+  - kind: ServiceAccount
+    name: {{ $root.Values.serviceAccount.name }}
+    namespace: {{ $root.Release.Namespace }}
+{{- end }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -105,6 +114,9 @@ spec:
     - {name: target-commit, type: string, default: ""}
   workspaces:
     - name: git-credentials
+{{- if $root.Values.applicationBuild.singleRun }}
+      optional: true
+{{- end }}
   results:
     - name: services
     - name: commit
@@ -117,6 +129,11 @@ spec:
     - name: config
       configMap:
         name: {{ $scope }}-dispatch-config
+{{- if $root.Values.applicationBuild.singleRun }}
+    - name: default-git-credentials
+      secret:
+        secretName: git-credentials
+{{- end }}
   stepTemplate:
     volumeMounts:
       - {name: work, mountPath: /work}
@@ -126,6 +143,10 @@ spec:
   steps:
     - name: source
       image: {{ $root.Values.images.git | quote }}
+{{- if $root.Values.applicationBuild.singleRun }}
+      volumeMounts:
+        - {name: default-git-credentials, mountPath: /credentials/git, readOnly: true}
+{{- end }}
       env:
         - {name: HOME, value: /work/home}
         - {name: CREDENTIALS_PATH, value: $(workspaces.git-credentials.path)}
@@ -142,6 +163,7 @@ spec:
 {{- if $root.Values.applicationBuild.singleRun }}
         #!/bin/sh
         set -eu
+        if [ -z "$CREDENTIALS_PATH" ]; then CREDENTIALS_PATH=/credentials/git; fi
         printf '%s' "$SOURCE_URL" | grep -Eq '^https://[A-Za-z0-9.-]+(:[0-9]+)?/[A-Za-z0-9._~%/-]+$' || { echo 'Invalid HTTPS source-url' >&2; exit 1; }
         printf '%s' "$BUILD_ENV" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$' || { echo 'Invalid env' >&2; exit 1; }
 {{- end }}
@@ -162,6 +184,42 @@ spec:
       script: |
         #!/usr/bin/env node
 {{ $root.Files.Get (ternary "files/build-fanout-dispatch.js" "files/backend-dispatch.js" $root.Values.applicationBuild.singleRun) | indent 8 }}
+{{- if $root.Values.applicationBuild.singleRun }}
+---
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: application-{{ $scope }}-build
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: {{ $scope }}
+    app.kubernetes.io/part-of: application-build
+spec:
+  description: Start here to select services and launch their build, scan, gate, sign and GitOps graph.
+  params:
+    - {name: services, type: string, default: {{ join "," $manualNames | quote }}, description: "Comma-separated service names to build"}
+    - {name: source-url, type: string, default: {{ $settings.sourceUrl | quote }}}
+    - {name: source-revision, type: string, default: {{ $settings.sourceRevision | quote }}}
+    - {name: env, type: string, default: {{ $settings.env | quote }}}
+    - {name: source-commit, type: string, default: "", description: "Optional full SHA; empty resolves the source branch"}
+    - {name: selection-mode, type: string, default: manual, description: "Leave manual for console starts; PR triggers use diff"}
+    - {name: target-commit, type: string, default: "", description: "Required only for PR diff selection"}
+  results:
+    - {name: build-pipeline-run, value: $(tasks.dispatch.results.pipeline-run)}
+    - {name: selected-services, value: $(tasks.dispatch.results.services)}
+    - {name: source-commit, value: $(tasks.dispatch.results.commit)}
+  tasks:
+    - name: dispatch
+      taskRef: {name: {{ $scope }}-build-dispatch}
+      params:
+        - {name: services, value: $(params.services)}
+        - {name: source-url, value: $(params.source-url)}
+        - {name: source-revision, value: $(params.source-revision)}
+        - {name: env, value: $(params.env)}
+        - {name: source-commit, value: $(params.source-commit)}
+        - {name: selection-mode, value: $(params.selection-mode)}
+        - {name: target-commit, value: $(params.target-commit)}
+{{- end }}
 {{- if not $root.Values.applicationBuild.singleRun }}
 ---
 apiVersion: tekton.dev/v1

@@ -15,7 +15,7 @@ metadata:
   namespace: {{ $root.Release.Namespace }}
 rules:
   - apiGroups: [tekton.dev]
-    resources: [{{ ternary "taskruns" "pipelineruns" $root.Values.applicationBuild.singleRun }}]
+    resources: [pipelineruns]
     verbs: [create]
 {{- if $settings.dispatch.triggers.authRequired }}
   - apiGroups: [""]
@@ -88,7 +88,7 @@ spec:
     - name: target-short
   resourcetemplates:
     - apiVersion: tekton.dev/v1
-      kind: {{ ternary "TaskRun" "PipelineRun" $root.Values.applicationBuild.singleRun }}
+      kind: PipelineRun
       metadata:
         name: {{ $scope }}-pr-$(tt.params.pr-id)-$(tt.params.source-short)-$(tt.params.target-short)
         namespace: {{ $root.Release.Namespace }}
@@ -98,10 +98,13 @@ spec:
           app.kubernetes.io/part-of: application-build
       spec:
 {{- if $root.Values.applicationBuild.singleRun }}
-        taskRef:
-          name: {{ $scope }}-build-dispatch
-        serviceAccountName: {{ $scope }}-dispatcher
-        timeout: 20m0s
+        pipelineRef:
+          name: application-{{ $scope }}-build
+        taskRunTemplate:
+          serviceAccountName: {{ $root.Values.serviceAccount.name }}
+        timeouts:
+          pipeline: 20m0s
+          tasks: 19m0s
 {{- else }}
         pipelineRef:
           name: application-{{ $scope }}-dispatch
