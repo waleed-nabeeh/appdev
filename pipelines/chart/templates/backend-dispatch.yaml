@@ -107,6 +107,7 @@ spec:
 {{- if $root.Values.applicationBuild.singleRun }}
     - {name: source-url, type: string, default: {{ $settings.sourceUrl | quote }}}
     - {name: env, type: string, default: {{ $settings.env | quote }}}
+    - {name: image-tag, type: string, default: "", description: "Optional image tag for all selected services; empty uses the first eight source SHA characters"}
 {{- end }}
     - {name: selection-mode, type: string, default: manual}
     - {name: source-revision, type: string, default: {{ $settings.sourceRevision | quote }}}
@@ -178,6 +179,7 @@ spec:
         - {name: SOURCE_URL, value: $(params.source-url)}
         - {name: BUILD_ENV, value: $(params.env)}
         - {name: DISPATCHER_NAME, value: $(context.taskRun.name)}
+        - {name: IMAGE_TAG, value: $(params.image-tag)}
         - {name: DISPATCHER_UID, value: $(context.taskRun.uid)}
         - {name: NAMESPACE, value: {{ $root.Release.Namespace | quote }}}
 {{- end }}
@@ -202,6 +204,7 @@ spec:
     - {name: source-revision, type: string, default: {{ $settings.sourceRevision | quote }}}
     - {name: env, type: string, default: {{ $settings.env | quote }}}
     - {name: source-commit, type: string, default: "", description: "Optional full SHA; empty resolves the source branch"}
+    - {name: image-tag, type: string, default: "", description: "Optional image tag for all selected services; empty uses the first eight source SHA characters"}
     - {name: selection-mode, type: string, default: manual, description: "Leave manual for console starts; PR triggers use diff"}
     - {name: target-commit, type: string, default: "", description: "Required only for PR diff selection"}
   results:
@@ -217,6 +220,7 @@ spec:
         - {name: source-revision, value: $(params.source-revision)}
         - {name: env, value: $(params.env)}
         - {name: source-commit, value: $(params.source-commit)}
+        - {name: image-tag, value: $(params.image-tag)}
         - {name: selection-mode, value: $(params.selection-mode)}
         - {name: target-commit, value: $(params.target-commit)}
 {{- end }}

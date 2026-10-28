@@ -64,6 +64,7 @@ spec:
     - {name: release-record, type: string, default: ""}
     - {name: release-json, type: string, default: ""}
     - {name: source-commit, type: string}
+    - {name: image-tag, type: string, default: ""}
     - {name: expected-base, type: string, default: ""}
   results:
     - name: commit
@@ -113,6 +114,7 @@ spec:
         - {name: RELEASE_RECORD, value: $(params.release-record)}
         - {name: RELEASE_JSON, value: $(params.release-json)}
         - {name: SOURCE_COMMIT, value: $(params.source-commit)}
+        - {name: IMAGE_TAG, value: $(params.image-tag)}
         - {name: NAMESPACE, value: {{ $root.Release.Namespace | quote }}}
       script: |
         #!/usr/bin/env node

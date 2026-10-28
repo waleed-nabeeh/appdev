@@ -8,12 +8,12 @@ const config = {catalog, imageRepository: 'quay-registry-prod.apps.hub-visa-ocp.
 const sha = '12345678' + 'a'.repeat(32);
 function check(ok, message) { if (!ok) throw new Error(message); }
 function reject(fn) { let failed = false; try { fn(); } catch (_) { failed = true; } check(failed, 'Expected rejection'); }
-function record(names) {
+function record(names, tag = sha.slice(0, 8)) {
   return {schemaVersion: 1, succeeded: true, sourceCommit: sha, selected: names, failed: [], notStarted: [],
     images: Object.fromEntries(names.map(name => {
       const repository = config.imageRepository + '/' + name;
       const digest = 'sha256:' + 'b'.repeat(64);
-      return [name, {repository, tag: sha.slice(0, 8), digest, image: repository + '@' + digest}];
+      return [name, {repository, tag, digest, image: repository + '@' + digest}];
     }))};
 }
 const before = JSON.stringify(core);
@@ -60,6 +60,9 @@ for (const [scope, activeConfig, counts] of [
     check(JSON.stringify(updated) === JSON.stringify(expected), 'Preproduction changed unrelated settings: ' + scope + '/' + count);
     check(JSON.stringify(preproduction) === original, 'Preproduction input was mutated');
     check(JSON.stringify(yaml.load(yaml.dump(updated, {schema: yaml.JSON_SCHEMA}), {schema: yaml.JSON_SCHEMA})) === JSON.stringify(expected), 'Preproduction YAML round-trip failed');
+    const manualTag = 'pre-test-20261028-01';
+    for (const name of selected) expected['argocd-applications'].applications['pre-' + name].overrideValues.image.tag = manualTag;
+    check(JSON.stringify(updateCore(preproduction, record(selected, manualTag), mappedConfig, sha, manualTag)) === JSON.stringify(expected), 'Manual tag must update only selected preproduction applications');
   }
   const name = activeConfig.catalog[0].name;
   const missing = JSON.parse(original);
@@ -69,6 +72,11 @@ for (const [scope, activeConfig, counts] of [
   reject(() => updateCore(missing, record([name]), mappedConfig, sha));
 }
 reject(() => updateCore(core, one, {...config, applicationNamePrefix: 7}, sha));
+reject(() => updateCore(core, record([catalog[0].name], 'manual-tag'), config, sha));
+reject(() => updateCore(core, one, config, sha, 'manual-tag'));
+for (const tag of ['-bad', '.bad', 'bad/tag', 'valid\n', 'a'.repeat(129), '$(id)']) {
+  reject(() => updateCore(core, record([catalog[0].name], tag), config, sha, tag));
+}
 reject(() => updateCore(core, {...one, succeeded: false}, config, sha));
 reject(() => updateCore(core, {...one, failed: [{service: catalog[0].name}]}, config, sha));
 reject(() => updateCore(core, {...one, selected: [catalog[0].name, catalog[0].name]}, config, sha));
@@ -89,7 +97,7 @@ async function checkEntry(env, expectedCalls, expectedError, immutable = true, f
   const source = fs.readFileSync('pipelines/chart/files/backend-gitops-update.js', 'utf8');
   const activeConfig = frontendScope ? frontendConfig : config;
   const activeDocument = frontendScope ? frontend : core;
-  const activeRecord = frontendScope ? record(['admin-portal']) : one;
+  const activeRecord = record(frontendScope ? ['admin-portal'] : [catalog[0].name], env.IMAGE_TAG || sha.slice(0, 8));
   const relative = 'app-chart/' + (frontendScope ? 'frontend' : 'backend') + '.yaml';
   const filename = '/work/repo/' + relative;
   let calls = 0;
@@ -127,11 +135,16 @@ async function checkEntry(env, expectedCalls, expectedError, immutable = true, f
     check(proc.exitCode === 1 && error && !written, 'Invalid input must fail without writing');
   } else {
     check(!proc.exitCode && !error, error || 'Unexpected entry point failure');
-    check(JSON.stringify(written) === JSON.stringify(updateCore(activeDocument, activeRecord, activeConfig, sha)), 'Entry point did not update only selected tags');
+    check(JSON.stringify(written) === JSON.stringify(updateCore(activeDocument, activeRecord, activeConfig, sha, env.IMAGE_TAG)), 'Entry point did not update only selected tags');
   }
 }
 module.exports = (async () => {
   await checkEntry({RELEASE_JSON: JSON.stringify(one)}, 0, false);
+  for (const front of [false, true]) {
+    const manualRecord = record(front ? ['admin-portal'] : [catalog[0].name], 'pre-test-20261028-01');
+    await checkEntry({RELEASE_JSON: JSON.stringify(manualRecord), IMAGE_TAG: 'pre-test-20261028-01'}, 0, false, true, front);
+    await checkEntry({RELEASE_JSON: JSON.stringify(manualRecord)}, 0, true, true, front);
+  }
   await checkEntry({RELEASE_RECORD: 'backend-result-' + 'a'.repeat(16)}, 1, false);
   await checkEntry({RELEASE_JSON: JSON.stringify(one), RELEASE_RECORD: 'backend-result-' + 'a'.repeat(16)}, 0, true);
   await checkEntry({RELEASE_JSON: '{'}, 0, true);

@@ -76,8 +76,24 @@ credential workspace for earlier standalone TaskRun examples.
 | `source-revision` | Backend `test`; frontend `pre-prod`. |
 | `env` | `dev`. Backend builds receive `CERT_KEYWORD=$(params.env)`; frontend builds receive `BUILD_ENVIRONMENT=$(params.env)`. |
 | `source-commit` | Empty resolves the source branch once; optionally provide a full SHA for a rebuild. |
+| `image-tag` | Empty uses the first eight source SHA characters. Optional manual tag, such as `pre-test-20261028-01`, applies to every selected image and its GitOps entry. |
 | `selection-mode` | `manual` for console/CLI service lists; PR triggers supply `diff`. |
 | `target-commit` | Empty for manual; a full target SHA is required for diff selection. |
+
+For a manual tag in the console, open **application-backend-build** or
+**application-frontend-build → Start**, select your comma-separated `services`,
+and set **image-tag** to `pre-test-20261028-01` (choose a fresh tag for each test).
+Keep `env: dev` and the other source defaults unless needed. The dispatcher
+passes the tag through build, scan, gate, sign and the final GitOps update.
+For example, `acl-service` builds `devops/acl-service:pre-test-20261028-01` and
+updates `pre-acl-service.overrideValues.image.tag` to that exact value.
+This builds from the selected source; it does not just retag an existing image.
+Reusing a tag already present in GitOps can produce no Git change; with tag-only
+deployment values it also does not guarantee a rollout. PR triggers continue
+using automatic commit tags by default. Manual tags use the
+[OCI tag format](https://github.com/opencontainers/distribution-spec/blob/main/spec.md#pulling-manifests),
+up to 128 ASCII characters with letters, numbers, underscores, dots and hyphens;
+the first character must be a letter, number or underscore.
 
 The entry Pipeline calls the same dispatcher used for PRs. Before starting the
 build, it copies the Helm-installed fanout template and retains only selected

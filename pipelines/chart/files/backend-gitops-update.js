@@ -1,9 +1,11 @@
 'use strict';
 
 function check(ok, message) { if (!ok) throw new Error(message); }
-function updateCore(document, record, config, expectedCommit) {
+function updateCore(document, record, config, expectedCommit, imageTag = '') {
   check(record.schemaVersion === 1 && record.succeeded === true, 'Only a successful batch can update GitOps');
   check(typeof expectedCommit === 'string' && expectedCommit.length === 40 && /^[a-f0-9]+$/.test(expectedCommit) && record.sourceCommit === expectedCommit, 'Batch source SHA mismatch');
+  const expectedTag = imageTag === '' ? expectedCommit.slice(0, 8) : imageTag;
+  check(typeof expectedTag === 'string' && expectedTag.length <= 128 && /^[A-Za-z0-9_]/.test(expectedTag) && !/[^A-Za-z0-9_.-]/.test(expectedTag), 'Invalid image-tag');
   check(Array.isArray(record.selected) && new Set(record.selected).size === record.selected.length, 'Invalid selected services');
   check(Array.isArray(record.failed) && record.failed.length === 0 && Array.isArray(record.notStarted) && record.notStarted.length === 0, 'Incomplete batch');
   const images = record.images;
@@ -18,7 +20,7 @@ function updateCore(document, record, config, expectedCommit) {
     check(config.catalog.some(s => s.name === name), 'Unknown or disabled service: ' + name);
     const image = images[name];
     const repository = config.imageRepository + '/' + name;
-    check(image && image.repository === repository && image.tag === expectedCommit.slice(0, 8), 'Unexpected image identity: ' + name);
+    check(image && image.repository === repository && image.tag === expectedTag, 'Unexpected image identity: ' + name);
     check(typeof image.digest === 'string' && image.digest.length === 71 && /^sha256:[a-f0-9]{64}$/.test(image.digest) && image.image === repository + '@' + image.digest, 'Invalid image digest: ' + name);
     const key = prefix + name + suffix;
     check(Object.hasOwn(apps, key), 'Missing GitOps application: ' + key);
@@ -60,7 +62,7 @@ if (require.main === module) {
     check(filename === path.resolve(repo, relative), 'GitOps values path must not contain symlinks');
     const original = fs.readFileSync(filename, 'utf8');
     const document = yaml.load(original, {schema: yaml.JSON_SCHEMA, maxDepth: 100});
-    const updated = updateCore(document, record, config, process.env.SOURCE_COMMIT);
+    const updated = updateCore(document, record, config, process.env.SOURCE_COMMIT, process.env.IMAGE_TAG);
     if (JSON.stringify(updated) !== JSON.stringify(document)) {
       fs.writeFileSync(filename, yaml.dump(updated, {schema: yaml.JSON_SCHEMA, noRefs: true, lineWidth: -1, quotingType: '"'}));
     }

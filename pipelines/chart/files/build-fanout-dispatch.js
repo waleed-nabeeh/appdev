@@ -6,8 +6,10 @@ function makeFanoutRun(template, config, selected, commit, revision, dispatcher,
   check(template.metadata?.name === config.fanoutPipeline, 'Unexpected fanout template');
   const sourceUrl = inputs.sourceUrl ?? config.sourceUrl;
   const environment = inputs.env ?? config.env ?? 'dev';
+  const imageTag = inputs.imageTag ?? '';
   check(typeof sourceUrl === 'string' && /^https:\/\/[A-Za-z0-9.-]+(?::[0-9]+)?\/[A-Za-z0-9._~%/-]+$/.test(sourceUrl), 'Invalid HTTPS source-url');
   check(typeof environment === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$/.test(environment), 'Invalid env');
+  check(typeof imageTag === 'string' && (imageTag === '' || (imageTag.length <= 128 && /^[A-Za-z0-9_]/.test(imageTag) && !/[^A-Za-z0-9_.-]/.test(imageTag))), 'Invalid image-tag');
   check(typeof commit === 'string' && /^[a-f0-9]{40}$/.test(commit), 'Expected full source SHA');
   check(typeof revision === 'string' && /^[A-Za-z0-9_./-]+$/.test(revision) && !revision.startsWith('-'), 'Invalid source branch');
   check(Array.isArray(selected) && selected.length > 0 && new Set(selected).size === selected.length, 'Select at least one unique service');
@@ -35,6 +37,7 @@ function makeFanoutRun(template, config, selected, commit, revision, dispatcher,
   update.runAfter = selected.map(name => 'sign-' + name);
   update.params = [
     {name: 'source-commit', value: '$(tasks.resolve-source.results.commit)'},
+    {name: 'image-tag', value: '$(params.image-tag)'},
     {name: 'release-json', value: JSON.stringify({schemaVersion: 1, succeeded: true,
       sourceCommit: '$(tasks.resolve-source.results.commit)', selected, images, failed: [], notStarted: []})}
   ];
@@ -46,7 +49,7 @@ function makeFanoutRun(template, config, selected, commit, revision, dispatcher,
     const references = JSON.stringify(result).matchAll(/\$\(tasks\.([^.]+)\.results\.[^)]+\)/g);
     return [...references].every(match => names.has(match[1]));
   });
-  const values = {services: selected.join(','), 'source-url': sourceUrl, 'source-revision': revision, env: environment, 'source-commit': commit};
+  const values = {services: selected.join(','), 'source-url': sourceUrl, 'source-revision': revision, env: environment, 'source-commit': commit, 'image-tag': imageTag};
   spec.params = Object.entries(values).map(([name, value]) => ({name, type: 'string', default: value}));
   // The chosen lanes are immutable; reject a services edit that no longer matches them.
   const sourceTask = spec.tasks.find(t => t.name === 'resolve-source');
@@ -107,7 +110,7 @@ if (require.main === module) {
     const api = kubeClient(fs, require('node:https'));
     const dispatcher = {metadata: {name: process.env.DISPATCHER_NAME, uid: process.env.DISPATCHER_UID, namespace: process.env.NAMESPACE}};
     const run = await launchFanout(api, config, selected, commit, process.env.REVISION, dispatcher,
-      {sourceUrl: process.env.SOURCE_URL, env: process.env.BUILD_ENV});
+      {sourceUrl: process.env.SOURCE_URL, env: process.env.BUILD_ENV, imageTag: process.env.IMAGE_TAG});
     fs.writeFileSync('/tekton/results/services', JSON.stringify(selected));
     fs.writeFileSync('/tekton/results/commit', commit);
     fs.writeFileSync('/tekton/results/pipeline-run', run ? run.metadata.name : 'none');

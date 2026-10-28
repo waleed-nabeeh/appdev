@@ -27,7 +27,7 @@ function verify(docs, scope, count) {
   const spec = run.spec.pipelineSpec;
   const values = Object.fromEntries(run.spec.params.map(p => [p.name, p.value]));
   const defaults = Object.fromEntries(spec.params.map(p => [p.name, p.default]));
-  check(values.services === selected.join(',') && values['source-url'] === config.sourceUrl && values.env === 'dev', 'Generated PipelineRun inputs');
+  check(values.services === selected.join(',') && values['source-url'] === config.sourceUrl && values.env === 'dev' && values['image-tag'] === '', 'Generated PipelineRun inputs');
   check(JSON.stringify(defaults) === JSON.stringify(values), 'Prepared PipelineRun must contain matching editable defaults');
   const tasks = spec.tasks;
   check(tasks.length === 2 + count * 6, 'Only selected lanes plus selection and GitOps');
@@ -53,6 +53,8 @@ function verify(docs, scope, count) {
   check(claims.length === count && claims.every(w => w.volumeClaimTemplate.spec.resources.requests.storage === '3Gi'), 'Only selected source PVCs');
   check(JSON.stringify([...spec.workspaces.map(w => w.name)].sort()) === JSON.stringify(run.spec.workspaces.map(w => w.name).sort()), 'Bindings must exactly match selected graph');
   const update = tasks.at(-1);
+  check(update.params.find(p => p.name === 'image-tag').value === '$(params.image-tag)', 'GitOps must validate the same manual tag used for builds');
+  check(tasks[0].params.find(p => p.name === 'image-tag').value === '$(params.image-tag)', 'Resolver must receive manual tag');
   check(JSON.stringify(update.runAfter) === JSON.stringify(selected.map(s => 'sign-' + s)), 'GitOps must wait for every selected sign');
   const record = JSON.parse(update.params.find(p => p.name === 'release-json').value);
   check(JSON.stringify(record.selected) === JSON.stringify(selected) && Object.keys(record.images).length === count, 'GitOps must update only selected entries');
@@ -83,6 +85,15 @@ check(override.spec.params.find(p => p.name === 'source-url').value === 'https:/
 check(override.spec.params.find(p => p.name === 'env').value === 'pre-prod' && override.spec.pipelineSpec.params.find(p => p.name === 'env').default === 'pre-prod', 'Editable env override/default');
 const missing = JSON.parse(JSON.stringify(template)); missing.spec.tasks = missing.spec.tasks.filter(t => t.name !== 'gate-' + selected[0]);
 reject(() => makeFanoutRun(missing, config, selected, commit, 'test', dispatcher));
+for (const scope of ['backend', 'frontend']) {
+  const {template, config} = fixture(documents, scope);
+  const selected = config.catalog.slice(0, 2).map(s => s.name);
+  const manual = makeFanoutRun(template, config, selected, commit, 'test', dispatcher, {imageTag: 'pre-test-20261028-01'});
+  check(manual.spec.params.find(p => p.name === 'image-tag').value === 'pre-test-20261028-01', 'Manual tag must survive dispatch for ' + scope);
+  for (const imageTag of ['-bad', '.bad', 'bad/tag', 'bad tag', 'valid\n', 'a'.repeat(129), '$(id)', 42]) {
+    reject(() => makeFanoutRun(template, config, selected, commit, 'test', dispatcher, {imageTag}));
+  }
+}
 module.exports = (async () => {
   let creates = 0;
   const api = async (method, path, body) => {
@@ -108,5 +119,9 @@ module.exports = (async () => {
   try { await launchFanout(async (method, path) => path.includes('/pipelines/') ? template : method === 'POST' ? conflictApi(method, path) : envChanged, config, selected, commit, 'test', dispatcher); }
   catch (_) { rejected = true; }
   check(rejected, 'Retry must reject an existing run with changed env');
+  rejected = false;
+  try { await launchFanout(conflictApi, config, selected, commit, 'test', dispatcher, {imageTag: 'another-tag'}); }
+  catch (_) { rejected = true; }
+  check(rejected, 'Retry must reject an existing run with a different image tag');
   console.log('Passed selected-only 1/2/14/17-backend and 1/2/3-frontend graphs, working Task references, PVCs, GitOps wiring, one-run launch, retry and no-op checks');
 })();

@@ -84,19 +84,25 @@ check(runs.size == 2, 'Expected two dispatcher TaskRun examples')
   check(direct_run['spec'].fetch('workspaces', []).empty? && entry.fetch('workspaces', []).empty?, 'UI start must require no workspace inputs')
   entry_defaults = entry['params'].to_h { |p| [p['name'], p['default']] }
   check(direct_run['spec']['params'][0]['value'] == entry_defaults['services'], 'Manual service list must match its console default')
-  %w[services source-url source-revision env source-commit].each { |p| check(entry_defaults[p] == defaults[p], 'Console defaults must match fanout defaults') }
+  %w[services source-url source-revision env source-commit image-tag].each { |p| check(entry_defaults[p] == defaults[p], 'Console defaults must match fanout defaults') }
+  check(entry_defaults['image-tag'] == '', 'Manual image tag must default to automatic SHA tagging')
+  check(fanout['tasks'].first['params'].any? { |p| p['name'] == 'image-tag' && p['value'] == '$(params.image-tag)' }, 'Manual tag must reach resolver')
+  check(fanout['tasks'].last['params'].any? { |p| p['name'] == 'image-tag' && p['value'] == '$(params.image-tag)' }, 'Manual tag must reach GitOps validation')
   check(entry['tasks'].size == 1 && entry['tasks'][0].dig('taskRef', 'name') == scope + '-build-dispatch', 'UI entry must use the shared dispatcher')
   check(entry['results'].any? { |r| r['name'] == 'build-pipeline-run' }, 'UI must expose the actual build run name')
   updater = tasks.fetch(scope + '-gitops-update')
   env = updater['stepTemplate']['env'].to_h { |e| [e['name'], e['value']] }
   check(env['VALUES_FILE'] == "app-chart/#{scope}.yaml" && env['GITOPS_BRANCH'] == 'dev', 'Incorrect GitOps target')
   check(env['GITOPS_URL'].end_with?('/RedHat_HelmCharts'), 'Incorrect accessible GitOps repo')
+  check(updater['steps'].find { |s| s['name'] == 'update-yaml' }['env'].any? { |e| e['name'] == 'IMAGE_TAG' && e['value'] == '$(params.image-tag)' }, 'GitOps must receive expected manual tag')
   launcher = tasks.fetch(scope + '-build-dispatch')
   check(launcher['steps'].last['script'].include?('function makeFanoutRun'), 'Missing selected-only builder')
   manual_names = config['catalog'].map { |s| s['name'] }
   check(launcher['params'].find { |p| p['name'] == 'services' }['default'] == manual_names.join(','), 'Manual chart default must list every enabled service')
   check(launcher['params'].find { |p| p['name'] == 'source-url' }['default'] == defaults['source-url'], 'Launcher source-url default drift')
   check(launcher['params'].find { |p| p['name'] == 'env' }['default'] == defaults['env'], 'Launcher env default drift')
+  check(launcher['params'].find { |p| p['name'] == 'image-tag' }['default'] == '', 'Dispatcher manual tag default drift')
+  check(launcher['steps'].last['env'].any? { |e| e['name'] == 'IMAGE_TAG' && e['value'] == '$(params.image-tag)' }, 'Dispatcher must pass manual tag into selected graph')
   check(launcher['workspaces'].find { |w| w['name'] == 'git-credentials' }['optional'], 'Dispatcher credentials must be optional workspace input')
   check(launcher['volumes'].any? { |v| v.dig('secret', 'secretName') == 'git-credentials' }, 'Dispatcher must mount configured credentials internally')
   run = runs.find { |r| r.dig('spec', 'taskRef', 'name') == scope + '-build-dispatch' }
@@ -149,6 +155,14 @@ Dir.mktmpdir do |tmp|
                  'SERVICES' => 'acl-service,core-service', 'EXPECTED_SERVICES' => 'acl-service,core-service'}
   _, err, result = Open3.capture3(environment, 'sh', script)
   check(result.success? && File.read(commit_file) == source_sha && File.read(tag_file) == '12345678', err)
+  ['pre-test-20261028-01', 'v1.2.3-rc.1', '_test', 'a' * 128].each do |tag|
+    _, err, result = Open3.capture3(environment.merge('IMAGE_TAG' => tag), 'sh', script)
+    check(result.success? && File.read(tag_file) == tag && File.read(commit_file) == source_sha, err)
+  end
+  ['-bad', '.bad', 'bad/tag', 'bad tag', "good\n", 'a' * 129, '$(id)'].each do |tag|
+    _, _, result = Open3.capture3(environment.merge('IMAGE_TAG' => tag), 'sh', script)
+    check(!result.success?, 'Invalid manual image tag must fail before building')
+  end
   [{'BUILD_ENV' => 'dev$(id)'}, {'SOURCE_URL' => 'https://user:password@git.example/backend'},
    {'SERVICES' => 'acl-service'}].each do |invalid|
     _, _, result = Open3.capture3(environment.merge(invalid), 'sh', script)

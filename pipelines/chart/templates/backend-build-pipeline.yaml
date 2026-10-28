@@ -39,6 +39,7 @@ spec:
     - name: services
       type: string
       default: ""
+    - {name: image-tag, type: string, default: ""}
 {{- if $root.Values.applicationBuild.singleRun }}
     - {name: url, type: string, default: {{ $settings.sourceUrl | quote }}}
     - {name: env, type: string, default: {{ $settings.env | quote }}}
@@ -76,9 +77,15 @@ spec:
           value: $(params.commit)
         - name: SERVICES
           value: $(params.services)
+        - {name: IMAGE_TAG, value: $(params.image-tag)}
       script: |
         #!/bin/sh
         set -eu
+        TAG="${IMAGE_TAG:-}"
+        if [ -n "$TAG" ]; then
+          case "$TAG" in *[!A-Za-z0-9_.-]*|[-.]*) echo 'Invalid image-tag' >&2; exit 1 ;; esac
+          [ "${#TAG}" -le 128 ] || { echo 'image-tag exceeds 128 characters' >&2; exit 1; }
+        fi
 {{- if $root.Values.applicationBuild.singleRun }}
         printf '%s' "$SOURCE_URL" | grep -Eq '^https://[A-Za-z0-9.-]+(:[0-9]+)?/[A-Za-z0-9._~%/-]+$' || { echo 'Invalid HTTPS source-url' >&2; exit 1; }
         printf '%s' "$BUILD_ENV" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$' || { echo 'Invalid env' >&2; exit 1; }
@@ -101,7 +108,9 @@ spec:
           echo 'Expected a full 40-character source commit' >&2; exit 1;
         fi
         printf '%s' "$COMMIT" > "$(results.commit.path)"
-        printf '%.8s' "$COMMIT" > "$(results.tag.path)"
+        if [ -z "$TAG" ]; then TAG=$(printf '%.8s' "$COMMIT"); fi
+        printf '%s' "$TAG" > "$(results.tag.path)"
+        printf 'Image tag: %s\n' "$TAG"
 ---
 apiVersion: tekton.dev/v1
 kind: Pipeline
@@ -123,6 +132,7 @@ spec:
     - name: source-commit
       type: string
       default: ""
+    - {name: image-tag, type: string, default: "", description: "Optional image tag; empty uses the first eight source SHA characters"}
   results:
     - name: source-commit
       value: $(tasks.resolve-source.results.commit)
@@ -152,6 +162,7 @@ spec:
           value: $(params.source-revision)
         - name: commit
           value: $(params.source-commit)
+        - {name: image-tag, value: $(params.image-tag)}
 {{- if $root.Values.applicationBuild.singleRun }}
         - {name: services, value: $(params.services)}
         - {name: expected-services, value: {{ join "," $manualNames | quote }}}
@@ -268,6 +279,7 @@ spec:
       params:
         - name: source-commit
           value: $(tasks.resolve-source.results.commit)
+        - {name: image-tag, value: $(params.image-tag)}
         - name: release-json
           value: {{ dict "schemaVersion" 1 "succeeded" true "sourceCommit" "$(tasks.resolve-source.results.commit)" "selected" $names "images" $images "failed" (list) "notStarted" (list) | toJson | quote }}
       workspaces:
