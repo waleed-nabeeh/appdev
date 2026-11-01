@@ -157,6 +157,45 @@ A no-change diff creates no build. Current restricted-network test authenticatio
 remains disabled as requested. Azure hook registration/delivery still needs the
 customer administrator and live verification.
 
+Expected Azure values:
+
+| Azure payload field | Trigger handling |
+| --- | --- |
+| `eventType` | Accepts `git.pullrequest.created` and `git.pullrequest.updated` |
+| `resource.status` | Must be `active`; completed/abandoned PRs are not built |
+| `resource.repository.remoteUrl` | Must exactly match the configured backend/frontend source URL |
+| `resource.targetRefName` | Backend `refs/heads/test`; frontend `refs/heads/pre-prod` |
+| `resource.sourceRefName` | Passed as `source-revision`; resolver removes `refs/heads/` |
+| `resource.lastMergeSourceCommit.commitId` | Full source SHA passed as `source-commit` |
+| `resource.lastMergeTargetCommit.commitId` | Full target SHA passed as `target-commit` for Git diff |
+| `resource.pullRequestId` | Used with both commit prefixes to name the launcher run |
+
+Source/target SHAs must each be 40 lowercase hexadecimal characters. Fork PRs
+are excluded. Service names come from the Git diff, not a service list in the
+Azure payload. `env` stays `dev`; `image-tag` defaults to the source SHA's first
+eight characters. Both hooks use internally managed credentials, as console
+starts do. These test hooks run before merge and can update GitOps after the
+selected builds succeed; production approval/promotion is a separate decision.
+
+For the first real test, create a source branch with a pushed change in a known
+enabled service, then open a PR targeting the branch above. Use the matching
+route and repository for each hook. In Azure Service Hooks history, inspect the
+actual request payload and delivery result. Azure's Test button can send sample
+values that do not match these filters. An HTTP 202 response alone does not prove
+a PipelineRun was created; check listener logs and the generated runs:
+
+```bash
+oc -n devops logs deployment/el-backend-pr --all-containers=true --since=10m --tail=150
+oc -n devops logs deployment/el-frontend-pr --all-containers=true --since=10m --tail=150
+oc -n devops get pipelineruns -l customer.mofa.gov.sa/trigger=azure-pr \
+  --sort-by=.metadata.creationTimestamp
+```
+
+Open the launcher's `build-pipeline-run` result to find the actual selected-lane
+build graph. A diff selecting no enabled services creates no build run. Repeated
+delivery for the same PR/source/target produces the same launcher name and can
+return AlreadyExists; it does not intentionally create duplicate builds.
+
 ```bash
 oc -n devops get pipelines application-backend-build application-frontend-build
 oc -n devops get eventlisteners backend-pr frontend-pr

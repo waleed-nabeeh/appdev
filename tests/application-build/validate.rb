@@ -120,6 +120,36 @@ check(runs.size == 2, 'Expected two dispatcher TaskRun examples')
   check(triggered['params'].find { |p| p['name'] == 'selection-mode' }['value'] == 'diff', 'PR must select from diff')
   check(triggered['params'].find { |p| p['name'] == 'source-url' }['value'] == defaults['source-url'], 'PR source-url default drift')
   check(triggered['params'].find { |p| p['name'] == 'env' }['value'] == 'dev', 'PR env default drift')
+  check(triggered.fetch('workspaces', []).empty?, 'PR entry must use internally managed credentials, matching console/CLI')
+  supplied = triggered['params'].to_h { |p| [p['name'], p['value']] }
+  check((supplied.keys - entry_defaults.keys).empty?, 'PR supplied unknown entry parameters')
+  check(!supplied.key?('image-tag') && entry_defaults['image-tag'] == '', 'PR must retain automatic commit tags')
+  binding = get.call('TriggerBinding', scope + '-azure-pr')['spec']['params'].to_h { |p| [p['name'], p['value']] }
+  check(binding['source-revision'] == '$(body.resource.sourceRefName)' &&
+        binding['source-commit'] == '$(body.resource.lastMergeSourceCommit.commitId)' &&
+        binding['target-commit'] == '$(body.resource.lastMergeTargetCommit.commitId)', 'Azure PR SHA/branch mapping drift')
+  filter = listener.dig('spec', 'triggers', 0, 'interceptors', 0, 'params').find { |p| p['name'] == 'filter' }['value']
+  check(filter.include?("body.resource.repository.remoteUrl == '#{defaults['source-url']}'") &&
+        filter.include?("body.resource.targetRefName == 'refs/heads/#{front ? 'pre-prod' : 'test'}'") &&
+        filter.include?("body.resource.status == 'active'") &&
+        %w[git.pullrequest.created git.pullrequest.updated].all? { |event| filter.include?(event) }, 'Azure PR filters drift')
+  # Resolve real-shaped Azure fields through the rendered binding/template.
+  # This checks data wiring, not execution of the CEL interceptor or cluster API.
+  %w[git.pullrequest.created git.pullrequest.updated].each do |event|
+    body = {'eventType' => event, 'resource' => {'status' => 'active', 'pullRequestId' => 123,
+      'sourceRefName' => 'refs/heads/feature/pr-test', 'targetRefName' => "refs/heads/#{front ? 'pre-prod' : 'test'}",
+      'repository' => {'remoteUrl' => defaults['source-url']},
+      'lastMergeSourceCommit' => {'commitId' => 'a' * 40}, 'lastMergeTargetCommit' => {'commitId' => 'b' * 40}}}
+    context = {'body' => body, 'extensions' => {'pr-id' => '123', 'source-short' => 'a' * 12, 'target-short' => 'b' * 12}}
+    resolved = binding.transform_values do |value|
+      path = value.match(/\A\$\(([^)]+)\)\z/)[1].split('.')
+      context.dig(*path) || raise('Unresolved Azure binding')
+    end
+    rendered_run = JSON.parse(JSON.generate(template['spec']['resourcetemplates'][0]).gsub(/\$\(tt\.params\.([^)]+)\)/) { resolved.fetch(Regexp.last_match(1)) })
+    inputs = rendered_run['spec']['params'].to_h { |p| [p['name'], p['value']] }
+    check(inputs['source-revision'] == 'refs/heads/feature/pr-test' && inputs['source-commit'] == 'a' * 40 && inputs['target-commit'] == 'b' * 40, 'PR payload did not reach launcher inputs')
+    check(rendered_run['metadata']['name'] == "#{scope}-pr-123-#{'a' * 12}-#{'b' * 12}", 'PR run identity must include both commits')
+  end
   route = get.call('Route', scope + '-pr-webhook')['spec']
   check(route['to']['name'] == 'el-' + scope + '-pr' && route['tls']['termination'] == 'edge', 'Route must reach correct listener')
   role = get.call('Role', scope + '-dispatcher')['rules']

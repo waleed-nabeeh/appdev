@@ -124,10 +124,12 @@ spec:
           - {name: source-revision, value: $(tt.params.source-revision)}
           - {name: source-commit, value: $(tt.params.source-commit)}
           - {name: target-commit, value: $(tt.params.target-commit)}
+{{- if not $root.Values.applicationBuild.singleRun }}
         workspaces:
           - name: git-credentials
             secret:
               secretName: git-credentials
+{{- end }}
 ---
 apiVersion: triggers.tekton.dev/v1beta1
 kind: EventListener

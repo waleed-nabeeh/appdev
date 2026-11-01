@@ -44,6 +44,8 @@ listener = triggered.find { |d| d['kind'] == 'EventListener' && d['metadata']['n
 check(listener.to_json.include?('compareSecret') && listener.to_json.include?('lastMergeTargetCommit'), 'Authenticated pinned PR')
 route = triggered.find { |d| d['kind'] == 'Route' && d['metadata']['name'] == 'backend-pr-webhook' }
 check(route['spec']['tls']['termination'] == 'edge', 'HTTPS route')
+legacy_trigger = triggered.find { |d| d['kind'] == 'TriggerTemplate' && d['metadata']['name'] == 'backend-azure-pr' }
+check(legacy_trigger.dig('spec', 'resourcetemplates', 0, 'spec', 'workspaces') == [{'name' => 'git-credentials', 'secret' => {'secretName' => 'git-credentials'}}], 'Legacy dispatcher must retain credential workspace')
 unauthenticated = render(*overlay, '--set', 'backendBuild.dispatch.triggers.enabled=true', '--set', 'backendBuild.dispatch.triggers.authRequired=false')
 open_listener = unauthenticated.find { |d| d['kind'] == 'EventListener' && d['metadata']['name'] == 'backend-pr' }
 check(!open_listener.to_json.include?('compareSecret') && !open_listener.to_json.include?('Authorization'), 'Unauthenticated test must not read auth Secret')
