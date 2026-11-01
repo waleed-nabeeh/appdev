@@ -96,7 +96,10 @@ check(runs.size == 2, 'Expected two dispatcher TaskRun examples')
   check(env['GITOPS_URL'].end_with?('/RedHat_HelmCharts'), 'Incorrect accessible GitOps repo')
   check(updater['steps'].find { |s| s['name'] == 'update-yaml' }['env'].any? { |e| e['name'] == 'IMAGE_TAG' && e['value'] == '$(params.image-tag)' }, 'GitOps must receive expected manual tag')
   launcher = tasks.fetch(scope + '-build-dispatch')
-  check(launcher['steps'].last['script'].include?('function makeFanoutRun'), 'Missing selected-only builder')
+  factory_step = launcher['steps'].last
+  check(factory_step['command'] == ['node'] && factory_step['args'] == ['/config/build-fanout-dispatch.js'] && !factory_step.key?('script'), 'Run selected-only builder from ConfigMap to preserve generated Pipeline parameter references')
+  factory = get.call('ConfigMap', scope + '-dispatch-config')['data']['build-fanout-dispatch.js']
+  check(factory == File.read('pipelines/chart/files/build-fanout-dispatch.js'), 'Mounted builder must match validated source')
   manual_names = config['catalog'].map { |s| s['name'] }
   check(launcher['params'].find { |p| p['name'] == 'services' }['default'] == manual_names.join(','), 'Manual chart default must list every enabled service')
   check(launcher['params'].find { |p| p['name'] == 'source-url' }['default'] == defaults['source-url'], 'Launcher source-url default drift')

@@ -102,6 +102,20 @@ stores this graph in `spec.pipelineSpec`. Unselected services have no lanes,
 TaskRuns or PVCs. Changing the services parameter on an already-prepared build
 cannot regenerate its graph; start the entry Pipeline again with the new list.
 
+For PRs, the dispatcher computes the merge-base diff between the supplied source
+and target SHAs, then matches changed paths against the catalog. Backend service
+paths include the full service folder: `services/acl/` selects ACL, including
+changes in its sibling domain/application projects. Two changed service folders
+select two lanes. Shared, certificate, unmapped or build dependency metadata
+changes conservatively select all enabled services. The launcher logs changed
+files and the resulting selection; no-change diffs create no build.
+
+The factory executes from the existing mounted ConfigMap, not an inline Task
+script. This preserves generated `$(params.services)` references until the actual
+build starts and avoids the reported `Services differ from the prepared graph`
+failure. Reapply Helm and start a fresh launcher after upgrading. Restarting the
+failed prepared build retains its old graph and does not repair this issue.
+
 Backend allows `acl-service`, `administration-service`, `audit-logging-service`,
 `core-service`, `identity-service`, `language-service`, `document-service`,
 `event-service`, `notification-service`, `request-service`, `stakeholder-service`,

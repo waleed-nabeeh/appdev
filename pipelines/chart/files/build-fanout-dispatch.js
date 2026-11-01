@@ -105,8 +105,16 @@ if (require.main === module) {
     const {selectServices, selectDiff, kubeClient} = require('/config/backend-dispatch.js');
     const config = JSON.parse(fs.readFileSync('/config/config.json', 'utf8'));
     const commit = fs.readFileSync('/work/commit', 'utf8');
+    const paths = process.env.MODE === 'manual' ? [] : fs.readFileSync('/work/changed', 'utf8').split('\0').filter(Boolean);
+    const fallback = fs.existsSync('/work/all-services');
     const selected = process.env.MODE === 'manual' ? selectServices(process.env.SERVICES, config.catalog) :
-      selectDiff(fs.readFileSync('/work/changed', 'utf8').split('\0'), config.catalog, fs.existsSync('/work/all-services'));
+      selectDiff(paths, config.catalog, fallback);
+    console.log('Selection mode: ' + process.env.MODE);
+    if (process.env.MODE !== 'manual') {
+      console.log('Changed files:\n' + (paths.join('\n') || '(none)'));
+      if (fallback) console.log('Merge-base history unavailable; selecting all enabled services.');
+    }
+    console.log('Selected services: ' + (selected.join(',') || '(none)'));
     const api = kubeClient(fs, require('node:https'));
     const dispatcher = {metadata: {name: process.env.DISPATCHER_NAME, uid: process.env.DISPATCHER_UID, namespace: process.env.NAMESPACE}};
     const run = await launchFanout(api, config, selected, commit, process.env.REVISION, dispatcher,
@@ -114,7 +122,6 @@ if (require.main === module) {
     fs.writeFileSync('/tekton/results/services', JSON.stringify(selected));
     fs.writeFileSync('/tekton/results/commit', commit);
     fs.writeFileSync('/tekton/results/pipeline-run', run ? run.metadata.name : 'none');
-    console.log('Selected services: ' + (selected.join(',') || '(none)'));
     console.log(run ? 'Build PipelineRun: ' + run.metadata.name : 'No changed services; no build PipelineRun created.');
   })().catch(error => { console.error(error.message); process.exitCode = 1; });
 }

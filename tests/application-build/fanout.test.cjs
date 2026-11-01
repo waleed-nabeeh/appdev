@@ -2,6 +2,7 @@
 const {execFileSync} = require('node:child_process');
 const yaml = require('../../pipelines/chart/files/vendor/js-yaml.js');
 const {makeFanoutRun, launchFanout} = require('../../pipelines/chart/files/build-fanout-dispatch.js');
+const {selectDiff} = require('../../pipelines/chart/files/backend-dispatch.js');
 function check(ok, message) { if (!ok) throw new Error(message); }
 function reject(fn) { let failed = false; try { fn(); } catch (_) { failed = true; } check(failed, 'Expected rejection'); }
 function rendered(extra = []) {
@@ -72,6 +73,14 @@ for (const count of [1, 2, 14]) verify(documents, 'backend', count);
 for (const count of [1, 2, 3]) verify(documents, 'frontend', count);
 verify(allBackend, 'backend', 17);
 const {run, config, template, selected} = verify(documents, 'backend', 2);
+const backendCatalog = fixture(documents, 'backend').config.catalog;
+check(selectDiff(['services/acl/MOFA.UnifiedVisaPlatform.ACL/Controller.cs'], backendCatalog).join() === 'acl-service', 'ACL executable changes select ACL only');
+check(selectDiff(['services/acl/MOFA.UnifiedVisaPlatform.ACL.Domain/Entity.cs'], backendCatalog).join() === 'acl-service', 'ACL sibling project changes select ACL only');
+check(selectDiff(['services/core/Domain/Entity.cs'], backendCatalog).join() === 'core-service', 'Core service changes select Core only');
+check(selectDiff(['services/acl/Controller.cs', 'services/core/Entity.cs'], backendCatalog).join() === 'acl-service,core-service', 'Two changed services select two lanes');
+for (const path of ['shared/Common.cs', 'certificates/ca.crt', 'Directory.Build.props', 'NuGet.Config']) {
+  check(selectDiff([path], backendCatalog).length === 14, 'Shared/build changes retain conservative fallback: ' + path);
+}
 reject(() => makeFanoutRun(template, config, ['not-a-service'], commit, 'test', dispatcher));
 reject(() => makeFanoutRun(template, config, [selected[0], selected[0]], commit, 'test', dispatcher));
 reject(() => makeFanoutRun(template, config, selected, 'bad', 'test', dispatcher));
@@ -94,7 +103,60 @@ for (const scope of ['backend', 'frontend']) {
     reject(() => makeFanoutRun(template, config, selected, commit, 'test', dispatcher, {imageTag}));
   }
 }
+async function renderedLaunch(scope, mode, services, paths, expected) {
+  const {config, template} = fixture(documents, scope);
+  const task = documents.find(d => d.kind === 'Task' && d.metadata.name === scope + '-build-dispatch');
+  const values = Object.fromEntries(task.spec.params.map(p => [p.name, p.default]));
+  Object.assign(values, {services, 'selection-mode': mode, 'source-commit': commit});
+  // Tekton substitutes Task parameters before executing a Step. Code mounted
+  // from a ConfigMap must not be substituted as though it were a Step script.
+  const step = JSON.parse(JSON.stringify(task.spec.steps.at(-1)).replace(/\$\(params\.([^)]+)\)/g, (whole, name) => Object.hasOwn(values, name) ? values[name] : whole));
+  check(step.command?.join() === 'node' && step.args?.join() === '/config/build-fanout-dispatch.js' && !step.script, 'Factory must execute from mounted code');
+  const code = documents.find(d => d.kind === 'ConfigMap' && d.metadata.name === scope + '-dispatch-config').data['build-fanout-dispatch.js'];
+  check(typeof code === 'string', 'Missing mounted factory');
+  let created, failure;
+  const writes = {};
+  const api = async (method, path, body) => {
+    if (method === 'GET') return template;
+    check(method === 'POST' && path.endsWith('/pipelineruns'), 'Unexpected API request');
+    created = body; return body;
+  };
+  const fs = {existsSync: () => false, readFileSync: path => {
+    if (path === '/config/config.json') return JSON.stringify(config);
+    if (path === '/work/commit') return commit;
+    if (path === '/work/changed') return paths.join('\0') + '\0';
+    throw Error('Unexpected file read: ' + path);
+  }, writeFileSync: (path, data) => { writes[path] = data; }};
+  const proc = {env: {...Object.fromEntries(step.env.map(e => [e.name, e.value])), MODE: mode,
+    NAMESPACE: dispatcher.metadata.namespace, DISPATCHER_NAME: dispatcher.metadata.name, DISPATCHER_UID: dispatcher.metadata.uid}};
+  const mod = {exports: {}};
+  const req = name => {
+    if (name === 'node:fs') return fs;
+    if (name === 'node:https') return {};
+    if (name === '/config/backend-dispatch.js') return {...require('../../pipelines/chart/files/backend-dispatch.js'), kubeClient: () => api};
+    throw Error('Unexpected module: ' + name);
+  };
+  req.main = mod;
+  new Function('module', 'require', 'process', 'console', code)(mod, req, proc, {log() {}, error(message) { failure = message; }});
+  for (let tick = 0; tick < 16; tick++) await Promise.resolve();
+  check(!proc.exitCode && !failure, failure || 'Rendered launch failed');
+  check(created && writes['/tekton/results/services'] === JSON.stringify(expected), 'Diff/CSV selection was not used');
+  const params = Object.fromEntries(created.spec.params.map(p => [p.name, p.value]));
+  const source = created.spec.pipelineSpec.tasks[0];
+  const resolve = value => value.replace(/\$\(params\.([^)]+)\)/g, (whole, name) => params[name]);
+  const received = resolve(source.params.find(p => p.name === 'services').value);
+  const prepared = source.params.find(p => p.name === 'expected-services').value;
+  check(received === expected.join(',') && received === prepared, 'Service selection guard would fail after nested substitution');
+  check(params.services === expected.join(',') && created.spec.pipelineSpec.tasks.length === 2 + expected.length * 6, 'Generated graph includes unselected lanes');
+}
 module.exports = (async () => {
+  await renderedLaunch('backend', 'diff', '', ['services/acl/MOFA.UnifiedVisaPlatform.ACL/Controller.cs'], ['acl-service']);
+  await renderedLaunch('backend', 'diff', '', ['services/acl/Domain.cs', 'services/core/Domain.cs'], ['acl-service', 'core-service']);
+  await renderedLaunch('backend', 'diff', '', ['shared/Common.cs'], backendCatalog.map(s => s.name));
+  await renderedLaunch('backend', 'manual', ' acl-service,core-service,acl-service ', [], ['acl-service', 'core-service']);
+  await renderedLaunch('frontend', 'diff', '', ['apps/admin-portal/src/app/app.ts'], ['admin-portal']);
+  await renderedLaunch('frontend', 'manual', 'admin-portal, applicant-portal', [], ['admin-portal', 'applicant-portal']);
+  console.log('Passed rendered dispatcher execution after Task substitution: PR diff, manual CSV and matching selected-service guard');
   let creates = 0;
   const api = async (method, path, body) => {
     if (method === 'GET') { check(path.endsWith('/pipelines/' + config.fanoutPipeline), 'Read only the installed fanout'); return template; }

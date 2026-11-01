@@ -90,6 +90,7 @@ spec:
         printf '%s' "$SOURCE_URL" | grep -Eq '^https://[A-Za-z0-9.-]+(:[0-9]+)?/[A-Za-z0-9._~%/-]+$' || { echo 'Invalid HTTPS source-url' >&2; exit 1; }
         printf '%s' "$BUILD_ENV" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$' || { echo 'Invalid env' >&2; exit 1; }
         if [ -n "$EXPECTED_SERVICES" ] && [ "$SERVICES" != "$EXPECTED_SERVICES" ]; then
+          printf 'Received services: %s\nExpected services: %s\n' "$SERVICES" "$EXPECTED_SERVICES" >&2
           echo 'Services differ from the prepared graph. Launch the dispatcher with the new selection.' >&2; exit 1
         fi
 {{- end }}

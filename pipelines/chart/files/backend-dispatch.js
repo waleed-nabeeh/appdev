@@ -21,7 +21,7 @@ function selectDiff(paths, catalog, fallback) {
   const selected = new Set();
   for (const path of paths) {
     if (!path) continue;
-    // Only changes within an executable project's own directory are narrowly scoped.
+    // Scope changes only when they match exactly one declared service area.
     // Libraries/contracts, build metadata, shared code and unmapped paths affect all.
     if (/\.(csproj|props|targets|sln|slnx)$/i.test(path)) return all;
     const matches = catalog.filter(s => (s.paths || [s.containerfile.slice(0, -'Dockerfile'.length)]).some(prefix => path.startsWith(prefix)));
