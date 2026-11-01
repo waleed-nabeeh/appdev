@@ -1,0 +1,17 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: frontend-promotion-
+  namespace: devops
+  labels:
+    app.kubernetes.io/part-of: application-promotion
+spec:
+  pipelineRef:
+    name: application-frontend-promotion
+  taskRunTemplate:
+    serviceAccountName: pipeline
+  timeouts:
+    pipeline: 1h0m0s
+  params:
+    - name: services
+      value: admin-portal

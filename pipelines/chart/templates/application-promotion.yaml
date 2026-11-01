@@ -1,0 +1,177 @@
+{{- if .Values.applicationPromotion.enabled }}
+{{- $root := . }}
+{{- range $scope := list "backend" "frontend" }}
+{{- $build := ternary $root.Values.backendBuild $root.Values.frontendRelease (eq $scope "backend") }}
+{{- $settings := index $root.Values.applicationPromotion $scope }}
+{{- $catalog := $root.Files.Get (printf "files/%s-services.json" $scope) | fromJsonArray }}
+{{- $enabled := list }}
+{{- $names := list }}
+{{- range $service := $catalog }}
+{{- if or (empty $build.selectedServices) (has $service.name $build.selectedServices) }}
+{{- $enabled = append $enabled $service }}
+{{- $names = append $names $service.name }}
+{{- end }}
+{{- end }}
+{{- $targets := list }}
+{{- range $target := $root.Values.applicationPromotion.targets }}
+{{- if not (has $target.name (list "prod" "dr")) }}{{ fail "Promotion target must be prod or dr" }}{{- end }}
+{{- $targets = append $targets (dict "name" $target.name "applicationPrefix" $target.applicationPrefix "file" (index $settings (printf "%sFile" $target.name))) }}
+{{- end }}
+{{- if ne (len $targets) 2 }}{{ fail "Promotion must include production and DR" }}{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $scope }}-promotion-code
+  namespace: {{ $root.Release.Namespace }}
+data:
+  promotion.json: |
+    {{ dict "sourceFile" $settings.sourceFile "sourcePrefix" $root.Values.applicationPromotion.sourcePrefix "targets" $targets "catalog" $enabled "imageRepository" $build.imageRepository | toJson }}
+  application-promotion.js: |
+{{ $root.Files.Get "files/application-promotion.js" | indent 4 }}
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: {{ $scope }}-promote-images
+  namespace: {{ $root.Release.Namespace }}
+spec:
+  description: Verify selected preproduction images and update production/DR GitOps files without rebuilding or syncing Argo CD.
+  params:
+    - {name: services, type: string, default: {{ join "," $names | quote }}}
+    - {name: gitops-commit, type: string, default: ""}
+  results:
+    - name: source-commit
+    - name: services
+    - name: gitops-commit
+  volumes:
+    - name: work
+      emptyDir: {}
+    - name: git-credentials
+      secret: {secretName: git-credentials}
+    - name: registry-auth
+      secret: {secretName: registry-auth}
+    - name: config
+      projected:
+        sources:
+          - configMap: {name: {{ $scope }}-promotion-code}
+          - configMap: {name: gitops-yaml-code}
+  stepTemplate:
+    volumeMounts:
+      - {name: work, mountPath: /work}
+      - {name: config, mountPath: /config, readOnly: true}
+    env:
+      - {name: HOME, value: /work/home}
+      - {name: SCOPE, value: {{ $scope | quote }}}
+      - {name: GITOPS_URL, value: {{ $root.Values.applicationPromotion.gitops.repository | quote }}}
+      - {name: GITOPS_BRANCH, value: {{ $root.Values.applicationPromotion.gitops.revision | quote }}}
+      - {name: SOURCE_FILE, value: {{ $settings.sourceFile | quote }}}
+      - {name: SERVICES, value: $(params.services)}
+      - {name: APPROVED_COMMIT, value: $(params.gitops-commit)}
+  steps:
+    - name: read-preproduction
+      image: {{ $root.Values.images.git | quote }}
+      volumeMounts:
+        - {name: git-credentials, mountPath: /credentials/git, readOnly: true}
+      script: |
+        #!/bin/sh
+        set -eu
+        mkdir -p "$HOME"
+        cp -R /credentials/git/. "$HOME"/
+        chmod -R go-rwx "$HOME"
+        git config --global credential.helper store
+        git check-ref-format "refs/heads/$GITOPS_BRANCH"
+        git clone --single-branch --branch "$GITOPS_BRANCH" "$GITOPS_URL" /work/repo
+        cd /work/repo
+        if [ -z "$APPROVED_COMMIT" ]; then APPROVED_COMMIT=$(git rev-parse HEAD); fi
+        [ "${#APPROVED_COMMIT}" -eq 40 ] && printf '%s' "$APPROVED_COMMIT" | grep -Eq '^[a-f0-9]{40}$' || { echo 'Expected full GitOps commit SHA' >&2; exit 1; }
+        git merge-base --is-ancestor "$APPROVED_COMMIT" HEAD || { echo 'Approved commit is not on the configured GitOps branch' >&2; exit 1; }
+        git show "$APPROVED_COMMIT:$SOURCE_FILE" > /work/approved-source.yaml
+        chmod -R g+rwX /work/repo
+        chmod g+r /work/approved-source.yaml
+        printf '%s' "$APPROVED_COMMIT" > /tekton/results/source-commit
+        printf 'Preproduction GitOps commit: %s\nSource file: %s\n' "$APPROVED_COMMIT" "$SOURCE_FILE"
+    - name: plan-promotion
+      image: {{ $root.Values.images.nodejs24 | quote }}
+      env: [{name: ACTION, value: plan}]
+      command: [node]
+      args: [/config/application-promotion.js]
+    - name: resolve-images
+      image: {{ $root.Values.images.skopeo | quote }}
+      env: [{name: MODE, value: resolve}]
+      volumeMounts:
+        - {name: registry-auth, mountPath: /credentials/registry, readOnly: true}
+      script: |
+{{ $root.Files.Get "files/promotion-resolve.sh" | indent 8 }}
+    - name: verify-images
+      image: {{ $root.Values.images.rhtasClientServer | quote }}
+      env:
+        - {name: HOME, value: /tmp/promotion-rhtas-home}
+      volumeMounts:
+        - {name: registry-auth, mountPath: /credentials/registry, readOnly: true}
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        mkdir -p "$HOME"
+        chmod 700 "$HOME"
+        authfile=/credentials/registry/config.json
+        if [ ! -f "$authfile" ]; then authfile=/credentials/registry/.dockerconfigjson; fi
+        test -s "$authfile"
+        export DOCKER_CONFIG="$(mktemp -d)"
+        cp "$authfile" "$DOCKER_CONFIG/config.json"
+        chmod 600 "$DOCKER_CONFIG/config.json"
+        curl --fail --silent --show-error --location \
+          "{{ $root.Values.rhtas.clientUrl }}/clients/linux/cosign-amd64.gz" --output /tmp/promotion-cosign.gz
+        gzip --decompress /tmp/promotion-cosign.gz
+        chmod +x /tmp/promotion-cosign
+        /tmp/promotion-cosign initialize --mirror="{{ $root.Values.rhtas.tufUrl }}" --root="{{ $root.Values.rhtas.tufUrl }}/root.json"
+        while IFS=$'\t' read -r service repository tag digest; do
+          printf 'Verifying %s:%s at %s\n' "$repository" "$tag" "$digest"
+          /tmp/promotion-cosign verify \
+            --certificate-identity-regexp="{{ $root.Values.rhtas.certificateIdentityRegexp }}" \
+            --certificate-oidc-issuer="{{ $root.Values.rhtas.certificateOidcIssuer }}" \
+            "$repository@$digest"
+        done < /work/resolved.tsv
+        printf 'passed' > /work/verified
+    - name: recheck-tags
+      image: {{ $root.Values.images.skopeo | quote }}
+      env: [{name: MODE, value: recheck}]
+      volumeMounts:
+        - {name: registry-auth, mountPath: /credentials/registry, readOnly: true}
+      script: |
+{{ $root.Files.Get "files/promotion-resolve.sh" | indent 8 }}
+    - name: update-gitops
+      image: {{ $root.Values.images.nodejs24 | quote }}
+      env: [{name: ACTION, value: update}]
+      command: [node]
+      args: [/config/application-promotion.js]
+    - name: push-production-and-dr
+      image: {{ $root.Values.images.git | quote }}
+      script: |
+{{ $root.Files.Get "files/promotion-push.sh" | indent 8 }}
+---
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: application-{{ $scope }}-promotion
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: application-promotion
+    app.kubernetes.io/component: {{ $scope }}
+spec:
+  description: Promote selected preproduction image references to production and DR GitOps; no builds, PVCs or Argo CD sync.
+  params:
+    - {name: services, type: string, default: {{ join "," $names | quote }}, description: "Comma-separated service names or all"}
+    - {name: gitops-commit, type: string, default: "", description: "Approved full GitOps SHA; empty snapshots the configured branch at start"}
+  results:
+    - {name: source-commit, value: $(tasks.promote-images.results.source-commit)}
+    - {name: services, value: $(tasks.promote-images.results.services)}
+    - {name: gitops-commit, value: $(tasks.promote-images.results.gitops-commit)}
+  tasks:
+    - name: promote-images
+      taskRef: {name: {{ $scope }}-promote-images}
+      params:
+        - {name: services, value: $(params.services)}
+        - {name: gitops-commit, value: $(params.gitops-commit)}
+{{- end }}
+{{- end }}

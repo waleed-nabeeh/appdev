@@ -1,0 +1,17 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: backend-promotion-
+  namespace: devops
+  labels:
+    app.kubernetes.io/part-of: application-promotion
+spec:
+  pipelineRef:
+    name: application-backend-promotion
+  taskRunTemplate:
+    serviceAccountName: pipeline
+  timeouts:
+    pipeline: 1h0m0s
+  params:
+    - name: services
+      value: acl-service

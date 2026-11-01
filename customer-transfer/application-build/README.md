@@ -4,6 +4,10 @@ Helm chart: `pipelines/chart/`. Release: `release-pipeline`. Namespace: `devops`
 Use this folder's **single values.yaml**; no other overlays or `--set` flags are
 required for the current customer setup.
 
+For the new Git-only copy of selected preproduction images into production and
+DR values, use [Application Promotion](../application-promotion/README.md).
+It uses this same values file and keeps the current application names unchanged.
+
 ## Manual start in the OpenShift console
 
 1. Select project **devops**, then **Pipelines → Pipelines**.

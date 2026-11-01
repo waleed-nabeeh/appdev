@@ -4,6 +4,26 @@ serviceAccount:
 applicationBuild:
   singleRun: false
 
+applicationPromotion:
+  enabled: false
+  gitops:
+    repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_HelmCharts
+    revision: dev
+  sourcePrefix: "pre-"
+  targets:
+    - name: prod
+      applicationPrefix: "pre-"
+    - name: dr
+      applicationPrefix: "pre-"
+  backend:
+    sourceFile: app-chart/backend.yaml
+    prodFile: app-chart/prod-backend.yaml
+    drFile: app-chart/dr-backend.yaml
+  frontend:
+    sourceFile: app-chart/frontend.yaml
+    prodFile: app-chart/prod-frontend.yaml
+    drFile: app-chart/dr-frontend.yaml
+
 backendBuild:
   enabled: false
   env: dev

@@ -26,6 +26,8 @@ serviceAccount:
   name: pipeline
 applicationBuild:
   singleRun: true
+applicationPromotion:
+  enabled: true
 frontendPr:
   enabled: false
 backendBuild:

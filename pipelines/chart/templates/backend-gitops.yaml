@@ -1,4 +1,4 @@
-{{- if or (and .Values.backendBuild.enabled .Values.backendBuild.dispatch.enabled .Values.backendBuild.dispatch.gitops.enabled) (and .Values.frontendRelease.enabled (or (eq (default "json" .Values.frontendRelease.gitops.format) "yaml") (and .Values.frontendRelease.dispatch.enabled .Values.frontendRelease.dispatch.gitops.enabled))) }}
+{{- if or .Values.applicationPromotion.enabled (and .Values.backendBuild.enabled .Values.backendBuild.dispatch.enabled .Values.backendBuild.dispatch.gitops.enabled) (and .Values.frontendRelease.enabled (or (eq (default "json" .Values.frontendRelease.gitops.format) "yaml") (and .Values.frontendRelease.dispatch.enabled .Values.frontendRelease.dispatch.gitops.enabled))) }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
