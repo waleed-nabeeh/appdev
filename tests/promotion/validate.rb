@@ -18,35 +18,47 @@ docs = YAML.load_stream(run(*command)).compact
 %w[backend frontend].each do |scope|
   find = ->(kind, name) { docs.find { |d| d['kind'] == kind && d['metadata']['name'] == name } || raise("Missing #{kind}/#{name}") }
   pipeline = find.call('Pipeline', "application-#{scope}-promotion")['spec']
-  task = find.call('Task', "#{scope}-promote-images")['spec']
+  phases = %w[read-release-manifest get-approved-artifacts verify-image update-gitops]
+  definitions = phases.to_h { |phase| [phase, find.call('Task', "#{scope}-promotion-#{phase}")['spec']] }
   config = JSON.parse(find.call('ConfigMap', "#{scope}-promotion-code")['data']['promotion.json'])
   check(config['catalog'].size == (scope == 'backend' ? 14 : 3), 'Promotion catalog must match current build allowlist')
   check(config['sourceFile'] == "app-chart/#{scope}.yaml", 'Wrong preprod source')
   check(config['targets'].map { |t| t['file'] } == ["app-chart/prod-#{scope}.yaml", "app-chart/dr-#{scope}.yaml"], 'Wrong target files')
   check(config['targets'].all? { |t| t['applicationPrefix'] == config['sourcePrefix'] }, 'Current test must preserve application names')
   check(pipeline['params'].find { |p| p['name'] == 'services' }['default'] == config['catalog'].map { |s| s['name'] }.join(','), 'Missing UI defaults')
-  check(pipeline.fetch('workspaces', []).empty? && task.fetch('workspaces', []).empty?, 'No manual workspaces or PVCs for promotion')
-  check(task['volumes'].none? { |v| v['persistentVolumeClaim'] }, 'Promotion needs no PVC')
-  expected = %w[read-preproduction plan-promotion resolve-images verify-images recheck-tags update-gitops push-production-and-dr]
-  check(task['steps'].map { |s| s['name'] } == expected && task['steps'].none? { |s| s['onError'] }, 'Verification/recheck must block all target updates on failure')
-  check(task.to_json.include?('$repository@$digest') && !task.to_json.include?('argocd app sync'), 'Verify the resolved digest; no automatic Argo sync')
-  check(task['steps'].find { |s| s['name'] == 'verify-images' }['env'].any? { |e| e['name'] == 'HOME' && e['value'] == '/tmp/promotion-rhtas-home' }, 'Verifier needs its own writable HOME, not private Git credentials')
-  check(task.to_json.include?('git merge-base --is-ancestor') && task.to_json.include?('git show'), 'Read an approved Git revision without replacing current target state')
+  check(pipeline.fetch('workspaces', []).empty?, 'No manual workspace inputs for promotion')
+  check(pipeline['tasks'].map { |t| t['name'] } == phases, 'Design stages must be separate graph Tasks')
+  phases.each_cons(2) { |a,b| check(pipeline['tasks'].find { |t| t['name'] == b }['runAfter'] == [a], 'Verification must block later Tasks') }
+  verifier = definitions.fetch('verify-image')
+  check(verifier.to_json.include?('$repository@$digest') && !pipeline.to_json.include?('argocd-sync'), 'Verify the resolved digest; no automatic Argo sync')
+  check(verifier['steps'].find { |s| s['name'] == 'verify-images' }['env'].any? { |e| e['name'] == 'HOME' && e['value'] == '/tmp/promotion-rhtas-home' }, 'Verifier needs its own writable HOME')
+  check(definitions.fetch('read-release-manifest').to_json.include?('git show') && definitions.fetch('update-gitops').to_json.include?('Concurrent change'), 'Pin approved source and reject intervening file changes')
   pipeline['tasks'].each do |t|
-    check(t.dig('taskRef', 'name') == "#{scope}-promote-images", 'Wrong promotion Task')
+    task = definitions.fetch(t['name'])
+    check(t.dig('taskRef', 'name') == "#{scope}-promotion-#{t['name']}", 'Wrong promotion Task')
     check(t['params'].all? { |p| task['params'].any? { |declared| declared['name'] == p['name'] } }, 'Unknown Task parameter')
-  end
-  task['steps'].each do |step|
-    next unless step['script']
-    Dir.mktmpdir do |tmp|
-      script = File.join(tmp, 'script')
-      File.write(script, step['script'])
-      run('bash', '-n', script)
+    check(task['params'].reject { |p| p.key?('default') }.all? { |p| t['params'].any? { |v| v['name'] == p['name'] } }, 'Missing artifact input')
+    check(task.fetch('workspaces', []).empty? && task['volumes'].none? { |v| v['persistentVolumeClaim'] }, 'Promotion must use no PVC')
+    check(!t['onError'] && task['steps'].none? { |s| s['onError'] }, 'Failure must block all target updates')
+    task.to_json.scan(/\$\(params\.([^)]+)\)/).flatten.each { |p| check(task['params'].any? { |v| v['name'] == p }, 'Unknown Task param reference') }
+    task['steps'].each do |step|
+      next unless step['script']
+      Dir.mktmpdir do |tmp|
+        script = File.join(tmp, 'script')
+        File.write(script, step['script'])
+        run('bash', '-n', script)
+      end
     end
   end
+  pipeline.to_json.scan(/\$\(tasks\.([^.]+)\.results\.([^)]+)\)/).each do |producer, result|
+    check(definitions.fetch(producer).fetch('results').any? { |r| r['name'] == result }, 'Invalid Task result data flow')
+  end
+  update = definitions.fetch('update-gitops')
+  check(update['steps'].map { |s| s['name'] } == %w[read-preproduction plan-promotion recheck-tags update-gitops push-production-and-dr], 'Recheck tags before writing targets')
+  check(pipeline['tasks'].last['params'].any? { |p| p['name'] == 'verified-digests' && p['value'] == '$(tasks.verify-image.results.digests)' }, 'Only verified artifact results may update GitOps')
 end
 disabled = YAML.load_stream(run('helm', 'template', 'release-pipeline', 'pipelines/chart')).compact
-check(disabled.none? { |d| d['metadata']['name'].end_with?('-promote-images') }, 'New promotion must default off outside customer values')
+check(disabled.none? { |d| d['metadata']['name'].include?('-promotion-read-release-manifest') }, 'New promotion must default off outside customer values')
 Dir.mktmpdir do |tmp|
   FileUtils.mkdir_p(File.join(tmp, 'work'))
   FileUtils.mkdir_p(File.join(tmp, 'credentials/registry'))
@@ -89,7 +101,7 @@ Dir.mktmpdir do |tmp|
     work = File.join(tmp, 'work-' + name)
     FileUtils.mkdir_p(work)
     FileUtils.mkdir_p(File.join(work, 'results'))
-    File.write(File.join(work, 'results/source-commit'), base)
+    File.write(File.join(work, 'source-commit'), base)
     File.write(File.join(work, 'targets.txt'), "prod-#{scope}.yaml\ndr-#{scope}.yaml\n")
     File.write(File.join(work, 'watched.txt'), "#{scope}.yaml\nprod-#{scope}.yaml\ndr-#{scope}.yaml\n")
     script = File.join(work, 'push.sh')
@@ -123,15 +135,22 @@ Dir.mktmpdir do |tmp|
   credentials = File.join(tmp, 'read-credentials')
   results = File.join(tmp, 'read-results')
   [work, credentials, results].each { |d| FileUtils.mkdir_p(d) }
-  definition = docs.find { |d| d['kind'] == 'Task' && d['metadata']['name'] == 'backend-promote-images' }
+  definition = docs.find { |d| d['kind'] == 'Task' && d['metadata']['name'] == 'backend-promotion-read-release-manifest' }
   source_step = definition['spec']['steps'].find { |s| s['name'] == 'read-preproduction' }['script']
   source_step = source_step.gsub('/work', work).gsub('/credentials/git', credentials).gsub('/tekton/results', results)
   filename = File.join(tmp, 'read-source.sh')
   File.write(filename, source_step)
-  env = {'HOME' => File.join(tmp, 'read-home'), 'GITOPS_URL' => remote, 'GITOPS_BRANCH' => 'dev', 'SOURCE_FILE' => 'backend.yaml', 'APPROVED_COMMIT' => base}
+  env = {'HOME' => File.join(tmp, 'read-home'), 'GITOPS_URL' => remote, 'GITOPS_BRANCH' => 'dev', 'SOURCE_FILE' => 'backend.yaml', 'APPROVED_COMMIT' => base, 'EMIT_SOURCE_RESULTS' => 'true'}
   _, err, status = Open3.capture3(env, 'sh', filename)
   check(status.success?, err)
   check(File.read(File.join(work, 'approved-source.yaml')) == 'backend.yaml-old', 'Promotion must read the pinned source revision')
   check(File.read(File.join(work, 'repo/backend.yaml')) == 'newer-preproduction-source' && File.read(File.join(work, 'repo/prod-backend.yaml')) == 'backend-new', 'Historical source must not reset current target state')
+  check(File.read(File.join(results, 'source-commit')) == base && File.read(File.join(results, 'base-commit')).size == 40, 'Read Task must emit the pinned source and current base for the update Task')
+  update_work = File.join(tmp, 'update-work')
+  FileUtils.mkdir_p(update_work)
+  File.write(filename, source_step.gsub(work, update_work))
+  _, error, status = Open3.capture3(env.merge('HOME' => File.join(tmp, 'update-home'),
+    'EXPECTED_BASE' => base, 'PROD_FILE' => 'prod-backend.yaml', 'DR_FILE' => 'dr-backend.yaml'), 'sh', filename)
+  check(!status.success? && error.include?('Concurrent change'), 'Fresh update Task must reject source/target changes since the read Task')
 end
 puts 'Passed real local Git promotion: paired target commit, parallel scope merge, approved source pinning and stale target/no-op rejection'

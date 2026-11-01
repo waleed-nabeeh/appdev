@@ -14,7 +14,7 @@ if git diff --cached --quiet; then
   echo 'Production and DR already contain the selected image references; no Git commit needed.'
 else
   git commit -m "Promote $SCOPE images to production and DR [skip ci]" \
-    -m "Source GitOps commit: $(cat /tekton/results/source-commit)"
+    -m "Source GitOps commit: $(cat /work/source-commit)"
   pushed=false
   for attempt in 1 2 3; do
     if git push origin "HEAD:refs/heads/$GITOPS_BRANCH"; then pushed=true; break; fi

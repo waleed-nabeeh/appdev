@@ -29,28 +29,53 @@ data:
     {{ dict "sourceFile" $settings.sourceFile "sourcePrefix" $root.Values.applicationPromotion.sourcePrefix "targets" $targets "catalog" $enabled "imageRepository" $build.imageRepository | toJson }}
   application-promotion.js: |
 {{ $root.Files.Get "files/application-promotion.js" | indent 4 }}
+{{- range $phase := list "read-release-manifest" "get-approved-artifacts" "verify-image" "update-gitops" }}
+{{- $git := or (eq $phase "read-release-manifest") (eq $phase "update-gitops") }}
 ---
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
-  name: {{ $scope }}-promote-images
+  name: {{ $scope }}-promotion-{{ $phase }}
   namespace: {{ $root.Release.Namespace }}
 spec:
-  description: Verify selected preproduction images and update production/DR GitOps files without rebuilding or syncing Argo CD.
   params:
+{{- if eq $phase "read-release-manifest" }}
     - {name: services, type: string, default: {{ join "," $names | quote }}}
     - {name: gitops-commit, type: string, default: ""}
+{{- else }}
+    - {name: images, type: string}
+{{- end }}
+{{- if or (eq $phase "verify-image") (eq $phase "update-gitops") }}
+    - {name: digests, type: string}
+{{- end }}
+{{- if eq $phase "update-gitops" }}
+    - {name: verified-digests, type: string}
+    - {name: services, type: string}
+    - {name: source-commit, type: string}
+    - {name: base-commit, type: string}
+{{- end }}
   results:
+{{- if eq $phase "read-release-manifest" }}
     - name: source-commit
+    - name: base-commit
     - name: services
+    - name: images
+{{- else if eq $phase "update-gitops" }}
     - name: gitops-commit
+{{- else }}
+    - name: digests
+{{- end }}
   volumes:
     - name: work
       emptyDir: {}
+{{- if $git }}
     - name: git-credentials
       secret: {secretName: git-credentials}
+{{- end }}
+{{- if ne $phase "read-release-manifest" }}
     - name: registry-auth
       secret: {secretName: registry-auth}
+{{- end }}
     - name: config
       projected:
         sources:
@@ -63,39 +88,50 @@ spec:
     env:
       - {name: HOME, value: /work/home}
       - {name: SCOPE, value: {{ $scope | quote }}}
+{{- if $git }}
       - {name: GITOPS_URL, value: {{ $root.Values.applicationPromotion.gitops.repository | quote }}}
       - {name: GITOPS_BRANCH, value: {{ $root.Values.applicationPromotion.gitops.revision | quote }}}
       - {name: SOURCE_FILE, value: {{ $settings.sourceFile | quote }}}
+      - {name: PROD_FILE, value: {{ $settings.prodFile | quote }}}
+      - {name: DR_FILE, value: {{ $settings.drFile | quote }}}
       - {name: SERVICES, value: $(params.services)}
+{{- if eq $phase "read-release-manifest" }}
       - {name: APPROVED_COMMIT, value: $(params.gitops-commit)}
+      - {name: EMIT_SOURCE_RESULTS, value: "true"}
+      - {name: EMIT_PLAN_RESULTS, value: "true"}
+{{- else }}
+      - {name: APPROVED_COMMIT, value: $(params.source-commit)}
+      - {name: EXPECTED_BASE, value: $(params.base-commit)}
+      - {name: VERIFIED_DIGESTS, value: $(params.verified-digests)}
+{{- end }}
+{{- end }}
+{{- if ne $phase "read-release-manifest" }}
+      - {name: IMAGES, value: $(params.images)}
+{{- end }}
+{{- if or (eq $phase "verify-image") (eq $phase "update-gitops") }}
+      - {name: DIGESTS, value: $(params.digests)}
+{{- end }}
   steps:
+{{- if $git }}
     - name: read-preproduction
       image: {{ $root.Values.images.git | quote }}
       volumeMounts:
         - {name: git-credentials, mountPath: /credentials/git, readOnly: true}
       script: |
-        #!/bin/sh
-        set -eu
-        mkdir -p "$HOME"
-        cp -R /credentials/git/. "$HOME"/
-        chmod -R go-rwx "$HOME"
-        git config --global credential.helper store
-        git check-ref-format "refs/heads/$GITOPS_BRANCH"
-        git clone --single-branch --branch "$GITOPS_BRANCH" "$GITOPS_URL" /work/repo
-        cd /work/repo
-        if [ -z "$APPROVED_COMMIT" ]; then APPROVED_COMMIT=$(git rev-parse HEAD); fi
-        [ "${#APPROVED_COMMIT}" -eq 40 ] && printf '%s' "$APPROVED_COMMIT" | grep -Eq '^[a-f0-9]{40}$' || { echo 'Expected full GitOps commit SHA' >&2; exit 1; }
-        git merge-base --is-ancestor "$APPROVED_COMMIT" HEAD || { echo 'Approved commit is not on the configured GitOps branch' >&2; exit 1; }
-        git show "$APPROVED_COMMIT:$SOURCE_FILE" > /work/approved-source.yaml
-        chmod -R g+rwX /work/repo
-        chmod g+r /work/approved-source.yaml
-        printf '%s' "$APPROVED_COMMIT" > /tekton/results/source-commit
-        printf 'Preproduction GitOps commit: %s\nSource file: %s\n' "$APPROVED_COMMIT" "$SOURCE_FILE"
+{{ $root.Files.Get "files/promotion-clone.sh" | indent 8 }}
     - name: plan-promotion
       image: {{ $root.Values.images.nodejs24 | quote }}
       env: [{name: ACTION, value: plan}]
       command: [node]
       args: [/config/application-promotion.js]
+{{- else }}
+    - name: prepare-artifacts
+      image: {{ $root.Values.images.nodejs24 | quote }}
+      env: [{name: ACTION, value: {{ ternary "prepare-images" "prepare-verification" (eq $phase "get-approved-artifacts") }}}]
+      command: [node]
+      args: [/config/application-promotion.js]
+{{- end }}
+{{- if eq $phase "get-approved-artifacts" }}
     - name: resolve-images
       image: {{ $root.Values.images.skopeo | quote }}
       env: [{name: MODE, value: resolve}]
@@ -103,6 +139,12 @@ spec:
         - {name: registry-auth, mountPath: /credentials/registry, readOnly: true}
       script: |
 {{ $root.Files.Get "files/promotion-resolve.sh" | indent 8 }}
+    - name: emit-digests
+      image: {{ $root.Values.images.nodejs24 | quote }}
+      env: [{name: ACTION, value: emit-digests}]
+      command: [node]
+      args: [/config/application-promotion.js]
+{{- else if eq $phase "verify-image" }}
     - name: verify-images
       image: {{ $root.Values.images.rhtasClientServer | quote }}
       env:
@@ -132,7 +174,8 @@ spec:
             --certificate-oidc-issuer="{{ $root.Values.rhtas.certificateOidcIssuer }}" \
             "$repository@$digest"
         done < /work/resolved.tsv
-        printf 'passed' > /work/verified
+        printf '%s' "$DIGESTS" > /tekton/results/digests
+{{- else if eq $phase "update-gitops" }}
     - name: recheck-tags
       image: {{ $root.Values.images.skopeo | quote }}
       env: [{name: MODE, value: recheck}]
@@ -149,6 +192,8 @@ spec:
       image: {{ $root.Values.images.git | quote }}
       script: |
 {{ $root.Files.Get "files/promotion-push.sh" | indent 8 }}
+{{- end }}
+{{- end }}
 ---
 apiVersion: tekton.dev/v1
 kind: Pipeline
@@ -159,19 +204,40 @@ metadata:
     app.kubernetes.io/part-of: application-promotion
     app.kubernetes.io/component: {{ $scope }}
 spec:
-  description: Promote selected preproduction image references to production and DR GitOps; no builds, PVCs or Argo CD sync.
+  description: Read preproduction versions, resolve and verify images, then update production/DR GitOps in separate Tasks; no builds, PVCs or Argo CD sync.
   params:
     - {name: services, type: string, default: {{ join "," $names | quote }}, description: "Comma-separated service names or all"}
     - {name: gitops-commit, type: string, default: "", description: "Approved full GitOps SHA; empty snapshots the configured branch at start"}
   results:
-    - {name: source-commit, value: $(tasks.promote-images.results.source-commit)}
-    - {name: services, value: $(tasks.promote-images.results.services)}
-    - {name: gitops-commit, value: $(tasks.promote-images.results.gitops-commit)}
+    - {name: source-commit, value: $(tasks.read-release-manifest.results.source-commit)}
+    - {name: services, value: $(tasks.read-release-manifest.results.services)}
+    - {name: gitops-commit, value: $(tasks.update-gitops.results.gitops-commit)}
   tasks:
-    - name: promote-images
-      taskRef: {name: {{ $scope }}-promote-images}
+    - name: read-release-manifest
+      taskRef: {name: {{ $scope }}-promotion-read-release-manifest}
       params:
         - {name: services, value: $(params.services)}
         - {name: gitops-commit, value: $(params.gitops-commit)}
+    - name: get-approved-artifacts
+      runAfter: [read-release-manifest]
+      taskRef: {name: {{ $scope }}-promotion-get-approved-artifacts}
+      params:
+        - {name: images, value: $(tasks.read-release-manifest.results.images)}
+    - name: verify-image
+      runAfter: [get-approved-artifacts]
+      taskRef: {name: {{ $scope }}-promotion-verify-image}
+      params:
+        - {name: images, value: $(tasks.read-release-manifest.results.images)}
+        - {name: digests, value: $(tasks.get-approved-artifacts.results.digests)}
+    - name: update-gitops
+      runAfter: [verify-image]
+      taskRef: {name: {{ $scope }}-promotion-update-gitops}
+      params:
+        - {name: services, value: $(tasks.read-release-manifest.results.services)}
+        - {name: source-commit, value: $(tasks.read-release-manifest.results.source-commit)}
+        - {name: base-commit, value: $(tasks.read-release-manifest.results.base-commit)}
+        - {name: images, value: $(tasks.read-release-manifest.results.images)}
+        - {name: digests, value: $(tasks.get-approved-artifacts.results.digests)}
+        - {name: verified-digests, value: $(tasks.verify-image.results.digests)}
 {{- end }}
 {{- end }}

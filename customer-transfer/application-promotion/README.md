@@ -94,18 +94,30 @@ approve the source snapshot through the customer's process before promoting it.
 
 ## What the run does
 
-One `promote-images` Task contains these ordered steps, sharing an `emptyDir`:
+The OpenShift graph now contains four separate Tasks, matching the application
+promotion stages in the design:
 
-1. `read-preproduction`: Clone the configured branch and snapshot source YAML at
-   the requested GitOps revision. Target values come from the current branch.
-2. `plan-promotion`: Validate service selection, source image identities and both
-   target files. Print the repositories/tags and destination application keys.
-3. `resolve-images`: Resolve every selected source tag to a Quay digest.
-4. `verify-images`: Verify each digest using the existing RHTAS trust and expected
-   signing identity. Any failure blocks both target updates.
-5. `recheck-tags`: Reject a tag that moved while signatures were being verified.
-6. `update-gitops`: Copy selected repositories/tags into both target YAML files.
-7. `push-production-and-dr`: Push one commit containing both files, without force.
+```text
+read-release-manifest → get-approved-artifacts → verify-image → update-gitops
+```
+
+| Graph Task | Task resource | Behavior |
+| --- | --- | --- |
+| `read-release-manifest` | `<scope>-promotion-read-release-manifest` | Snapshot the approved preprod GitOps revision, validate selection/targets, and emit the selected service versions. For this first test the source is the existing backend/frontend YAML, not a separate release manifest file. |
+| `get-approved-artifacts` | `<scope>-promotion-get-approved-artifacts` | Resolve the selected Quay tags to digests. |
+| `verify-image` | `<scope>-promotion-verify-image` | Verify every selected digest with existing RHTAS trust and signing identity. Any failure blocks GitOps. |
+| `update-gitops` | `<scope>-promotion-update-gitops` | Re-read the pinned source, reject intervening source/target changes, recheck tags, and push both target-file updates together. |
+
+Each Task runs in its own Pod with its own `emptyDir`. Small, bounded Task results
+pass selected versions and digests between Tasks; no checkout, credential HOME or
+PVC is shared across Pods. The final Task makes a fresh checkout rather than
+relying on another Task's local files. The verifier returns the exact digest list
+it verified, and the updater checks that it matches the artifact lookup result.
+This keeps failed or mismatched verification from publishing GitOps changes.
+
+`argocd-sync` is still outside this agreed Git-only test. The split does not add
+approval automation, Foundation chart promotion, CDN invalidation or uvisa
+versioning integration.
 
 There is no separate dispatcher or build run and no PVC. A same-file concurrent
 change, or source change during a rejected push/retry, fails rather than
