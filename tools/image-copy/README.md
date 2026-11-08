@@ -24,6 +24,22 @@ Keep this file outside Git.
 
 ## Frontend Images
 
+Copy the pinned frontend builder and runtime images:
+
+```bash
+./copy-image.sh registry.access.redhat.com/ubi9/nodejs-24:9.8-1782938304 quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nodejs-24:9.8-1782938304 /secure/path/pullsecret.txt-quay
+./copy-image.sh registry.access.redhat.com/hi/nginx:1.30.3-fips quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx-fips:1.30.3-fips /secure/path/pullsecret.txt-quay
+```
+
+After copying, use these destinations in the frontend Dockerfile stages:
+
+```dockerfile
+FROM quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nodejs-24:9.8-1782938304 AS frontend
+FROM quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx-fips:1.30.3-fips
+```
+
+### Previous UBI Copy References
+
 ```bash
 ./copy-image.sh registry.access.redhat.com/ubi9/nodejs-24:latest quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nodejs-24:ubi9 /secure/path/pullsecret.txt-quay
 ./copy-image.sh registry.access.redhat.com/ubi9/nginx-126:latest quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx-126:ubi9 /secure/path/pullsecret.txt-quay
