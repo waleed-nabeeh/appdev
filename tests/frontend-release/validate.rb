@@ -103,6 +103,12 @@ services.each do |service|
   sign = variant['spec']['tasks'].find { |t| t['name'] == "sign-#{service}" }
   check(sign['runAfter'] == ["build-#{service}"], 'No-scan signing must explicitly follow build')
 end
+no_tests = docs(run(*base, '-f', 'customer-transfer/frontend-release-test/values-release.yaml', '--set', 'frontendRelease.testsEnabled=false'))
+no_tests = no_tests.find { |d| d.dig('metadata', 'name') == pipeline['metadata']['name'] }['spec']['tasks']
+check(no_tests.none? { |t| t['name'].start_with?('test-') }, 'Disabled frontend tests must be absent')
+services.each do |service|
+  check(no_tests.find { |t| t['name'] == "build-#{service}" }['runAfter'] == ["clone-#{service}"], 'Disabled tests must connect clone directly to build')
+end
 
 gitops = 'customer-transfer/frontend-release-test/gitops/tekton-frontend-test'
 check(docs(run('helm', 'template', 'frontend-release-test-root', gitops, '-n', 'development')).empty?, 'Empty release must not create workloads')

@@ -11,6 +11,7 @@ function rendered(extra = []) {
 }
 const documents = rendered();
 const allBackend = rendered(['--set-json', 'backendBuild.selectedServices=[]']);
+const frontendTestsEnabled = rendered(['--set', 'frontendRelease.testsEnabled=true']);
 const commit = '12345678' + 'a'.repeat(32);
 const dispatcher = {metadata: {name: 'backend-dispatch-demo', namespace: 'devops', uid: '12345678-1234-1234-1234-123456789abc'}};
 function fixture(docs, scope) {
@@ -31,7 +32,8 @@ function verify(docs, scope, count) {
   check(values.services === selected.join(',') && values['source-url'] === config.sourceUrl && values.env === 'dev' && values['image-tag'] === '', 'Generated PipelineRun inputs');
   check(JSON.stringify(defaults) === JSON.stringify(values), 'Prepared PipelineRun must contain matching editable defaults');
   const tasks = spec.tasks;
-  check(tasks.length === 2 + count * 6, 'Only selected lanes plus selection and GitOps');
+  const testsEnabled = scope !== 'frontend' || config.testsEnabled !== false;
+  check(tasks.length === 2 + count * (testsEnabled ? 6 : 5), 'Only selected lanes plus selection and GitOps');
   check(tasks[0].name === 'dispatch-service-selection' && tasks.at(-1).name === 'update-gitops', 'Selection to GitOps graph');
   check(tasks[0].params.find(p => p.name === 'expected-services').value === selected.join(','), 'Must reject selection edits after graph preparation');
   check(tasks.every(t => !t.when), 'No skipped/unselected lanes');
@@ -64,6 +66,10 @@ function verify(docs, scope, count) {
   }
   check(run.spec.workspaces.some(w => w.name === 'npm-auth') === (scope === 'frontend'), 'Frontend-only npm credentials');
   for (const service of selected) {
+    const unit = tasks.find(t => t.name === 'test-' + service);
+    const build = tasks.find(t => t.name === 'build-' + service);
+    check(Boolean(unit) === testsEnabled, 'Test presence must follow the scope configuration');
+    check(build.runAfter.join() === (testsEnabled ? 'test-' : 'clone-') + service, 'Build must follow the active preceding stage');
     check(tasks.find(t => t.name === 'clone-' + service).params.find(p => p.name === 'url').value === '$(params.source-url)', 'Editable source-url must reach every clone');
     check(tasks.find(t => t.name === 'build-' + service).params.find(p => p.name === 'build-args').value.join() === (scope === 'backend' ? 'CERT_KEYWORD=$(params.env)' : 'BUILD_ENVIRONMENT=$(params.env)'), 'env must reach every build argument');
   }
@@ -71,6 +77,7 @@ function verify(docs, scope, count) {
 }
 for (const count of [1, 2, 14]) verify(documents, 'backend', count);
 for (const count of [1, 2, 3]) verify(documents, 'frontend', count);
+for (const count of [1, 2, 3]) verify(frontendTestsEnabled, 'frontend', count);
 verify(allBackend, 'backend', 17);
 const {run, config, template, selected} = verify(documents, 'backend', 2);
 const backendCatalog = fixture(documents, 'backend').config.catalog;
@@ -147,7 +154,8 @@ async function renderedLaunch(scope, mode, services, paths, expected) {
   const received = resolve(source.params.find(p => p.name === 'services').value);
   const prepared = source.params.find(p => p.name === 'expected-services').value;
   check(received === expected.join(',') && received === prepared, 'Service selection guard would fail after nested substitution');
-  check(params.services === expected.join(',') && created.spec.pipelineSpec.tasks.length === 2 + expected.length * 6, 'Generated graph includes unselected lanes');
+  const stageCount = scope === 'frontend' && config.testsEnabled === false ? 5 : 6;
+  check(params.services === expected.join(',') && created.spec.pipelineSpec.tasks.length === 2 + expected.length * stageCount, 'Generated graph includes unselected lanes');
 }
 module.exports = (async () => {
   await renderedLaunch('backend', 'diff', '', ['services/acl/MOFA.UnifiedVisaPlatform.ACL/Controller.cs'], ['acl-service']);

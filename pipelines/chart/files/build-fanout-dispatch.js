@@ -17,9 +17,11 @@ function makeFanoutRun(template, config, selected, commit, revision, dispatcher,
   check(dispatcher.metadata.namespace === template.metadata.namespace, 'Namespace mismatch');
   selected.forEach(name => check(config.catalog.some(s => s.name === name), 'Unknown or disabled service: ' + name));
   let spec = JSON.parse(JSON.stringify(template.spec));
+  const stages = config.scope === 'frontend' && config.testsEnabled === false ?
+    ['clone', 'build', 'scan', 'gate', 'sign'] : ['clone', 'test', 'build', 'scan', 'gate', 'sign'];
   const names = new Set(['resolve-source', 'update-gitops']);
   for (const name of selected) {
-    for (const stage of ['clone', 'test', 'build', 'scan', 'gate', 'sign']) {
+    for (const stage of stages) {
       const taskName = stage + '-' + name;
       check(spec.tasks.some(t => t.name === taskName), 'Missing working fanout stage: ' + taskName);
       names.add(taskName);

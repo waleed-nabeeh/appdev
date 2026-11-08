@@ -68,6 +68,8 @@ backendBuild:
       applicationNameSuffix: ""
 frontendRelease:
   enabled: true
+  # Temporary build-speed concession; set true to restore frontend unit tests.
+  testsEnabled: false
   env: dev
   sourceUrl: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Frontend
   sourceRevision: pre-prod

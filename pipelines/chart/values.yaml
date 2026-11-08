@@ -58,6 +58,7 @@ backendBuild:
 
 frontendRelease:
   enabled: false
+  testsEnabled: true
   env: dev
   selectedServices: []
   workspaceSize: 3Gi

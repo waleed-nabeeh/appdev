@@ -3,6 +3,7 @@
 {{- $scope := .scope }}
 {{- $settings := .settings }}
 {{- $frontend := eq $scope "frontend" }}
+{{- $testsEnabled := or (not $frontend) $settings.testsEnabled }}
 {{- $catalog := $root.Files.Get (printf "files/%s-services.json" $scope) | fromJsonArray }}
 {{- $selected := $settings.selectedServices }}
 {{- $gitops := and $settings.dispatch.enabled $settings.dispatch.gitops.enabled }}
@@ -194,6 +195,7 @@ spec:
           workspace: source-{{ $service.name }}
         - name: git-credentials
           workspace: git-credentials
+{{- if $testsEnabled }}
     - name: test-{{ $service.name }}
       runAfter: [clone-{{ $service.name }}]
 {{- if $settings.allowTestFailure }}
@@ -211,8 +213,9 @@ spec:
         - name: npm-auth
           workspace: npm-auth
 {{- end }}
+{{- end }}
     - name: build-{{ $service.name }}
-      runAfter: [test-{{ $service.name }}]
+      runAfter: [{{ ternary "test" "clone" $testsEnabled }}-{{ $service.name }}]
       taskRef:
         name: build-image
       params:

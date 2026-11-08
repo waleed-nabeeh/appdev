@@ -45,7 +45,7 @@ data:
 {{ $root.Files.Get "files/build-fanout-dispatch.js" | indent 4 }}
 {{- end }}
   config.json: |
-    {{ dict "scope" $scope "sourceUrl" $settings.sourceUrl "env" $settings.env "fanoutPipeline" (printf "application-%s-build-fanout" $scope) "childPipeline" (printf "application-%s-service-build" $scope) "npmAuth" $frontend "catalog" $enabled "imageRepository" $settings.imageRepository "applicationNamePrefix" $settings.dispatch.gitops.applicationNamePrefix "applicationNameSuffix" $settings.dispatch.gitops.applicationNameSuffix "buildServiceAccount" $root.Values.serviceAccount.name "workspaceSize" $settings.workspaceSize "maxParallel" (int $settings.dispatch.maxParallel) "timeoutSeconds" (int $settings.dispatch.timeoutSeconds) "childTimeout" $settings.dispatch.childTimeout | toJson }}
+    {{ dict "scope" $scope "sourceUrl" $settings.sourceUrl "env" $settings.env "testsEnabled" (or (not $frontend) $settings.testsEnabled) "fanoutPipeline" (printf "application-%s-build-fanout" $scope) "childPipeline" (printf "application-%s-service-build" $scope) "npmAuth" $frontend "catalog" $enabled "imageRepository" $settings.imageRepository "applicationNamePrefix" $settings.dispatch.gitops.applicationNamePrefix "applicationNameSuffix" $settings.dispatch.gitops.applicationNameSuffix "buildServiceAccount" $root.Values.serviceAccount.name "workspaceSize" $settings.workspaceSize "maxParallel" (int $settings.dispatch.maxParallel) "timeoutSeconds" (int $settings.dispatch.timeoutSeconds) "childTimeout" $settings.dispatch.childTimeout | toJson }}
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -306,6 +306,7 @@ spec:
       workspaces:
         - {name: source, workspace: source}
         - {name: git-credentials, workspace: git-credentials}
+{{- if or (not $frontend) $settings.testsEnabled }}
     - name: test
       runAfter: [clone]
 {{- if $settings.allowTestFailure }}
@@ -319,8 +320,9 @@ spec:
 {{- if $frontend }}
         - {name: npm-auth, workspace: npm-auth}
 {{- end }}
+{{- end }}
     - name: build
-      runAfter: [test]
+      runAfter: [{{ ternary "test" "clone" (or (not $frontend) $settings.testsEnabled) }}]
       taskRef: {name: build-image}
       params:
         - {name: image, value: $(tasks.settings.results.image)}

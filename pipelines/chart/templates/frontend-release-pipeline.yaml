@@ -50,6 +50,7 @@ spec:
           workspace: source-{{ $service }}
         - name: git-credentials
           workspace: git-credentials
+{{- if $.Values.frontendRelease.testsEnabled }}
     - name: test-{{ $service }}
       runAfter: [clone-{{ $service }}]
 {{- if $.Values.frontendRelease.allowTestFailure }}
@@ -65,8 +66,9 @@ spec:
           workspace: source-{{ $service }}
         - name: npm-auth
           workspace: npm-auth
+{{- end }}
     - name: build-{{ $service }}
-      runAfter: [test-{{ $service }}]
+      runAfter: [{{ ternary "test" "clone" $.Values.frontendRelease.testsEnabled }}-{{ $service }}]
       taskRef:
         name: build-image
       params:

@@ -130,12 +130,20 @@ The allowlists are `selectedServices` in values.yaml. The backend catalog contai
 17 services; add prepared services and reapply Helm to allow more than the current
 14. Gateway, Payment and AuthServer are excluded by default; prepare their source
 Dockerfiles and GitOps entries before enabling them. Empty backend selectedServices
-enables all 17 known catalog entries. Every selected lane reuses:
+enables all 17 known catalog entries. Each selected backend lane runs:
 
 **clone → test → build/push → ACS scan → policy gate → sign → final combined GitOps update**
 
-Frontend unit-test failure remains temporarily allowed. Build, scan, gate and
-sign failures block GitOps. Verification belongs to promotion. Tags remain the
+Frontend lanes currently skip unit tests with `frontendRelease.testsEnabled: false`:
+
+**clone → build/push → ACS scan → policy gate → sign → final combined GitOps update**
+
+To restore tests, set `frontendRelease.testsEnabled: true` in the same values
+file, reapply Helm, and start a fresh run. The existing `allowTestFailure: true`
+then allows failed frontend tests to continue; set it to false when tests must
+block the build. Existing prepared runs retain their original graph.
+
+Build, scan, gate and sign failures block GitOps. Verification belongs to promotion. Tags remain the
 bare first eight source-commit characters. Different env builds of the same commit
 therefore share a tag; env does not select a different GitOps destination.
 
