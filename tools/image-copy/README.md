@@ -57,6 +57,24 @@ The script inherits exported proxy settings from the current shell. Load the
 existing proxy configuration before copying, and include internal Quay in
 `NO_PROXY`/`no_proxy` when it must be reached directly.
 
+### Diagnose a Copy That Produces No Progress
+
+Add `--debug --command-timeout=60s` for a bounded diagnostic attempt:
+
+```bash
+./copy-image.sh registry.access.redhat.com/ubi9/nodejs-24:9.8-1782938304 quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nodejs-24:9.8-1782938304 /secure/path/pullsecret.txt-quay --src-tls-verify=false --debug --command-timeout=60s
+```
+
+The timeout limits the entire copy; use a longer duration such as `30m` for the
+real transfer. The default command has no added overall timeout. Debug output
+identifies the last registry or layer request before a stall. Redact credentials,
+tokens and signed URL query strings before sharing that output.
+
+If a new terminal or SSH session is used, load the proxy configuration again.
+An unset proxy, a conflicting uppercase/lowercase proxy setting, or a blocked
+registry/CDN connection requires a connectivity fix; TLS-bypass flags do not
+resolve those conditions.
+
 ### Previous UBI Copy References
 
 ```bash
