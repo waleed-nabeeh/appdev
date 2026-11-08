@@ -38,6 +38,25 @@ FROM quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nodejs-24:9.8-17829
 FROM quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx-fips:1.30.3-fips
 ```
 
+### Temporary Certificate Bypass
+
+TLS verification is enabled by default. For the reported source-layer download
+failure at `cdn.quay.io`, append `--src-tls-verify=false` to the copy command:
+
+```bash
+./copy-image.sh registry.access.redhat.com/hi/nginx:1.30.3-fips quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nginx-fips:1.30.3-fips /secure/path/pullsecret.txt-quay --src-tls-verify=false
+./copy-image.sh registry.access.redhat.com/ubi9/nodejs-24:9.8-1782938304 quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nodejs-24:9.8-1782938304 /secure/path/pullsecret.txt-quay --src-tls-verify=false
+```
+
+If the certificate error names the destination Quay registry, append
+`--dest-tls-verify=false` instead. Both flags can be supplied when needed.
+These flags disable certificate verification only for that invocation. Install
+the approved CA on the transfer host for the permanent correction.
+
+The script inherits exported proxy settings from the current shell. Load the
+existing proxy configuration before copying, and include internal Quay in
+`NO_PROXY`/`no_proxy` when it must be reached directly.
+
 ### Previous UBI Copy References
 
 ```bash
