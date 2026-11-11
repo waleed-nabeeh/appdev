@@ -94,6 +94,19 @@ It is not established as a FIPS-validated replacement for the private image.
 
 The pipeline chart's `frontendPr.proxyImage` must reference the same destination.
 
+## Helm Chart Publishing Image
+
+Copy this image for the planned Helm chart validation, packaging, and OCI
+publication pipeline:
+
+```bash
+./copy-image.sh docker.io/alpine/helm:3.19.0 quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/helm:3.19.0 /secure/path/pullsecret.txt-quay
+```
+
+This is a community image, not a Red Hat-supported image. OpenShift execution
+and internal CA trust still require validation. Copying it does not install
+or start the planned pipeline.
+
 ## Optional Docker Hub Alternatives
 
 These retained alternatives require source-tag availability and compatibility
