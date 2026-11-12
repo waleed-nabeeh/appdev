@@ -111,6 +111,49 @@ Vault remains in project `infra-platforms`; the Kubernetes Secret is created in
    and SecretStore conditions and ESO controller logs. Common blockers are a
    missing Store, Vault policy/role binding, TokenRequest permission, or CA trust.
 
+### Hub ESO egress to the internal Vault Service
+
+The Red Hat ESO controller requires an `ExternalSecretsConfig` named `cluster`.
+For an existing configuration with no custom network policy entries, apply
+the supplied merge patch from the repository root:
+
+```bash
+oc get externalsecretsconfig.operator.openshift.io cluster -o yaml
+oc patch externalsecretsconfig.operator.openshift.io cluster --type=merge \
+  --patch-file customer-transfer/devops-apply/eso-vault-egress-patch.yaml
+```
+
+The merge patch preserves other configuration fields but replaces the
+`spec.controllerConfig.networkPolicies` list. If custom entries already exist,
+append the supplied entry through `oc edit externalsecretsconfig cluster`
+instead. Do not discard existing policy entries. Operator default DNS/API
+policies are separate from this custom list.
+
+This rule permits the ESO core controller to reach pods in `infra-platforms`
+on TCP 8200; it does not permit the external Vault Route on HTTPS/443.
+Confirm `vault-active` exists, has endpoints and serves the current HTTP
+listener before selecting the internal endpoint:
+
+```bash
+oc -n infra-platforms get svc vault-active
+oc -n infra-platforms get endpointslices \
+  -l kubernetes.io/service-name=vault-active
+oc -n devops patch secretstore vault-backend --type=merge \
+  -p '{"spec":{"provider":{"vault":{"server":"http://vault-active.infra-platforms.svc:8200"}}}}'
+oc -n external-secrets get networkpolicy
+oc -n devops describe secretstore vault-backend
+oc -n devops describe externalsecret eso-vault-test
+oc -n devops get secret eso-vault-test
+```
+
+The HTTP endpoint matches the supplied Vault chart's `tls_disable = 1`
+listener. If listener TLS is enabled, use HTTPS with the appropriate CA trust.
+Reapplying `external-secret-vault-test.yaml` restores its Route URL; retain
+the chosen endpoint in the owning configuration. No Vault data changes or
+restarts are needed. This patch has not been live-tested on Hub.
+
+Reference: [Red Hat ESO network policy configuration](https://docs.redhat.com/en/documentation/openshift_container_platform/4.21/html/security_and_compliance/external-secrets-operator-for-red-hat-openshift).
+
 ## 2. Install the pipeline and tasks
 
 From the `appdev` repository root, run:

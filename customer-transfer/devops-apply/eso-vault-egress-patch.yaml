@@ -1,0 +1,14 @@
+spec:
+  managementState: Managed
+  controllerConfig:
+    networkPolicies:
+      - name: allow-vault-egress
+        componentName: ExternalSecretsCoreController
+        egress:
+          - to:
+              - namespaceSelector:
+                  matchLabels:
+                    kubernetes.io/metadata.name: infra-platforms
+            ports:
+              - protocol: TCP
+                port: 8200
