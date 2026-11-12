@@ -63,6 +63,11 @@ Vault remains in project `infra-platforms`; the Kubernetes Secret is created in
 
 ### Test ESO syncing from Vault
 
+For Hub when the existing Kubernetes auth mount points to Pre-Production,
+follow [Hub Vault authentication](VAULT-HUB-AUTH.md) to configure a separate
+`kubernetes-hub` mount and apply the supplied SecretStore patch. Do not change
+the shared Pre-Production auth configuration.
+
 1. In an approved Vault admin session (Vault is in `infra-platforms`), write a
    harmless test value to KV v2 and grant a narrow policy to only that path:
 

@@ -1,0 +1,11 @@
+spec:
+  provider:
+    vault:
+      server: http://vault-active.infra-platforms.svc:8200
+      auth:
+        kubernetes:
+          mountPath: kubernetes-hub
+          role: eso-devops-test
+          serviceAccountRef:
+            name: eso-vault-reader
+            namespace: devops
