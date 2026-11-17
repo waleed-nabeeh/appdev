@@ -58,9 +58,12 @@ spec:
                 test -s "$jar" || { echo "Missing JAR: $jar" >&2; exit 1; }
               done
               # This pipeline expects the reviewed single-stage Dockerfile.
-              bases=$(awk 'toupper($1) == "FROM" {print $2}' Dockerfile)
+              bases=$(awk '{sub(/\r$/, "")} toupper($1) == "FROM" {print $2}' Dockerfile)
               test "$bases" = "$BASE_IMAGE" || {
-                echo "Dockerfile must have one FROM using $BASE_IMAGE" >&2; exit 1;
+                echo "Dockerfile must have one FROM using $BASE_IMAGE" >&2
+                printf 'Actual FROM image(s): <%s>\n' "$bases" >&2
+                git rev-parse HEAD >&2
+                exit 1;
               }
               git rev-parse HEAD | tr -d '\n' > "$(results.commit.path)"
       params:
