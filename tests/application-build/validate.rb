@@ -22,7 +22,7 @@ tasks = documents.select { |d| d['kind'] == 'Task' }.to_h { |d| [d['metadata']['
 documents.select { |d| d['kind'] == 'Pipeline' }.each do |pipeline|
   spec = pipeline['spec']
   spec.fetch('tasks', []).each do |task|
-    definition = tasks.fetch(task.dig('taskRef', 'name'))
+    definition = task['taskSpec'] || tasks.fetch(task.dig('taskRef', 'name'))
     supplied = task.fetch('params', []).map { |p| p['name'] }
     declared = definition.fetch('params', []).map { |p| p['name'] }
     check((supplied - declared).empty?, "Unknown param in #{task['name']}")
@@ -37,7 +37,8 @@ documents.select { |d| d['kind'] == 'Pipeline' }.each do |pipeline|
   end
   spec.to_json.scan(/\$\(tasks\.([^.]+)\.results\.([^)]+)\)/).each do |producer, result|
     producer_task = spec['tasks'].find { |t| t['name'] == producer }
-    check(producer_task && tasks.fetch(producer_task['taskRef']['name']).fetch('results', []).any? { |r| r['name'] == result }, 'Invalid task result reference')
+    definition = producer_task && (producer_task['taskSpec'] || tasks.fetch(producer_task.dig('taskRef', 'name')))
+    check(definition && definition.fetch('results', []).any? { |r| r['name'] == result }, 'Invalid task result reference')
   end
 end
 runs = YAML.load_stream(File.read('customer-transfer/application-build/dispatches.yaml')).compact

@@ -4,7 +4,7 @@ kind: Pipeline
 metadata:
   name: application-keycloak-build
 spec:
-  description: Build and publish the custom Keycloak image using internal sources and no proxy.
+  description: Build a candidate, scan and gate it with RHACS, publish its validated digest and sign with RHTAS. No deployment.
   params:
     - {name: source-url, type: string, default: {{ .Values.keycloakBuild.sourceUrl | quote }}}
     - {name: source-revision, type: string, default: {{ .Values.keycloakBuild.sourceRevision | quote }}}
@@ -20,8 +20,9 @@ spec:
   results:
     - {name: source-commit, value: $(tasks.validate.results.commit)}
     - {name: image-tag, value: $(tasks.validate.results.tag)}
-    - {name: image-url, value: $(tasks.build.results.image-url)}
-    - {name: image-digest, value: $(tasks.build.results.image-digest)}
+    - {name: image-url, value: $(tasks.push-image.results.image-url)}
+    - {name: image-digest, value: $(tasks.push-image.results.image-digest)}
+    - {name: candidate-image, value: $(tasks.build-image.results.image-url)}
   tasks:
     - name: clone
       taskRef:
@@ -57,8 +58,13 @@ spec:
               if [ -z "$IMAGE_TAG" ]; then
                 IMAGE_TAG=$(printf '%.8s' "$commit")
               fi
-              printf '%s\n' "$IMAGE_TAG" | grep -Eq '^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$' || {
-                echo 'Invalid image-tag: use letters, digits, underscores, dots or hyphens, with no spaces; maximum 128 characters.' >&2; exit 1;
+              case "$IMAGE_TAG" in
+                ""|[.-]*|*[!A-Za-z0-9_.-]*)
+                  echo 'Invalid image-tag: use letters, digits, underscores, dots or hyphens, starting with a letter, digit or underscore.' >&2; exit 1 ;;
+                candidate-*) echo 'The candidate- tag prefix is reserved for pipeline staging.' >&2; exit 1 ;;
+              esac
+              test "${#IMAGE_TAG}" -le 128 || {
+                echo 'image-tag must be at most 128 characters.' >&2; exit 1;
               }
               test -s Dockerfile
               for jar in JDBC-driver/mssql-jdbc.jar SPI-jar-files/applicant-portal-keycloak-extension.jar SPI-jar-files/nafath-keycloak-extension.jar; do
@@ -78,16 +84,83 @@ spec:
         - {name: image-tag, value: $(params.image-tag)}
       workspaces:
         - {name: source, workspace: source}
-    - name: build
+    - name: build-image
       runAfter: [validate]
       taskRef:
         name: build-image-no-proxy
       params:
-        - {name: image, value: {{ printf "%s:$(tasks.validate.results.tag)" .Values.keycloakBuild.imageRepository | quote }}}
+        - {name: image, value: {{ printf "%s:candidate-$(context.pipelineRun.uid)" .Values.keycloakBuild.imageRepository | quote }}}
         - {name: context, value: "."}
         - {name: containerfile, value: Dockerfile}
       workspaces:
         - {name: source, workspace: source}
+        - {name: registry-auth, workspace: registry-auth}
+    - name: scan-image
+      runAfter: [build-image]
+      taskRef:
+        name: scan-image
+      params:
+        - name: image
+          value: {{ printf "%s@$(tasks.build-image.results.image-digest)" .Values.keycloakBuild.imageRepository | quote }}
+    - name: security-gate
+      runAfter: [scan-image]
+      taskRef:
+        name: security-gate
+      params:
+        - name: image
+          value: {{ printf "%s@$(tasks.build-image.results.image-digest)" .Values.keycloakBuild.imageRepository | quote }}
+    - name: push-image
+      runAfter: [security-gate]
+      taskSpec:
+        params:
+          - {name: repository, type: string}
+          - {name: tag, type: string}
+          - {name: digest, type: string}
+        workspaces:
+          - name: registry-auth
+        results:
+          - name: image-url
+          - name: image-digest
+        steps:
+          - name: publish-validated-image
+            image: {{ .Values.images.skopeo }}
+            env:
+              - {name: IMAGE_REPOSITORY, value: $(params.repository)}
+              - {name: IMAGE_TAG, value: $(params.tag)}
+              - {name: SCANNED_DIGEST, value: $(params.digest)}
+            script: |
+              #!/usr/bin/env bash
+              set -euo pipefail
+              unset HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy
+              authfile="$(workspaces.registry-auth.path)/config.json"
+              if [ ! -f "$authfile" ] && [ -f "$(workspaces.registry-auth.path)/.dockerconfigjson" ]; then
+                authfile="$(workspaces.registry-auth.path)/.dockerconfigjson"
+              fi
+              test -s "$authfile"
+              # Copy by the scanned digest, never by the mutable candidate tag.
+              skopeo copy --authfile "$authfile" --preserve-digests \
+                --digestfile /tmp/published-digest \
+                "docker://${IMAGE_REPOSITORY}@${SCANNED_DIGEST}" \
+                "docker://${IMAGE_REPOSITORY}:${IMAGE_TAG}"
+              published_digest=$(cat /tmp/published-digest)
+              test "$published_digest" = "$SCANNED_DIGEST" || {
+                echo 'Published image digest differs from the scanned digest.' >&2; exit 1;
+              }
+              printf '%s' "$published_digest" > "$(results.image-digest.path)"
+              printf '%s@%s' "$IMAGE_REPOSITORY" "$published_digest" > "$(results.image-url.path)"
+      params:
+        - {name: repository, value: {{ .Values.keycloakBuild.imageRepository | quote }}}
+        - {name: tag, value: $(tasks.validate.results.tag)}
+        - {name: digest, value: $(tasks.build-image.results.image-digest)}
+      workspaces:
+        - {name: registry-auth, workspace: registry-auth}
+    - name: sign-image
+      runAfter: [push-image]
+      taskRef:
+        name: sign-image
+      params:
+        - {name: image, value: $(tasks.push-image.results.image-url)}
+      workspaces:
         - {name: registry-auth, workspace: registry-auth}
 ---
 # Helm installs a template only; upgrading the chart does not start a build.

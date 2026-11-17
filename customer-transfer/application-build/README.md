@@ -250,11 +250,32 @@ The same Helm upgrade above now installs `application-keycloak-build` because
 this folder's values enable `keycloakBuild.enabled`. Chart defaults leave it
 disabled for other consumers. Upgrading installs resources only; it starts no build.
 
-Flow: **clone → validate → build and push**. It reuses the Git image and a
-proxy-free variant of the existing Buildah task. Neither the Keycloak build nor
-its clone/validation stages read `pipeline-proxy`. Existing frontend/backend
-proxy behavior is unchanged. This initial pipeline does not scan/sign the image,
-update GitOps, or deploy Keycloak.
+Flow: **clone → validate → build-image → scan-image → security-gate → push-image → sign-image**.
+The pipeline remains independent of Application Foundation Helm packaging,
+configuration deployment and GitOps updates.
+
+- `build-image` reuses the proxy-free Buildah task and uploads to the same Quay
+  repository with a unique `candidate-<PipelineRun UID>` tag.
+- `scan-image` reuses RHACS scanning against the uploaded image digest.
+- `security-gate` checks the configured RHACS build-time enforcement policies.
+  A successful vulnerability scan alone is not a policy approval.
+- `push-image` uses the existing Skopeo image to copy the scanned digest to the
+  requested final tag with digest preservation; it never rebuilds the image.
+- `sign-image` reuses the RHTAS task to sign the published digest.
+
+The candidate upload is necessary because RHACS scans images from registries:
+[RHACS 4.11 image scanning](https://docs.redhat.com/en/documentation/red_hat_advanced_cluster_security_for_kubernetes/4.11/html/roxctl_cli/image-scanning-by-using-the-roxctl-cli-1).
+Copying uses [Skopeo digest preservation](https://github.com/containers/skopeo/blob/main/docs/skopeo-copy.1.md).
+No Keycloak task reads `pipeline-proxy`; existing frontend/backend behavior is
+unchanged. Registry credentials must permit both candidate and final tags.
+
+A scan or policy failure prevents final-tag publication and signing; any
+previously existing final tag is unchanged. A signing failure leaves a published
+but unsigned image and a failed PipelineRun: do not release it. Candidate tags
+are retained for troubleshooting, including failed candidates; agree an approved
+Quay retention policy separately. Do not deploy `candidate-*` tags. This same
+repository is not an access-isolated quarantine; consumers must use approved,
+signed digests. `candidate-` is reserved and cannot be used as a manual final tag.
 
 Before starting:
 
@@ -279,6 +300,15 @@ Before starting:
    allow base-image pulls and pushes to `devops/keycloak-custom`; the pipeline
    account must have the same Buildah permissions as existing image builds.
    Internal Git and Quay connectivity/CA trust and PVC capacity remain required.
+6. `rhacs-auth` must contain `endpoint` and `token` for the existing scan/gate
+   tasks. RHACS must be able to pull the private Keycloak repository through its
+   Quay integration, have usable vulnerability data, and enforce the agreed
+   build-time policies. Confirm installed RHACS/server compatibility with the
+   existing roxctl 4.11.4 image; scanning/policy failures stop publication.
+7. Existing RHTAS URLs, trust, token audience and pipeline service-account
+   identity must be valid. Fulcio/Rekor/TUF and the internal client service must
+   be reachable. Quay credentials must allow signature publication. Signing
+   failures fail the pipeline; signing is not optional in this flow.
 
 After applying the Helm upgrade, generate and start a run:
 
@@ -301,7 +331,10 @@ The output is:
 quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/keycloak-custom:<image-tag>
 ```
 
-Check the PipelineRun's `source-commit`, `image-tag`, `image-url` and `image-digest` results.
+Check that the PipelineRun condition is `Succeeded=True`, then inspect its
+`source-commit`, `image-tag`, `candidate-image`, `image-url` and `image-digest` results.
+The published `image-url` is a digest reference; successful publication alone
+does not prove the later signing task succeeded.
 An empty `image-tag` uses the first eight source commit characters. A manual tag
 such as `26.6-custom-1` must contain no spaces and must be at most 128 characters.
 Validation checks tag syntax, required nonempty files, and the expected base-image
@@ -313,3 +346,14 @@ Operator supports the selected server version before deploying.
 The source repository was reviewed from the supplied Dockerfile screenshot;
 its Dockerfile is not modified by this Helm upgrade. Runtime build and deployment
 validation must be performed on the customer cluster.
+
+Manual UI/CLI starts remain available for testing. No Keycloak webhook is created
+by this change. Production initiation must be connected to the agreed Azure
+branch/PR workflow with authenticated requests and an approved source commit;
+this implementation does not claim automated source-control triggering is enabled.
+
+Local regression check (from the appdev repository root):
+
+```bash
+ruby tests/keycloak-build/validate.rb
+```
