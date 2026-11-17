@@ -243,3 +243,71 @@ build, registry write, console click-through or Argo deployment was executed her
 References: [Tekton PipelineRun specifications](https://tekton.dev/docs/pipelines/pipelineruns/),
 [Red Hat console workflow](https://docs.redhat.com/en/documentation/red_hat_openshift_pipelines/1.22/html/creating_cicd_pipelines/working-with-pipelines-web-console).
 The console reference is for 1.22; the customer reports Pipelines 1.23.2.
+
+## Custom Keycloak image
+
+The same Helm upgrade above now installs `application-keycloak-build` because
+this folder's values enable `keycloakBuild.enabled`. Chart defaults leave it
+disabled for other consumers. Upgrading installs resources only; it starts no build.
+
+Flow: **clone → validate → build and push**. It reuses the Git image and a
+proxy-free variant of the existing Buildah task. Neither the Keycloak build nor
+its clone/validation stages read `pipeline-proxy`. Existing frontend/backend
+proxy behavior is unchanged. This initial pipeline does not scan/sign the image,
+update GitOps, or deploy Keycloak.
+
+Before starting:
+
+1. [Load and push the Keycloak base image](../../tools/image-copy/README.md#keycloak-266-base-image)
+   to `devops/keycloak-rhel9:26.6` in internal Quay.
+2. In Azure repo `integration-rhsso`, branch `keycloak-custom`, change the root
+   Dockerfile's single base-image line and commit it:
+
+   ```dockerfile
+   FROM quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/keycloak-rhel9:26.6
+   ```
+
+3. Include these actual binary files (not Git LFS pointers) in the build context,
+   and ensure `.dockerignore` does not exclude them:
+   - `JDBC-driver/mssql-jdbc.jar`
+   - `SPI-jar-files/applicant-portal-keycloak-extension.jar`
+   - `SPI-jar-files/nafath-keycloak-extension.jar`
+4. The application team must confirm provider/JDBC compatibility with Keycloak
+   26.6 and supply any additional required provider libraries. No Maven, npm,
+   NuGet, or external package downloads are performed by the reviewed Dockerfile.
+5. Existing `git-credentials` must allow source checkout. `registry-auth` must
+   allow base-image pulls and pushes to `devops/keycloak-custom`; the pipeline
+   account must have the same Buildah permissions as existing image builds.
+   Internal Git and Quay connectivity/CA trust and PVC capacity remain required.
+
+After applying the Helm upgrade, generate and start a run:
+
+```bash
+oc -n devops get configmap keycloak-build-run-template \
+  -o jsonpath='{.data.pipelinerun\.yaml}' > /tmp/keycloak-build-run.yaml
+# Edit image-tag in this file; use a unique tag for each build.
+oc create -f /tmp/keycloak-build-run.yaml
+oc -n devops get pipelineruns --sort-by=.metadata.creationTimestamp
+```
+
+Alternatively, in **devops → Pipelines**, start `application-keycloak-build`,
+provide `image-tag`, bind `git-credentials` and `registry-auth` to the corresponding
+Secrets and `source` to a new 3Gi PVC, and use service account `pipeline`.
+Optional `source-commit` pins a particular commit; otherwise the branch is cloned.
+
+The output is:
+
+```text
+quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/keycloak-custom:<image-tag>
+```
+
+Check the PipelineRun's `source-commit`, `image-url` and `image-digest` results.
+Validation checks tag syntax, required nonempty files, and the expected base-image
+reference; it does not prove JAR compatibility. Buildah runs `kc.sh build` via the
+Dockerfile. A subsequent deployment test must verify startup, SQL Server access,
+health probes and both custom authentication flows. Ensure the installed Keycloak
+Operator supports the selected server version before deploying.
+
+The source repository was reviewed from the supplied Dockerfile screenshot;
+its Dockerfile is not modified by this Helm upgrade. Runtime build and deployment
+validation must be performed on the customer cluster.

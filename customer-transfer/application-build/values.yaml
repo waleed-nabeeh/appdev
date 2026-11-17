@@ -102,3 +102,6 @@ frontendRelease:
       enabled: true
       authRequired: false
       targetBranch: pre-prod
+
+keycloakBuild:
+  enabled: true

@@ -1,0 +1,118 @@
+{{- if .Values.keycloakBuild.enabled }}
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: application-keycloak-build
+spec:
+  description: Build and publish the custom Keycloak image using internal sources and no proxy.
+  params:
+    - {name: source-url, type: string, default: {{ .Values.keycloakBuild.sourceUrl | quote }}}
+    - {name: source-revision, type: string, default: {{ .Values.keycloakBuild.sourceRevision | quote }}}
+    - {name: source-commit, type: string, default: ""}
+    - name: image-tag
+      type: string
+      description: Required manual tag, for example 26.6-custom-1. Use a new tag per build.
+  workspaces:
+    - name: source
+    - name: git-credentials
+    - name: registry-auth
+  results:
+    - {name: source-commit, value: $(tasks.validate.results.commit)}
+    - {name: image-url, value: $(tasks.build.results.image-url)}
+    - {name: image-digest, value: $(tasks.build.results.image-digest)}
+  tasks:
+    - name: clone
+      taskRef:
+        name: clone
+      params:
+        - {name: url, value: $(params.source-url)}
+        - {name: revision, value: $(params.source-revision)}
+        - {name: commit, value: $(params.source-commit)}
+      workspaces:
+        - {name: source, workspace: source}
+        - {name: git-credentials, workspace: git-credentials}
+    - name: validate
+      runAfter: [clone]
+      taskSpec:
+        params:
+          - {name: image-tag, type: string}
+        workspaces:
+          - name: source
+        results:
+          - name: commit
+        steps:
+          - name: validate-inputs
+            image: {{ .Values.images.git }}
+            workingDir: $(workspaces.source.path)/source
+            env:
+              - {name: IMAGE_TAG, value: $(params.image-tag)}
+              - {name: BASE_IMAGE, value: {{ .Values.keycloakBuild.baseImage | quote }}}
+            script: |
+              #!/bin/sh
+              set -eu
+              printf '%s\n' "$IMAGE_TAG" | grep -Eq '^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$' || {
+                echo 'Supply a valid, non-empty image-tag.' >&2; exit 1;
+              }
+              test -s Dockerfile
+              for jar in JDBC-driver/mssql-jdbc.jar SPI-jar-files/applicant-portal-keycloak-extension.jar SPI-jar-files/nafath-keycloak-extension.jar; do
+                test -s "$jar" || { echo "Missing JAR: $jar" >&2; exit 1; }
+              done
+              # This pipeline expects the reviewed single-stage Dockerfile.
+              bases=$(awk 'toupper($1) == "FROM" {print $2}' Dockerfile)
+              test "$bases" = "$BASE_IMAGE" || {
+                echo "Dockerfile must have one FROM using $BASE_IMAGE" >&2; exit 1;
+              }
+              git rev-parse HEAD | tr -d '\n' > "$(results.commit.path)"
+      params:
+        - {name: image-tag, value: $(params.image-tag)}
+      workspaces:
+        - {name: source, workspace: source}
+    - name: build
+      runAfter: [validate]
+      taskRef:
+        name: build-image-no-proxy
+      params:
+        - {name: image, value: {{ printf "%s:$(params.image-tag)" .Values.keycloakBuild.imageRepository | quote }}}
+        - {name: context, value: "."}
+        - {name: containerfile, value: Dockerfile}
+      workspaces:
+        - {name: source, workspace: source}
+        - {name: registry-auth, workspace: registry-auth}
+---
+# Helm installs a template only; upgrading the chart does not start a build.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-build-run-template
+  namespace: {{ .Release.Namespace }}
+data:
+  pipelinerun.yaml: |
+    apiVersion: tekton.dev/v1
+    kind: PipelineRun
+    metadata:
+      generateName: keycloak-build-
+      namespace: {{ .Release.Namespace }}
+    spec:
+      pipelineRef:
+        name: application-keycloak-build
+      taskRunTemplate:
+        serviceAccountName: {{ .Values.serviceAccount.name }}
+      timeouts:
+        pipeline: 1h0m0s
+      params:
+        - {name: image-tag, value: "26.6-custom-1"}
+      workspaces:
+        - name: git-credentials
+          secret:
+            secretName: git-credentials
+        - name: registry-auth
+          secret:
+            secretName: registry-auth
+        - name: source
+          volumeClaimTemplate:
+            spec:
+              accessModes: [ReadWriteOnce]
+              resources:
+                requests:
+                  storage: {{ .Values.keycloakBuild.workspaceSize | quote }}
+{{- end }}

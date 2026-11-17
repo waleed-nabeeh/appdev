@@ -282,10 +282,13 @@ spec:
         npm install --no-save @nx/nx-linux-x64-gnu @rollup/rollup-linux-x64-gnu
         npx nx test "$(params.project)"
 ---
+{{- $root := . }}
+{{- range $withProxy := list true false }}
+{{- if or $withProxy $root.Values.keycloakBuild.enabled }}
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
-  name: build-image
+  name: {{ ternary "build-image" "build-image-no-proxy" $withProxy }}
 spec:
   params:
     - name: image
@@ -309,42 +312,44 @@ spec:
       optional: true
   steps:
     - name: build-and-push
-      image: {{ .Values.images.buildah }}
+      image: {{ $root.Values.images.buildah }}
       securityContext:
         capabilities:
           add: [SETFCAP]
       workingDir: $(workspaces.source.path)/source
+{{- if $withProxy }}
       env:
         - name: HTTP_PROXY
           valueFrom:
             secretKeyRef:
-              name: {{ .Values.proxy.secretName }}
+              name: {{ $root.Values.proxy.secretName }}
               key: HTTP_PROXY
         - name: HTTPS_PROXY
           valueFrom:
             secretKeyRef:
-              name: {{ .Values.proxy.secretName }}
+              name: {{ $root.Values.proxy.secretName }}
               key: HTTPS_PROXY
         - name: NO_PROXY
           valueFrom:
             secretKeyRef:
-              name: {{ .Values.proxy.secretName }}
+              name: {{ $root.Values.proxy.secretName }}
               key: NO_PROXY
         - name: http_proxy
           valueFrom:
             secretKeyRef:
-              name: {{ .Values.proxy.secretName }}
+              name: {{ $root.Values.proxy.secretName }}
               key: HTTP_PROXY
         - name: https_proxy
           valueFrom:
             secretKeyRef:
-              name: {{ .Values.proxy.secretName }}
+              name: {{ $root.Values.proxy.secretName }}
               key: HTTPS_PROXY
         - name: no_proxy
           valueFrom:
             secretKeyRef:
-              name: {{ .Values.proxy.secretName }}
+              name: {{ $root.Values.proxy.secretName }}
               key: NO_PROXY
+{{- end }}
       args: ["$(params.build-args[*])"]
       script: |
         #!/usr/bin/env bash
@@ -353,9 +358,13 @@ spec:
         for argument in "$@"; do
           build_args+=(--build-arg "$argument")
         done
+{{- if $withProxy }}
         build_args+=(--build-arg "HTTP_PROXY=$HTTP_PROXY")
         build_args+=(--build-arg "HTTPS_PROXY=$HTTPS_PROXY")
         build_args+=(--build-arg "NO_PROXY=$NO_PROXY")
+{{- else }}
+        unset HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy
+{{- end }}
         build_secrets=()
         if [ "$(workspaces.npm-auth.bound)" = "true" ]; then
           npm_token="$(workspaces.npm-auth.path)/NPM_TOKEN"
@@ -382,6 +391,8 @@ spec:
         printf '%s' "$digest" > "$(results.image-digest.path)"
         printf '%s' "$(params.image)@$digest" > "$(results.image-url.path)"
 ---
+{{- end }}
+{{- end }}
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:

@@ -131,3 +131,29 @@ Use the destination digest when pinning a workload or verifying/signing through
 the existing pipelines. Copying an image does not sign it or validate its runtime.
 The script retains the existing single-image Skopeo copy behavior; it does not
 request all architectures. Mutable source tags such as latest can change.
+
+## Keycloak 26.6 base image
+
+For the prepared offline Linux AMD64 archive, copy the tar and checksum to the
+AppDev host and run from their directory:
+
+```bash
+sha256sum -c keycloak-rhel9-26.6-linux-amd64.tar.sha256
+podman load -i keycloak-rhel9-26.6-linux-amd64.tar
+podman tag registry.redhat.io/rhbk/keycloak-rhel9:26.6 quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/keycloak-rhel9:26.6
+podman login quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa
+podman push quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/keycloak-rhel9:26.6
+```
+
+Use an account with push permission on `devops/keycloak-rhel9` and the approved
+Quay CA trust. This transfers the base image, not the custom provider image.
+
+Alternatively, on an approved connected image-transfer host, use the existing
+individual image-copy procedure:
+
+```bash
+./copy-image.sh registry.redhat.io/rhbk/keycloak-rhel9:26.6 quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/keycloak-rhel9:26.6 /secure/path/pullsecret.txt-quay
+```
+
+The source credentials must allow pulling the Red Hat image. For the Helm-installed
+custom build pipeline, follow [the Keycloak build instructions](../../customer-transfer/application-build/README.md#custom-keycloak-image).
