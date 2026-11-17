@@ -114,3 +114,5 @@ foundationCi:
 
 remoteBuild:
   enabled: true
+  # Temporary private-key-only connection test; restore strict with verified known_hosts.
+  hostKeyPolicy: accept-new

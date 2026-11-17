@@ -160,6 +160,7 @@ remoteBuild:
   user: appdevpipeline
   port: 22
   sshSecretName: dmz-build-ssh
+  hostKeyPolicy: strict
   # Relative to the SSH account home; alternatively set the approved absolute path.
   workRoot: tekton-builds
   maxParallel: 4

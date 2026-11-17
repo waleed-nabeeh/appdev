@@ -1,4 +1,7 @@
 {{- if .Values.remoteBuild.enabled }}
+{{- if not (has .Values.remoteBuild.hostKeyPolicy (list "strict" "accept-new")) }}
+{{- fail "remoteBuild.hostKeyPolicy must be strict or accept-new" }}
+{{- end }}
 {{- if or (lt (int .Values.remoteBuild.maxParallel) 1) (gt (int .Values.remoteBuild.maxParallel) 4) }}
 {{- fail "remoteBuild.maxParallel must be between 1 and 4 for the initial VM capacity" }}
 {{- end }}
@@ -43,6 +46,7 @@ spec:
         - {name: ssh-auth, mountPath: /ssh-auth, readOnly: true}
         - {name: runner, mountPath: /opt/dmz-build, readOnly: true}
       env:
+        - {name: DMZ_HOST_KEY_POLICY, value: {{ .Values.remoteBuild.hostKeyPolicy | quote }}}
         - {name: DMZ_HOST, value: {{ .Values.remoteBuild.host | quote }}}
         - {name: DMZ_USER, value: {{ .Values.remoteBuild.user | quote }}}
         - {name: DMZ_PORT, value: {{ .Values.remoteBuild.port | quote }}}

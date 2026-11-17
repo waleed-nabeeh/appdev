@@ -17,9 +17,16 @@ chart CI pipelines do not switch to the DMZ VM.
 
 ## Readiness
 
-1. Add the dedicated private key and **verified** `known_hosts` entry to the
+1. Add the dedicated private key to the
    `dmz-build-ssh` Secret in namespace `devops`, using keys `ssh-privatekey` and
-   `known_hosts`. Opaque and `kubernetes.io/ssh-auth` Secrets both work. Use the
+   `known_hosts` when available. Opaque and `kubernetes.io/ssh-auth` Secrets both work.
+   Current customer values use `hostKeyPolicy: accept-new` for private-key-only
+   testing: the first server key is accepted and remembered within this TaskRun;
+   subsequent SSH connections in that run reject a changed key. The temporary
+   file is removed afterward, so the initial trust is repeated on the next run.
+   First contact is not independently verified. To restore strict verification,
+   add verified `known_hosts` and set `remoteBuild.hostKeyPolicy: strict` (chart
+   default), then upgrade Helm. Use the
    replacement for any key exposed in a screenshot. The private key must support
    approved unattended authentication; this implementation has no passphrase agent.
 2. The matching public key must be authorized for `appdevpipeline`. Hub pipeline
@@ -96,7 +103,7 @@ oc create -f /tmp/frontend-dmz-test.yaml
 
 Success requires a successful PipelineRun, published image/digest in Quay, and
 `image-url`/`image-digest` results. Logs print the acquired VM slot and final
-published image/digest. A missing host key, SSH failure, Podman build failure or
+published image/digest. A missing host key in strict mode, SSH failure, Podman build failure or
 push failure stops the Task and does not publish successful Task results.
 
 ## Workspace, credentials, concurrency and cleanup

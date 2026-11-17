@@ -42,7 +42,7 @@ with tempfile.TemporaryDirectory(prefix='dmz-test-') as tmp:
     executable(bin_dir / 'ssh-keygen', '#!/bin/sh\nexit 0\n')
     executable(bin_dir / 'ssh', '''#!/usr/bin/env python3
 import os, subprocess, sys
-assert 'StrictHostKeyChecking=yes' in sys.argv
+assert ('StrictHostKeyChecking=yes' in sys.argv or 'StrictHostKeyChecking=accept-new' in sys.argv)
 assert 'BatchMode=yes' in sys.argv
 assert 'IdentitiesOnly=yes' in sys.argv
 sys.exit(subprocess.run(['bash', '-c', sys.argv[-1]], cwd=os.environ['MOCK_REMOTE']).returncode)
@@ -142,3 +142,13 @@ sys.exit(2)
                             NPM_AUTH_BOUND='false'), text=True, capture_output=True)
     assert result.returncode != 0 and 'known_hosts' in result.stderr
     print('PASS: missing verified host key fails closed before source/credential transfer')
+
+    case = root / 'private-key-only'
+    case.mkdir()
+    result = subprocess.run(['bash', str(client_path), 'BUILD_ENVIRONMENT=dev with space'],
+                            env=dict(env, JOB_ID=case.name, NPM_AUTH_BOUND='false', EXPECT_NPM='false',
+                                     DMZ_HOST_KEY_POLICY='accept-new', RESULT_DIGEST=str(case/'digest'),
+                                     RESULT_IMAGE=str(case/'image')), text=True, capture_output=True)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert (case/'digest').read_text() == 'sha256:'+'a'*64
+    print('PASS: explicit accept-new test mode works with private key only')

@@ -14,14 +14,22 @@ for path in "$BUILD_CONTEXT" "$CONTAINERFILE"; do
   case "$path" in ""|/*|..|../*|*/../*|*/..) echo 'Build paths must be repository-relative' >&2; exit 1 ;; esac
 done
 test -s /ssh-auth/ssh-privatekey
-test -s /ssh-auth/known_hosts || { echo 'Add a verified known_hosts entry to the dmz-build-ssh Secret.' >&2; exit 1; }
+case "${DMZ_HOST_KEY_POLICY:-strict}" in
+  strict)
+    test -s /ssh-auth/known_hosts || { echo 'Add a verified known_hosts entry to the dmz-build-ssh Secret.' >&2; exit 1; }
+    host_key_check=yes ;;
+  accept-new)
+    host_key_check=accept-new
+    echo 'SSH test mode: accept-new. A new host key is trusted on first contact for this TaskRun only.' ;;
+  *) echo 'hostKeyPolicy must be strict or accept-new.' >&2; exit 1 ;;
+esac
 local_work=$(mktemp -d)
 remote_dir="$DMZ_ROOT/jobs/$JOB_ID"
 remote_created=false
 runner_started=false
 ssh_vm() {
   ssh -F /dev/null -p "$DMZ_PORT" -i "$local_work/key" \
-    -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+    -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking="$host_key_check" \
     -o UserKnownHostsFile="$local_work/known_hosts" -o ConnectTimeout=15 \
     -o ServerAliveInterval=20 -o ServerAliveCountMax=3 \
     "$DMZ_USER@$DMZ_HOST" "$@"
@@ -37,7 +45,11 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 cp /ssh-auth/ssh-privatekey "$local_work/key"
-cp /ssh-auth/known_hosts "$local_work/known_hosts"
+if [ -s /ssh-auth/known_hosts ]; then
+  cp /ssh-auth/known_hosts "$local_work/known_hosts"
+else
+  : > "$local_work/known_hosts"
+fi
 chmod 600 "$local_work/key"
 ssh-keygen -y -P '' -f "$local_work/key" >/dev/null || {
   echo 'SSH private key is invalid or requires a passphrase. Use an approved unattended key.' >&2; exit 1;
