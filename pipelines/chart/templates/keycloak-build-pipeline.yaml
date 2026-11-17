@@ -151,6 +151,11 @@ spec:
               }
               printf '%s' "$published_digest" > "$(results.image-digest.path)"
               printf '%s@%s' "$IMAGE_REPOSITORY" "$published_digest" > "$(results.image-url.path)"
+              printf '\nPush completed successfully.\n'
+              printf 'Published image: %s:%s\n' "$IMAGE_REPOSITORY" "$IMAGE_TAG"
+              printf 'Image tag: %s\n' "$IMAGE_TAG"
+              printf 'Image digest: %s\n' "$published_digest"
+              printf 'Digest reference: %s@%s\n' "$IMAGE_REPOSITORY" "$published_digest"
       params:
         - {name: repository, value: {{ .Values.keycloakBuild.imageRepository | quote }}}
         - {name: tag, value: $(tasks.validate.results.tag)}

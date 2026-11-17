@@ -113,12 +113,15 @@ Dir.mktmpdir('keycloak-publish-test') do |dir|
   digest = "sha256:#{'a' * 64}"
   env = {'PATH' => "#{dir}:#{ENV['PATH']}", 'IMAGE_REPOSITORY' => 'quay.example/devops/keycloak-custom',
          'IMAGE_TAG' => '26.6-custom-1', 'SCANNED_DIGEST' => digest, 'MOCK_DIGEST' => digest, 'HTTPS_PROXY' => 'must-be-unset'}
-  _, err, status = Open3.capture3(env, 'bash', script_path)
+  output, err, status = Open3.capture3(env, 'bash', script_path)
   check(status.success?, err)
+  check(output.include?("Published image: #{env['IMAGE_REPOSITORY']}:#{env['IMAGE_TAG']}") &&
+        output.include?("Image digest: #{digest}"), 'Push log must identify the published tag and digest')
   check(File.read(File.join(dir, 'url')) == "#{env['IMAGE_REPOSITORY']}@#{digest}", 'Wrong published reference')
   [{'MOCK_DIGEST' => "sha256:#{'b' * 64}"}, {'MOCK_FAIL' => '1'}].each do |failure|
     FileUtils.rm_f(File.join(dir, 'url'))
-    _, _, status = Open3.capture3(env.merge(failure), 'bash', script_path)
+    output, _, status = Open3.capture3(env.merge(failure), 'bash', script_path)
+    check(!output.include?('Push completed successfully.'), 'Failed push must not log success')
     check(!status.success? && !File.exist?(File.join(dir, 'url')), 'Publication failure must stop results/signing')
   end
   definitions.values.each do |definition|
