@@ -134,6 +134,7 @@ rhacs:
 # Prebuilt JDBC/provider JARs; no external package downloads or proxy Secret.
 keycloakBuild:
   enabled: false
+  allowSecurityGateFailure: false
   sourceUrl: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/integration-rhsso
   sourceRevision: keycloak-custom
   imageRepository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/keycloak-custom

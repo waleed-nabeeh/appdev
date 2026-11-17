@@ -25,7 +25,12 @@ order = %w[clone validate build-image scan-image security-gate push-image sign-i
 check(tasks.keys == order, 'Unexpected pipeline flow')
 order.each_cons(2) { |before, after| check(tasks[after]['runAfter'] == [before], "Missing failure gate before #{after}") }
 tasks.each do |name, task|
-  check(!task.key?('onError') && !task.key?('when'), 'Security stages must not be bypassed')
+  check(!task.key?('when'), 'Security stages must not be skipped')
+  if name == 'security-gate'
+    check(task['onError'] == 'continue', 'Customer temporary advisory gate must continue on failure')
+  else
+    check(!task.key?('onError'), 'Only the security gate may ignore failure')
+  end
   definition = definitions[name]
   supplied = task.fetch('params', []).map { |p| p['name'] }
   declared = definition.fetch('params', []).map { |p| p['name'] }
@@ -41,6 +46,9 @@ end
 spec.to_json.scan(/\$\(tasks\.([^.]+)\.results\.([^)]+)\)/).each do |producer, result|
   check(definitions.fetch(producer).fetch('results', []).any? { |r| r['name'] == result }, 'Invalid result reference')
 end
+strict = render('--set', 'keycloakBuild.allowSecurityGateFailure=false').find { |d| d['kind'] == 'Pipeline' && d['metadata']['name'] == 'application-keycloak-build' }
+strict_gate = strict['spec']['tasks'].find { |t| t['name'] == 'security-gate' }
+check(!strict_gate.key?('onError'), 'Strict policy enforcement must be restorable')
 build = tasks['build-image']
 check(build['params'].find { |p| p['name'] == 'image' }['value'].end_with?(':candidate-$(context.pipelineRun.uid)'), 'Candidate must be unique per run')
 check(!definitions['build-image']['steps'][0].key?('env'), 'Build must not require proxy Secret')

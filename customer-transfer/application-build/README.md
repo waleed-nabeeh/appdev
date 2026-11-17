@@ -258,7 +258,12 @@ configuration deployment and GitOps updates.
   repository with a unique `candidate-<PipelineRun UID>` tag.
 - `scan-image` reuses RHACS scanning against the uploaded image digest.
 - `security-gate` checks the configured RHACS build-time enforcement policies.
-  A successful vulnerability scan alone is not a policy approval.
+  A successful vulnerability scan alone is not a policy approval. The current
+  customer values temporarily set `keycloakBuild.allowSecurityGateFailure: true`: the
+  gate still runs, but `onError: continue` lets publication/signing proceed after
+  a policy-check failure. This also ignores other failures of that gate Task.
+  Failed checks remain visible in the TaskRun logs/status; overall PipelineRun
+  success in this mode is not evidence of policy compliance.
 - `push-image` uses the existing Skopeo image to copy the scanned digest to the
   requested final tag with digest preservation; it never rebuilds the image.
 - `sign-image` reuses the RHTAS task to sign the published digest.
@@ -269,8 +274,11 @@ Copying uses [Skopeo digest preservation](https://github.com/containers/skopeo/b
 No Keycloak task reads `pipeline-proxy`; existing frontend/backend behavior is
 unchanged. Registry credentials must permit both candidate and final tags.
 
-A scan or policy failure prevents final-tag publication and signing; any
-previously existing final tag is unchanged. A signing failure leaves a published
+A scan failure always prevents final-tag publication and signing. A policy-gate
+failure blocks them only when `keycloakBuild.allowSecurityGateFailure` is false
+(the chart default); any previously existing final tag is unchanged in that case.
+To restore enforcement, set this value to false in
+`customer-transfer/application-build/values.yaml` and run the same Helm upgrade. A signing failure leaves a published
 but unsigned image and a failed PipelineRun: do not release it. Candidate tags
 are retained for troubleshooting, including failed candidates; agree an approved
 Quay retention policy separately. Do not deploy `candidate-*` tags. This same
@@ -304,7 +312,8 @@ Before starting:
    tasks. RHACS must be able to pull the private Keycloak repository through its
    Quay integration, have usable vulnerability data, and enforce the agreed
    build-time policies. Confirm installed RHACS/server compatibility with the
-   existing roxctl 4.11.4 image; scanning/policy failures stop publication.
+   existing roxctl 4.11.4 image. Scan failures stop publication; gate failures
+   currently remain advisory under the temporary customer setting.
 7. Existing RHTAS URLs, trust, token audience and pipeline service-account
    identity must be valid. Fulcio/Rekor/TUF and the internal client service must
    be reachable. Quay credentials must allow signature publication. Signing

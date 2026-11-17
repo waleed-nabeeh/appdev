@@ -103,6 +103,9 @@ spec:
         - name: image
           value: {{ printf "%s@$(tasks.build-image.results.image-digest)" .Values.keycloakBuild.imageRepository | quote }}
     - name: security-gate
+{{- if .Values.keycloakBuild.allowSecurityGateFailure }}
+      onError: continue
+{{- end }}
       runAfter: [scan-image]
       taskRef:
         name: security-gate
