@@ -4,6 +4,11 @@ Helm chart: `pipelines/chart/`. Release: `release-pipeline`. Namespace: `devops`
 Use this folder's **single values.yaml**; no other overlays or `--set` flags are
 required for the current customer setup.
 
+For the new frontend/backend VM build tests and later activation of remote
+image builds, use [DMZ build instructions](README-dmz-build.md). The customer
+values install manual smoke tests; existing application routing stays on Hub
+until `remoteBuild.useForApplicationBuilds` is enabled.
+
 For firewall/proxy preparation and the internal-only target, use the
 [network access requirements](README-network-access.md). It separates package
 feeds, registry/CDN downloads and conditional installer endpoints by source.

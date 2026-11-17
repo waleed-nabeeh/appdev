@@ -1,0 +1,64 @@
+{{- if .Values.remoteBuild.enabled }}
+{{- if or (lt (int .Values.remoteBuild.maxParallel) 1) (gt (int .Values.remoteBuild.maxParallel) 4) }}
+{{- fail "remoteBuild.maxParallel must be between 1 and 4 for the initial VM capacity" }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dmz-build-runner
+data:
+  runner.sh: |
+{{ .Files.Get "files/dmz-build-runner.sh" | indent 4 }}
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: build-image-dmz
+spec:
+  params:
+    - {name: image, type: string}
+    - {name: context, type: string, default: "."}
+    - {name: containerfile, type: string, default: Containerfile}
+    - {name: build-args, type: array, default: []}
+  results:
+    - name: image-digest
+    - name: image-url
+  workspaces:
+    - name: source
+    - name: registry-auth
+    - name: npm-auth
+      optional: true
+  volumes:
+    - name: ssh-auth
+      secret:
+        secretName: {{ .Values.remoteBuild.sshSecretName }}
+    - name: runner
+      configMap:
+        name: dmz-build-runner
+  steps:
+    - name: build-and-push-dmz
+      image: {{ .Values.images.git }}
+      args: ["$(params.build-args[*])"]
+      volumeMounts:
+        - {name: ssh-auth, mountPath: /ssh-auth, readOnly: true}
+        - {name: runner, mountPath: /opt/dmz-build, readOnly: true}
+      env:
+        - {name: DMZ_HOST, value: {{ .Values.remoteBuild.host | quote }}}
+        - {name: DMZ_USER, value: {{ .Values.remoteBuild.user | quote }}}
+        - {name: DMZ_PORT, value: {{ .Values.remoteBuild.port | quote }}}
+        - {name: DMZ_ROOT, value: {{ .Values.remoteBuild.workRoot | quote }}}
+        - {name: DMZ_MAX_BUILDS, value: {{ .Values.remoteBuild.maxParallel | quote }}}
+        - {name: DMZ_WAIT_SECONDS, value: {{ .Values.remoteBuild.waitSeconds | quote }}}
+        - {name: JOB_ID, value: $(context.taskRun.uid)}
+        - {name: SOURCE_DIR, value: $(workspaces.source.path)/source}
+        - {name: REGISTRY_AUTH, value: $(workspaces.registry-auth.path)}
+        - {name: NPM_AUTH_BOUND, value: $(workspaces.npm-auth.bound)}
+        - {name: NPM_AUTH, value: $(workspaces.npm-auth.path)}
+        - {name: BUILD_IMAGE, value: $(params.image)}
+        - {name: BUILD_CONTEXT, value: $(params.context)}
+        - {name: CONTAINERFILE, value: $(params.containerfile)}
+        - {name: RESULT_DIGEST, value: $(results.image-digest.path)}
+        - {name: RESULT_IMAGE, value: $(results.image-url.path)}
+      script: |
+{{ .Files.Get "files/dmz-build-client.sh" | indent 8 }}
+{{- end }}

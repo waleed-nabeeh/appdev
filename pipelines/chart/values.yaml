@@ -151,3 +151,16 @@ foundationCi:
   chartVersion: 1.0.1-test.1
   registry: oci://quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops
   workspaceSize: 1Gi
+
+# Only image build/push runs on the VM; all other stages stay on Hub.
+remoteBuild:
+  enabled: false
+  useForApplicationBuilds: false
+  host: 172.28.50.40
+  user: appdevpipeline
+  port: 22
+  sshSecretName: dmz-build-ssh
+  # Relative to the SSH account home; alternatively set the approved absolute path.
+  workRoot: tekton-builds
+  maxParallel: 4
+  waitSeconds: 10800

@@ -1,0 +1,95 @@
+{{- if .Values.remoteBuild.enabled }}
+{{- $root := . }}
+{{- range $scope := list "backend" "frontend" }}
+{{- $frontend := eq $scope "frontend" }}
+{{- $settings := ternary $root.Values.frontendRelease $root.Values.backendBuild $frontend }}
+{{- $catalog := $root.Files.Get (printf "files/%s-services.json" $scope) | fromJsonArray }}
+{{- $service := first $catalog }}
+---
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: application-{{ $scope }}-dmz-test
+spec:
+  description: Manual single-service DMZ build/push smoke test. No unit tests, scans, signing or GitOps; not a release pipeline.
+  params:
+    - {name: source-url, type: string, default: {{ $settings.sourceUrl | quote }}}
+    - {name: source-revision, type: string, default: {{ $settings.sourceRevision | quote }}}
+    - {name: source-commit, type: string, default: ""}
+    - {name: context, type: string, default: {{ $service.context | quote }}}
+    - {name: containerfile, type: string, default: {{ $service.containerfile | quote }}}
+    - name: image
+      type: string
+      default: {{ printf "%s/%s:dmz-test-1" $settings.imageRepository $service.name | quote }}
+      description: Test image destination; use a new dmz-test tag per test, never an existing release tag.
+    - {name: build-args, type: array, default: {{ $settings.buildArgs | toJson }}}
+  workspaces:
+    - name: source
+    - name: git-credentials
+    - name: registry-auth
+{{- if $frontend }}
+    - name: npm-auth
+{{- end }}
+  results:
+    - {name: image-url, value: $(tasks.build.results.image-url)}
+    - {name: image-digest, value: $(tasks.build.results.image-digest)}
+  tasks:
+    - name: clone
+      taskRef: {name: clone}
+      params:
+        - {name: url, value: $(params.source-url)}
+        - {name: revision, value: $(params.source-revision)}
+        - {name: commit, value: $(params.source-commit)}
+      workspaces:
+        - {name: source, workspace: source}
+        - {name: git-credentials, workspace: git-credentials}
+    - name: build
+      runAfter: [clone]
+      taskRef: {name: build-image-dmz}
+      params:
+        - {name: image, value: $(params.image)}
+        - {name: context, value: $(params.context)}
+        - {name: containerfile, value: $(params.containerfile)}
+        - {name: build-args, value: ["$(params.build-args[*])"]}
+      workspaces:
+        - {name: source, workspace: source}
+        - {name: registry-auth, workspace: registry-auth}
+{{- if $frontend }}
+        - {name: npm-auth, workspace: npm-auth}
+{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $scope }}-dmz-test-run-template
+data:
+  pipelinerun.yaml: |
+    apiVersion: tekton.dev/v1
+    kind: PipelineRun
+    metadata:
+      generateName: {{ $scope }}-dmz-test-
+      namespace: {{ $root.Release.Namespace }}
+    spec:
+      pipelineRef: {name: application-{{ $scope }}-dmz-test}
+      taskRunTemplate:
+        serviceAccountName: {{ $root.Values.serviceAccount.name }}
+      timeouts:
+        pipeline: 2h0m0s
+      workspaces:
+        - name: source
+          volumeClaimTemplate:
+            spec:
+              accessModes: [ReadWriteOnce]
+              resources:
+                requests:
+                  storage: {{ $settings.workspaceSize | quote }}
+        - name: git-credentials
+          secret: {secretName: git-credentials}
+        - name: registry-auth
+          secret: {secretName: registry-auth}
+{{- if $frontend }}
+        - name: npm-auth
+          secret: {secretName: npm-auth}
+{{- end }}
+{{- end }}
+{{- end }}

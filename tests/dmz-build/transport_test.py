@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+"""Exercise real tar/shell transport with mocked SSH/Podman, never a live VM."""
+import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+
+REPO = Path(__file__).resolve().parents[2]
+CLIENT = (REPO / 'pipelines/chart/files/dmz-build-client.sh').read_text()
+RUNNER = REPO / 'pipelines/chart/files/dmz-build-runner.sh'
+
+
+def executable(path, text):
+    path.write_text(text)
+    path.chmod(0o755)
+
+
+with tempfile.TemporaryDirectory(prefix='dmz-test-') as tmp:
+    root = Path(tmp)
+    bin_dir = root / 'bin'
+    bin_dir.mkdir()
+    remote = root / 'remote'
+    remote.mkdir()
+    source = root / 'source'
+    (source / 'shared').mkdir(parents=True)
+    (source / 'shared/shared.csproj').write_text('shared project')
+    (source / 'Dockerfile').write_text('FROM internal/base\nCOPY . .\n')
+    (source / '.dockerignore').write_text('.git\n')
+    (source / '.git').mkdir()
+    (source / '.git/config').write_text('excluded')
+    auth = root / 'auth'
+    auth.mkdir()
+    (auth / '.dockerconfigjson').write_text('{}')
+    npm = root / 'npm'
+    npm.mkdir()
+    (npm / 'NPM_TOKEN').write_text('test-token-not-a-real-credential')
+    ssh_auth = root / 'ssh'
+    ssh_auth.mkdir()
+    (ssh_auth / 'ssh-privatekey').write_text('mock-private-key')
+    (ssh_auth / 'known_hosts').write_text('mock-host-key')
+    executable(bin_dir / 'ssh-keygen', '#!/bin/sh\nexit 0\n')
+    executable(bin_dir / 'ssh', '''#!/usr/bin/env python3
+import os, subprocess, sys
+assert 'StrictHostKeyChecking=yes' in sys.argv
+assert 'BatchMode=yes' in sys.argv
+assert 'IdentitiesOnly=yes' in sys.argv
+sys.exit(subprocess.run(['bash', '-c', sys.argv[-1]], cwd=os.environ['MOCK_REMOTE']).returncode)
+''')
+    # Python flock uses actual OS locks on the inherited descriptors, like util-linux flock.
+    executable(bin_dir / 'flock', '''#!/usr/bin/env python3
+import fcntl, sys
+mode = sys.argv[1]
+flags = {'-x': fcntl.LOCK_EX, '-n': fcntl.LOCK_EX | fcntl.LOCK_NB, '-u': fcntl.LOCK_UN}[mode]
+try:
+    fcntl.flock(int(sys.argv[2]), flags)
+except BlockingIOError:
+    sys.exit(1)
+''')
+    executable(bin_dir / 'realpath', '''#!/usr/bin/env python3
+import pathlib, sys
+print(pathlib.Path(sys.argv[-1]).resolve(strict=True))
+''')
+    executable(bin_dir / 'podman', '''#!/usr/bin/env python3
+import fcntl, json, os, pathlib, sys, time
+args = sys.argv[1:]
+if args[0] == 'info':
+    print('true'); sys.exit(0)
+if args[:2] == ['image', 'rm']:
+    sys.exit(0)
+if args[0] == 'build':
+    assert pathlib.Path('shared/shared.csproj').is_file(), 'full repository missing'
+    assert pathlib.Path('.dockerignore').is_file()
+    assert not pathlib.Path('.git').exists()
+    credential = pathlib.Path(args[args.index('--authfile')+1])
+    assert credential.is_file() and not credential.is_relative_to(pathlib.Path.cwd())
+    expected = os.environ.get('EXPECT_NPM') == 'true'
+    assert ('--secret' in args) == expected
+    assert '--build-arg' in args and 'BUILD_ENVIRONMENT=dev with space' in args
+    if os.environ.get('MOCK_FAIL') == 'build': sys.exit(14)
+    if os.environ.get('TRACK'):
+        track = pathlib.Path(os.environ['TRACK'])
+        with track.open('r+') as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            d=json.load(f); d['active']+=1; d['max']=max(d['max'],d['active'])
+            f.seek(0); json.dump(d,f); f.truncate()
+        time.sleep(0.4)
+        with track.open('r+') as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            d=json.load(f); d['active']-=1; f.seek(0); json.dump(d,f); f.truncate()
+    sys.exit(0)
+if args[0] == 'push':
+    if os.environ.get('MOCK_FAIL') == 'push': sys.exit(15)
+    pathlib.Path(args[args.index('--digestfile')+1]).write_text('sha256:' + 'a'*64)
+    sys.exit(0)
+sys.exit(2)
+''')
+    script = CLIENT.replace('/ssh-auth', str(ssh_auth)).replace('/opt/dmz-build/runner.sh', str(RUNNER))
+    client_path = root / 'client.sh'
+    client_path.write_text(script)
+    env = dict(os.environ, PATH=str(bin_dir)+':'+os.environ['PATH'], MOCK_REMOTE=str(remote),
+               DMZ_HOST='172.28.50.40', DMZ_USER='appdevpipeline', DMZ_PORT='22',
+               DMZ_ROOT='tekton-builds', DMZ_MAX_BUILDS='4', DMZ_WAIT_SECONDS='30',
+               SOURCE_DIR=str(source), REGISTRY_AUTH=str(auth), NPM_AUTH=str(npm),
+               BUILD_IMAGE='quay.example/devops/acl-service:dmz-test-1',
+               BUILD_CONTEXT='.', CONTAINERFILE='Dockerfile')
+    for label, use_npm, failure in [('frontend', 'true', ''), ('backend', 'false', ''),
+                                     ('build-fail', 'true', 'build'), ('push-fail', 'true', 'push')]:
+        case = root / label
+        case.mkdir()
+        run_env = dict(env, JOB_ID=label, NPM_AUTH_BOUND=use_npm, EXPECT_NPM=use_npm,
+                       MOCK_FAIL=failure, RESULT_DIGEST=str(case/'digest'), RESULT_IMAGE=str(case/'image'))
+        result = subprocess.run(['bash', str(client_path), 'BUILD_ENVIRONMENT=dev with space'],
+                                env=run_env, text=True, capture_output=True)
+        assert (result.returncode == 0) == (not failure), (label, result.stdout, result.stderr)
+        assert not (remote/'tekton-builds/jobs'/label).exists(), 'remote workspace/credentials not cleaned'
+        if not failure:
+            assert (case/'digest').read_text() == 'sha256:'+'a'*64
+            assert (case/'image').read_text() == env['BUILD_IMAGE']+'@sha256:'+'a'*64
+        else:
+            assert not (case/'digest').exists(), 'failed build returned successful results'
+        print('PASS:', label, 'full context, secret isolation, result handling and cleanup')
+    # Two additional jobs queue behind the same four globally shared locks.
+    track = root / 'concurrency.json'
+    track.write_text('{"active":0,"max":0}')
+    processes = []
+    for number in range(6):
+        case = root / ('parallel-'+str(number))
+        case.mkdir()
+        run_env = dict(env, JOB_ID=case.name, NPM_AUTH_BOUND='false', EXPECT_NPM='false',
+                       TRACK=str(track), RESULT_DIGEST=str(case/'digest'), RESULT_IMAGE=str(case/'image'))
+        processes.append(subprocess.Popen(['bash', str(client_path), 'BUILD_ENVIRONMENT=dev with space'],
+                         env=run_env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE))
+    for process in processes:
+        stdout, stderr = process.communicate(timeout=40)
+        assert process.returncode == 0, (stdout, stderr)
+    stats = json.loads(track.read_text())
+    assert stats['active'] == 0 and 1 < stats['max'] <= 4, stats
+    print('PASS: six simultaneous jobs respect the shared four-build limit:', stats)
+    (ssh_auth/'known_hosts').unlink()
+    result = subprocess.run(['bash', str(client_path)], env=dict(env, JOB_ID='missing-host',
+                            NPM_AUTH_BOUND='false'), text=True, capture_output=True)
+    assert result.returncode != 0 and 'known_hosts' in result.stderr
+    print('PASS: missing verified host key fails closed before source/credential transfer')

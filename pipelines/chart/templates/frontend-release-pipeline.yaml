@@ -70,7 +70,7 @@ spec:
     - name: build-{{ $service }}
       runAfter: [{{ ternary "test" "clone" $.Values.frontendRelease.testsEnabled }}-{{ $service }}]
       taskRef:
-        name: build-image
+        name: {{ ternary "build-image-dmz" "build-image" (and $.Values.remoteBuild.enabled $.Values.remoteBuild.useForApplicationBuilds) }}
       params:
         - name: image
           value: {{ $.Values.frontendRelease.imageRepository }}/{{ $service }}:$(tasks.resolve-source.results.tag)

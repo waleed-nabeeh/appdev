@@ -323,7 +323,7 @@ spec:
 {{- end }}
     - name: build
       runAfter: [{{ ternary "test" "clone" (or (not $frontend) $settings.testsEnabled) }}]
-      taskRef: {name: build-image}
+      taskRef: {name: {{ ternary "build-image-dmz" "build-image" (and $root.Values.remoteBuild.enabled $root.Values.remoteBuild.useForApplicationBuilds) }}}
       params:
         - {name: image, value: $(tasks.settings.results.image)}
         - {name: context, value: $(tasks.settings.results.context)}

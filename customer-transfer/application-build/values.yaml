@@ -111,3 +111,6 @@ keycloakBuild:
 
 foundationCi:
   enabled: true
+
+remoteBuild:
+  enabled: true
