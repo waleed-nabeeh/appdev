@@ -191,3 +191,14 @@ VM or OpenShift tests. Verify installed Podman/client compatibility on the VM.
 References: [Podman build](https://docs.podman.io/en/stable/markdown/podman-build.1.html),
 [Podman push](https://docs.podman.io/en/stable/markdown/podman-push.1.html),
 [flock](https://www.man7.org/linux/man-pages/man1/flock.1.html).
+
+### SSH key parsing fails before connection
+
+`Load key ... error in libcrypto` occurs while reading the private key locally,
+not while authenticating to the VM. The client normalizes CRLF line endings and
+ensures a final newline in its temporary key copy; the Secret itself is unchanged.
+If parsing still fails, re-upload the complete original OpenSSH/PEM private key
+using Browse in the Secret UI rather than retyping it. Confirm format/algorithm
+compatibility and whether the supplied key is passphrase-encrypted; a PuTTY PPK
+file needs conversion to an OpenSSH format. Never paste the key into logs/chat.
+No format normalization can repair missing or altered key data.

@@ -152,3 +152,23 @@ sys.exit(2)
     assert result.returncode == 0, (result.stdout, result.stderr)
     assert (case/'digest').read_text() == 'sha256:'+'a'*64
     print('PASS: explicit accept-new test mode works with private key only')
+
+# Use real ssh-keygen to validate the normalization, without exposing key material.
+with tempfile.TemporaryDirectory(prefix='dmz-key-format-') as tmp:
+    root = Path(tmp)
+    original = root/'original'
+    subprocess.run(['ssh-keygen', '-q', '-t', 'rsa', '-b', '2048', '-N', '', '-f', str(original)],
+                   check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    content = original.read_bytes()
+    for name, raw in [('lf', content), ('no-final-newline', content.rstrip(b'\n')),
+                      ('crlf', content.replace(b'\n', b'\r\n'))]:
+        source = root/(name+'.key')
+        normalized = root/(name+'.normalized')
+        source.write_bytes(raw)
+        with normalized.open('wb') as target:
+            subprocess.run(['awk', '{sub(/\\r$/, ""); print}', str(source)], stdout=target, check=True)
+        normalized.chmod(0o600)
+        result = subprocess.run(['ssh-keygen', '-y', '-P', '', '-f', str(normalized)],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        assert result.returncode == 0, name
+    print('PASS: real SSH key parsing after LF, CRLF and missing-final-newline normalization')

@@ -44,7 +44,8 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-cp /ssh-auth/ssh-privatekey "$local_work/key"
+# Normalize pasted Windows line endings and restore the required final newline.
+awk '{sub(/\r$/, ""); print}' /ssh-auth/ssh-privatekey > "$local_work/key"
 if [ -s /ssh-auth/known_hosts ]; then
   cp /ssh-auth/known_hosts "$local_work/known_hosts"
 else
@@ -52,7 +53,7 @@ else
 fi
 chmod 600 "$local_work/key"
 ssh-keygen -y -P '' -f "$local_work/key" >/dev/null || {
-  echo 'SSH private key is invalid or requires a passphrase. Use an approved unattended key.' >&2; exit 1;
+  echo 'SSH client could not parse the private key. Check the complete original key, supported format/algorithm and passphrase requirements. No VM connection was attempted.' >&2; exit 1;
 }
 mkdir "$local_work/credentials" "$local_work/metadata"
 authfile="$REGISTRY_AUTH/config.json"
