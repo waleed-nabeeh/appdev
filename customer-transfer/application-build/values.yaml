@@ -3,6 +3,7 @@
 # env defaults to dev; it drives CERT_KEYWORD (backend) / BUILD_ENVIRONMENT (frontend).
 ---
 images:
+  helm: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/helm:3.19.0
   git: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/alpine-git:2026-10-07
   dotnet: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/dotnet-100:10.0
   nodejs24: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nodejs-24:ubi9
@@ -107,3 +108,6 @@ keycloakBuild:
   enabled: true
   # Temporary integration setting; false restores blocking policy enforcement.
   allowSecurityGateFailure: true
+
+foundationCi:
+  enabled: true

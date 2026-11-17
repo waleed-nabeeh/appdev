@@ -366,3 +366,91 @@ Local regression check (from the appdev repository root):
 ```bash
 ruby tests/keycloak-build/validate.rb
 ```
+
+## Application Foundation chart CI (manual test)
+
+The same values file now enables `application-foundation-ci` in the existing
+pipeline Helm release. First source: `RedHat_HelmCharts`, branch `dev`, directory
+`app-chart/1.0.0`. This is a single selected-chart test of the foundation CI
+workflow; it does not yet detect all modified charts or create PR webhooks.
+
+Flow: **clone → validate-chart → package-chart → publish-chart**.
+
+- Clone uses the existing Git image and credentials.
+- Validation copies the selected chart into a separate workspace directory,
+  sets the manually approved chart version in that copy, then runs `helm lint
+  --strict` and `helm template`. Optional `values-file` is repository-relative
+  and affects validation only. Rendered manifests are not printed to logs.
+- Packaging produces the versioned `.tgz` from the validated workspace copy.
+  `appVersion`, dependency versions, source directory and Git are unchanged.
+- Publication uses `helm push` to internal Quay. The chart name is derived from
+  `Chart.yaml`; the OCI tag is derived from its approved version. The push logs
+  print the published chart reference, version and registry digest.
+
+Prerequisites:
+
+1. Mirror `docker.io/alpine/helm:3.19.0` to internal `devops/helm:3.19.0`, using
+   [the image-transfer instructions](../../tools/image-copy/README.md#helm-chart-publishing-image).
+   It is the only new task image. The Git image is already configured internally.
+2. `git-credentials` must allow read access to the selected repository/branch.
+   `registry-auth` must contain `config.json` or `.dockerconfigjson` with Quay
+   write access to `devops/app-chart`. Create the Quay repository first if the
+   account cannot create it. Keep internal CA trust configured; TLS verification
+   remains enabled.
+3. Chart dependencies must be vendored under `charts/`. The inspected reference
+   has the local `access-control` dependency included. No `helm dependency update`,
+   public downloads, proxy Secret, or runtime tool installation is used.
+4. The `pipeline` service account must be able to run the existing Git image and
+   new Helm image with a writable source PVC. Confirm the actual Azure source
+   branch/path and dependency completeness when running on the customer cluster.
+
+Apply the same Helm upgrade documented above. Then use the UI:
+
+1. Select **devops → Pipelines → application-foundation-ci → Start**.
+2. Keep `source-url` and `source-revision: dev` unless testing another branch.
+3. Set `chart-path: app-chart/1.0.0`.
+4. Set `chart-version: 1.0.1-test.1` for the first test; increment for later runs.
+   This intentionally differs from source directory `1.0.0` to avoid overwriting
+   the existing chart version. Do not reuse an already published version: Helm
+   push can replace an existing tag if the registry allows it.
+5. Leave `source-commit` and `values-file` empty unless pinning a commit or using
+   an environment-specific validation values file.
+6. Bind `git-credentials` and `registry-auth` to their matching Secrets. Bind
+   `source` to a new **ReadWriteOnce, 1Gi VolumeClaimTemplate** and select service
+   account **pipeline**. Start the run.
+
+For a CLI start with the same defaults:
+
+```bash
+oc -n devops get configmap foundation-ci-run-template \
+  -o jsonpath='{.data.pipelinerun\.yaml}' > /tmp/foundation-ci-run.yaml
+# Edit chart-version before repeating a test.
+oc create -f /tmp/foundation-ci-run.yaml
+```
+
+Expected first-test artifact:
+
+```text
+oci://quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/app-chart:1.0.1-test.1
+```
+
+Check **PipelineRun → Output** for `source-commit`, `chart-name`, `chart-version`,
+`chart-reference` and `chart-digest`. From a trusted, authenticated Helm client,
+verify it can be retrieved:
+
+```bash
+helm pull oci://quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/app-chart \
+  --version 1.0.1-test.1 --destination /tmp
+helm show chart /tmp/app-chart-1.0.1-test.1.tgz
+```
+
+This publishes a chart only. It does not update Argo CD, deploy workloads, build
+Keycloak images or sign chart artifacts. Foundation Keycloak, 3scale and AMQ
+configuration charts can be tested individually later using their actual
+`chart-path` and approved version, once those inputs are ready. PR triggering
+and multi-chart change detection remain deferred.
+
+Validation references: [Helm 3 OCI registries](https://helm.sh/docs/v3/topics/registries/).
+Local check: `ruby tests/foundation-ci/validate.rb` (set `HELM_TEST_BINARY` to a
+Helm 3.19.0 binary to match the pipeline image). Registry publication in this
+check is mocked; customer Quay publication and UI execution require a live run.

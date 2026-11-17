@@ -111,6 +111,7 @@ proxy:
   secretName: pipeline-proxy
 
 images:
+  helm: docker.io/alpine/helm:3.19.0
   git: docker.io/alpine/git:latest
   dotnet: registry.access.redhat.com/ubi9/dotnet-100:latest
   nodejs24: registry.access.redhat.com/ubi9/nodejs-24:latest
@@ -140,3 +141,13 @@ keycloakBuild:
   imageRepository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/keycloak-custom
   baseImage: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/keycloak-rhel9:26.6
   workspaceSize: 3Gi
+
+# Manual single-chart validation, packaging and OCI publication; no deployment.
+foundationCi:
+  enabled: false
+  sourceUrl: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_HelmCharts
+  sourceRevision: dev
+  chartPath: app-chart/1.0.0
+  chartVersion: 1.0.1-test.1
+  registry: oci://quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops
+  workspaceSize: 1Gi

@@ -1,0 +1,228 @@
+{{- if .Values.foundationCi.enabled }}
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: application-foundation-ci
+spec:
+  description: Manually validate, version, package and publish one selected Helm chart as OCI. No Git writes or deployment.
+  params:
+    - {name: source-url, type: string, default: {{ .Values.foundationCi.sourceUrl | quote }}}
+    - {name: source-revision, type: string, default: {{ .Values.foundationCi.sourceRevision | quote }}}
+    - {name: source-commit, type: string, default: ""}
+    - {name: chart-path, type: string, default: {{ .Values.foundationCi.chartPath | quote }}}
+    - name: chart-version
+      type: string
+      default: {{ .Values.foundationCi.chartVersion | quote }}
+      description: Approved SemVer package version; choose an unused version. Source directory and appVersion are unchanged.
+    - name: values-file
+      type: string
+      default: ""
+      description: Optional values file relative to the repository root, used only for linting/rendering.
+  workspaces:
+    - name: source
+    - name: git-credentials
+    - name: registry-auth
+  results:
+    - {name: source-commit, value: $(tasks.validate-chart.results.commit)}
+    - {name: chart-name, value: $(tasks.validate-chart.results.chart-name)}
+    - {name: chart-version, value: $(tasks.validate-chart.results.chart-version)}
+    - {name: chart-reference, value: $(tasks.publish-chart.results.chart-reference)}
+    - {name: chart-digest, value: $(tasks.publish-chart.results.chart-digest)}
+  tasks:
+    - name: clone
+      taskRef:
+        name: clone
+      params:
+        - {name: url, value: $(params.source-url)}
+        - {name: revision, value: $(params.source-revision)}
+        - {name: commit, value: $(params.source-commit)}
+      workspaces:
+        - {name: source, workspace: source}
+        - {name: git-credentials, workspace: git-credentials}
+    - name: validate-chart
+      runAfter: [clone]
+      taskSpec:
+        params:
+          - {name: chart-path, type: string}
+          - {name: chart-version, type: string}
+          - {name: values-file, type: string}
+        workspaces:
+          - name: source
+        results:
+          - name: commit
+          - name: chart-name
+          - name: chart-version
+        steps:
+          - name: record-source
+            image: {{ .Values.images.git }}
+            workingDir: $(workspaces.source.path)/source
+            script: |
+              #!/bin/sh
+              set -eu
+              git rev-parse HEAD | tr -d '\n' > "$(results.commit.path)"
+          - name: lint-and-render
+            image: {{ .Values.images.helm }}
+            env:
+              - {name: CHART_PATH, value: $(params.chart-path)}
+              - {name: CHART_VERSION, value: $(params.chart-version)}
+              - {name: VALUES_FILE, value: $(params.values-file)}
+              - {name: RENDER_NAMESPACE, value: {{ .Release.Namespace | quote }}}
+            script: |
+              #!/bin/sh
+              set -eu
+              unset HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy
+              export HELM_CACHE_HOME=/tmp/helm/cache HELM_CONFIG_HOME=/tmp/helm/config HELM_DATA_HOME=/tmp/helm/data
+              repo=$(cd "$(workspaces.source.path)/source" && pwd -P)
+              staging="$(workspaces.source.path)/chart-ci"
+              case "$CHART_PATH" in
+                ""|/*|..|../*|*/../*|*/..) echo 'chart-path must stay inside the source repository.' >&2; exit 1 ;;
+              esac
+              case "$VALUES_FILE" in
+                /*|..|../*|*/../*|*/..) echo 'values-file must stay inside the source repository.' >&2; exit 1 ;;
+              esac
+              case "$CHART_VERSION" in
+                ""|*[!A-Za-z0-9.+-]*) echo 'Supply an approved SemVer chart-version, for example 1.0.1-test.1.' >&2; exit 1 ;;
+              esac
+              printf '%s\n' "$CHART_VERSION" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$' || {
+                echo 'chart-version must include major.minor.patch, optionally prerelease/build metadata.' >&2; exit 1;
+              }
+              test -s "$repo/$CHART_PATH/Chart.yaml"
+              chart_dir=$(cd "$repo/$CHART_PATH" && pwd -P)
+              case "$chart_dir/" in "$repo/"*) ;; *) echo 'Chart directory escapes the repository.' >&2; exit 1 ;; esac
+              rm -rf "$staging"
+              mkdir -p "$staging"
+              cp -R "$chart_dir" "$staging/chart"
+              # Change only the workspace copy; validate the exact version to be packaged.
+              awk -v version="$CHART_VERSION" '
+                /^version:/ {print "version: \"" version "\""; found=1; next}
+                {print}
+                END {if (!found) exit 1}
+              ' "$staging/chart/Chart.yaml" > "$staging/Chart.yaml"
+              mv "$staging/Chart.yaml" "$staging/chart/Chart.yaml"
+              set --
+              if [ -n "$VALUES_FILE" ]; then
+                test -s "$repo/$VALUES_FILE"
+                set -- -f "$repo/$VALUES_FILE"
+              fi
+              helm version --short
+              helm lint "$staging/chart" --strict "$@"
+              helm template chart-ci "$staging/chart" --namespace "$RENDER_NAMESPACE" "$@" > "$staging/rendered.yaml"
+              chart_name=$(helm show chart "$staging/chart" | awk '/^name:/ {print $2; exit}')
+              test -n "$chart_name"
+              printf '%s' "$chart_name" > "$(results.chart-name.path)"
+              printf '%s' "$CHART_VERSION" > "$(results.chart-version.path)"
+              printf 'Validated chart: %s, version: %s\n' "$chart_name" "$CHART_VERSION"
+      params:
+        - {name: chart-path, value: $(params.chart-path)}
+        - {name: chart-version, value: $(params.chart-version)}
+        - {name: values-file, value: $(params.values-file)}
+      workspaces:
+        - {name: source, workspace: source}
+    - name: package-chart
+      runAfter: [validate-chart]
+      taskSpec:
+        workspaces:
+          - name: source
+        steps:
+          - name: package
+            image: {{ .Values.images.helm }}
+            script: |
+              #!/bin/sh
+              set -eu
+              unset HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy
+              export HELM_CACHE_HOME=/tmp/helm/cache HELM_CONFIG_HOME=/tmp/helm/config HELM_DATA_HOME=/tmp/helm/data
+              staging="$(workspaces.source.path)/chart-ci"
+              mkdir -p "$staging/dist"
+              # Dependencies must already be vendored; never download them at runtime.
+              helm package "$staging/chart" --destination "$staging/dist"
+      workspaces:
+        - {name: source, workspace: source}
+    - name: publish-chart
+      runAfter: [package-chart]
+      taskSpec:
+        params:
+          - {name: chart-name, type: string}
+          - {name: chart-version, type: string}
+        workspaces:
+          - name: source
+          - name: registry-auth
+        results:
+          - name: chart-reference
+          - name: chart-digest
+        steps:
+          - name: publish
+            image: {{ .Values.images.helm }}
+            env:
+              - {name: CHART_NAME, value: $(params.chart-name)}
+              - {name: CHART_VERSION, value: $(params.chart-version)}
+              - {name: OCI_REGISTRY, value: {{ .Values.foundationCi.registry | trimSuffix "/" | quote }}}
+            script: |
+              #!/bin/sh
+              set -eu
+              unset HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy
+              export HELM_CACHE_HOME=/tmp/helm/cache HELM_CONFIG_HOME=/tmp/helm/config HELM_DATA_HOME=/tmp/helm/data
+              authfile="$(workspaces.registry-auth.path)/config.json"
+              if [ ! -f "$authfile" ] && [ -f "$(workspaces.registry-auth.path)/.dockerconfigjson" ]; then
+                authfile="$(workspaces.registry-auth.path)/.dockerconfigjson"
+              fi
+              test -s "$authfile"
+              export HELM_REGISTRY_CONFIG="$authfile"
+              package="$(workspaces.source.path)/chart-ci/dist/${CHART_NAME}-${CHART_VERSION}.tgz"
+              test -s "$package"
+              if helm push "$package" "$OCI_REGISTRY" > /tmp/chart-push.log 2>&1; then
+                cat /tmp/chart-push.log
+              else
+                cat /tmp/chart-push.log >&2
+                exit 1
+              fi
+              digest=$(awk '$1 == "Digest:" {print $2}' /tmp/chart-push.log | tail -n 1)
+              printf '%s\n' "$digest" | grep -Eq '^sha256:[0-9a-f]{64}$'
+              oci_tag=$(printf '%s' "$CHART_VERSION" | tr '+' '_')
+              reference="${OCI_REGISTRY}/${CHART_NAME}:${oci_tag}"
+              printf '%s' "$reference" > "$(results.chart-reference.path)"
+              printf '%s' "$digest" > "$(results.chart-digest.path)"
+              printf '\nChart publication completed successfully.\n'
+              printf 'Published chart: %s\nVersion: %s\nDigest: %s\n' "$reference" "$CHART_VERSION" "$digest"
+      params:
+        - {name: chart-name, value: $(tasks.validate-chart.results.chart-name)}
+        - {name: chart-version, value: $(tasks.validate-chart.results.chart-version)}
+      workspaces:
+        - {name: source, workspace: source}
+        - {name: registry-auth, workspace: registry-auth}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: foundation-ci-run-template
+  namespace: {{ .Release.Namespace }}
+data:
+  pipelinerun.yaml: |
+    apiVersion: tekton.dev/v1
+    kind: PipelineRun
+    metadata:
+      generateName: foundation-ci-
+      namespace: {{ .Release.Namespace }}
+    spec:
+      pipelineRef:
+        name: application-foundation-ci
+      taskRunTemplate:
+        serviceAccountName: {{ .Values.serviceAccount.name }}
+      timeouts:
+        pipeline: 30m0s
+      params:
+        - {name: chart-version, value: {{ .Values.foundationCi.chartVersion | quote }}}
+      workspaces:
+        - name: git-credentials
+          secret:
+            secretName: git-credentials
+        - name: registry-auth
+          secret:
+            secretName: registry-auth
+        - name: source
+          volumeClaimTemplate:
+            spec:
+              accessModes: [ReadWriteOnce]
+              resources:
+                requests:
+                  storage: {{ .Values.foundationCi.workspaceSize | quote }}
+{{- end }}

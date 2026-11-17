@@ -96,7 +96,7 @@ The pipeline chart's `frontendPr.proxyImage` must reference the same destination
 
 ## Helm Chart Publishing Image
 
-Copy this image for the planned Helm chart validation, packaging, and OCI
+Copy this image for the Helm chart validation, packaging, and OCI
 publication pipeline:
 
 ```bash
@@ -105,7 +105,25 @@ publication pipeline:
 
 This is a community image, not a Red Hat-supported image. OpenShift execution
 and internal CA trust still require validation. Copying it does not install
-or start the planned pipeline.
+or start the pipeline. Apply the pipeline Helm upgrade separately.
+
+### Offline Flash Transfer
+
+The prepared `helm-3.19.0-linux-amd64.tar` and matching `.sha256` file are Linux
+AMD64 artifacts. Copy both to AppDev and run from their directory:
+
+```bash
+sha256sum -c helm-3.19.0-linux-amd64.tar.sha256
+sudo podman load -i helm-3.19.0-linux-amd64.tar
+sudo podman tag docker.io/alpine/helm:3.19.0 quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/helm:3.19.0
+sudo podman push --authfile ./pullsecret.txt-quay quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/helm:3.19.0
+```
+
+Replace the auth-file path if needed. Use `sudo` consistently when loading as
+root; omit it consistently for a properly configured rootless account. Do not
+commit image tar files or credentials to Git. See the
+[manual chart CI instructions](../../customer-transfer/application-build/README.md#application-foundation-chart-ci-manual-test)
+for Helm upgrade and UI start steps.
 
 ## Optional Docker Hub Alternatives
 
