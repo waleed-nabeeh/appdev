@@ -285,13 +285,13 @@ After applying the Helm upgrade, generate and start a run:
 ```bash
 oc -n devops get configmap keycloak-build-run-template \
   -o jsonpath='{.data.pipelinerun\.yaml}' > /tmp/keycloak-build-run.yaml
-# Edit image-tag in this file; use a unique tag for each build.
+# Optional: set image-tag; empty uses the first eight source commit characters.
 oc create -f /tmp/keycloak-build-run.yaml
 oc -n devops get pipelineruns --sort-by=.metadata.creationTimestamp
 ```
 
 Alternatively, in **devops → Pipelines**, start `application-keycloak-build`,
-provide `image-tag`, bind `git-credentials` and `registry-auth` to the corresponding
+optionally provide `image-tag`, bind `git-credentials` and `registry-auth` to the corresponding
 Secrets and `source` to a new 3Gi PVC, and use service account `pipeline`.
 Optional `source-commit` pins a particular commit; otherwise the branch is cloned.
 
@@ -301,7 +301,9 @@ The output is:
 quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/keycloak-custom:<image-tag>
 ```
 
-Check the PipelineRun's `source-commit`, `image-url` and `image-digest` results.
+Check the PipelineRun's `source-commit`, `image-tag`, `image-url` and `image-digest` results.
+An empty `image-tag` uses the first eight source commit characters. A manual tag
+such as `26.6-custom-1` must contain no spaces and must be at most 128 characters.
 Validation checks tag syntax, required nonempty files, and the expected base-image
 reference; it does not prove JAR compatibility. Buildah runs `kc.sh build` via the
 Dockerfile. A subsequent deployment test must verify startup, SQL Server access,

@@ -11,13 +11,15 @@ spec:
     - {name: source-commit, type: string, default: ""}
     - name: image-tag
       type: string
-      description: Required manual tag, for example 26.6-custom-1. Use a new tag per build.
+      default: ""
+      description: Optional manual tag; empty uses the first eight source commit characters.
   workspaces:
     - name: source
     - name: git-credentials
     - name: registry-auth
   results:
     - {name: source-commit, value: $(tasks.validate.results.commit)}
+    - {name: image-tag, value: $(tasks.validate.results.tag)}
     - {name: image-url, value: $(tasks.build.results.image-url)}
     - {name: image-digest, value: $(tasks.build.results.image-digest)}
   tasks:
@@ -40,6 +42,7 @@ spec:
           - name: source
         results:
           - name: commit
+          - name: tag
         steps:
           - name: validate-inputs
             image: {{ .Values.images.git }}
@@ -50,8 +53,12 @@ spec:
             script: |
               #!/bin/sh
               set -eu
+              commit=$(git rev-parse HEAD)
+              if [ -z "$IMAGE_TAG" ]; then
+                IMAGE_TAG=$(printf '%.8s' "$commit")
+              fi
               printf '%s\n' "$IMAGE_TAG" | grep -Eq '^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$' || {
-                echo 'Supply a valid, non-empty image-tag.' >&2; exit 1;
+                echo 'Invalid image-tag: use letters, digits, underscores, dots or hyphens, with no spaces; maximum 128 characters.' >&2; exit 1;
               }
               test -s Dockerfile
               for jar in JDBC-driver/mssql-jdbc.jar SPI-jar-files/applicant-portal-keycloak-extension.jar SPI-jar-files/nafath-keycloak-extension.jar; do
@@ -65,7 +72,8 @@ spec:
                 git rev-parse HEAD >&2
                 exit 1;
               }
-              git rev-parse HEAD | tr -d '\n' > "$(results.commit.path)"
+              printf '%s' "$commit" > "$(results.commit.path)"
+              printf '%s' "$IMAGE_TAG" > "$(results.tag.path)"
       params:
         - {name: image-tag, value: $(params.image-tag)}
       workspaces:
@@ -75,7 +83,7 @@ spec:
       taskRef:
         name: build-image-no-proxy
       params:
-        - {name: image, value: {{ printf "%s:$(params.image-tag)" .Values.keycloakBuild.imageRepository | quote }}}
+        - {name: image, value: {{ printf "%s:$(tasks.validate.results.tag)" .Values.keycloakBuild.imageRepository | quote }}}
         - {name: context, value: "."}
         - {name: containerfile, value: Dockerfile}
       workspaces:
@@ -103,7 +111,7 @@ data:
       timeouts:
         pipeline: 1h0m0s
       params:
-        - {name: image-tag, value: "26.6-custom-1"}
+        - {name: image-tag, value: ""}
       workspaces:
         - name: git-credentials
           secret:
