@@ -11,9 +11,11 @@ and push on DMZ → return image digest to Tekton**. These smoke tests do not ru
 unit tests, scan/sign images, update GitOps or deploy applications. Their images
 are test artifacts, not release-approved images.
 
-The existing application pipelines remain unchanged until
-`remoteBuild.useForApplicationBuilds` is explicitly enabled. Keycloak and Helm
-chart CI pipelines do not switch to the DMZ VM.
+The customer values now enable `remoteBuild.useForApplicationBuilds: true` for
+the existing full application pipelines. Start `application-backend-build` or
+`application-frontend-build` for test/scan/sign/GitOps workflows; the `-dmz-test`
+pipelines above remain build/push-only smoke tests. Keycloak and Helm chart CI
+pipelines do not switch to the DMZ VM.
 
 ## Readiness
 
@@ -147,9 +149,9 @@ removing abandoned directories. Never delete active jobs or run broad Podman
 prunes while other builds run. Only source/credentials are transferred out; the
 completed image stays in Quay and Tekton receives its digest.
 
-## Activate the existing frontend/backend workflows after validation
+## Full frontend/backend workflows
 
-Keep `remoteBuild.enabled: true` and add this setting in the same customer values:
+The same customer values already contain:
 
 ```yaml
 remoteBuild:
@@ -157,12 +159,24 @@ remoteBuild:
   useForApplicationBuilds: true
 ```
 
-Run the same Helm upgrade again. This changes the image-build Task reference in
+Apply the same Helm upgrade. This changes the image-build Task reference in
 the selected-service frontend/backend fanouts and their supported dispatch/release
 variants to `build-image-dmz`. Parameters, source PVCs, image results, scanning,
 policy gates, signing and GitOps logic remain unchanged. All 14 selected backend
 services can be requested as usual; only four VM builds run at once. Older
 standalone validation pipelines remain unchanged.
+
+Start **application-backend-build** or **application-frontend-build** from the
+console; no workspace bindings are required on these entry Pipelines. For the
+first full run, select `acl-service` or `admin-portal`, respectively, then expand
+after validation. The launcher's `build-pipeline-run` result names the actual
+run containing the selected lanes. The launcher only creates that run; its
+success is not proof that builds or GitOps updates succeeded. Generated build
+runs have a four-hour pipeline timeout, including time waiting for VM slots.
+Backend tests remain blocking; frontend tests keep their existing disabled
+setting. Both RHACS policy gates remain blocking. The last task updates selected
+`pre-` image tags in `RedHat_HelmCharts/dev`, `app-chart/backend.yaml` or
+`app-chart/frontend.yaml`. This is a Git update, not an Argo CD sync/health check.
 
 **Backend tests remain on Hub** and currently run NuGet restore with the existing
 proxy Secret. Frontend tests, when enabled, also need package access. Remote image

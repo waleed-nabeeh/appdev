@@ -114,6 +114,8 @@ foundationCi:
 
 remoteBuild:
   enabled: true
+  # Full frontend/backend workflows build/push on DMZ; other stages stay on Hub.
+  useForApplicationBuilds: true
   # Temporary private-key-only connection test; restore strict with verified known_hosts.
   hostKeyPolicy: accept-new
   # Temporary registry certificate bypass on DMZ; restore true after CA installation.

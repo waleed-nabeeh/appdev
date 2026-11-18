@@ -68,6 +68,7 @@ function verify(docs, scope, count) {
   for (const service of selected) {
     const unit = tasks.find(t => t.name === 'test-' + service);
     const build = tasks.find(t => t.name === 'build-' + service);
+    check(build.taskRef.name === 'build-image-dmz', 'Every selected customer lane must build on DMZ');
     check(Boolean(unit) === testsEnabled, 'Test presence must follow the scope configuration');
     check(build.runAfter.join() === (testsEnabled ? 'test-' : 'clone-') + service, 'Build must follow the active preceding stage');
     check(tasks.find(t => t.name === 'clone-' + service).params.find(p => p.name === 'url').value === '$(params.source-url)', 'Editable source-url must reach every clone');

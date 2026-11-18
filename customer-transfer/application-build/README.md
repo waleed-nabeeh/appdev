@@ -4,10 +4,12 @@ Helm chart: `pipelines/chart/`. Release: `release-pipeline`. Namespace: `devops`
 Use this folder's **single values.yaml**; no other overlays or `--set` flags are
 required for the current customer setup.
 
-For the new frontend/backend VM build tests and later activation of remote
-image builds, use [DMZ build instructions](README-dmz-build.md). The customer
-values install manual smoke tests; existing application routing stays on Hub
-until `remoteBuild.useForApplicationBuilds` is enabled.
+The customer values enable **DMZ image builds for the full frontend/backend
+workflows** (`remoteBuild.useForApplicationBuilds: true`). Clone, backend tests,
+RHACS scan/policy gate, signing and GitOps updates stay on Hub. Only container
+build/push runs on the VM, with four shared build slots across both scopes.
+For SSH, credentials, workspaces, smoke tests and rollback, use the
+[DMZ build instructions](README-dmz-build.md).
 
 For firewall/proxy preparation and the internal-only target, use the
 [network access requirements](README-network-access.md). It separates package
@@ -52,6 +54,16 @@ application keys use the preproduction prefix: `acl-service` updates
 for both scopes. Keep service inputs and Quay image names without that prefix.
 Only selected services' tags change; a missing `pre-` entry fails the update.
 Existing applications must already be present in the two destination files.
+
+For the first full-workflow validation, start one service per scope:
+`acl-service` for backend and `admin-portal` for frontend. Once successful, expand
+the service list. Other portals use their own Dockerfiles; apply the working
+frontend builder image and required fixes there before selecting all three.
+Backend unit tests still restore packages on Hub using the existing proxy Secret;
+a successful DMZ smoke build does not establish that this test dependency path
+works. RHACS policy gates remain blocking for both application workflows.
+Successful full runs update the selected `pre-` GitOps entries; Argo CD deployment
+and application readiness must be checked separately.
 
 ## Apply Helm and test from the CLI
 
