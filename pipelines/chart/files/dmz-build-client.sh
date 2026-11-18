@@ -13,6 +13,8 @@ done
 for path in "$BUILD_CONTEXT" "$CONTAINERFILE"; do
   case "$path" in ""|/*|..|../*|*/../*|*/..) echo 'Build paths must be repository-relative' >&2; exit 1 ;; esac
 done
+DMZ_TLS_VERIFY=${DMZ_TLS_VERIFY:-true}
+case "$DMZ_TLS_VERIFY" in true|false) ;; *) echo 'tlsVerify must be true or false.' >&2; exit 1 ;; esac
 test -s /ssh-auth/ssh-privatekey
 case "${DMZ_HOST_KEY_POLICY:-strict}" in
   strict)
@@ -65,6 +67,7 @@ if [ "$NPM_AUTH_BOUND" = true ]; then
   cp "$NPM_AUTH/NPM_TOKEN" "$local_work/credentials/npm_token"
 fi
 chmod 600 "$local_work/credentials/"*
+printf '%s' "$DMZ_TLS_VERIFY" > "$local_work/metadata/tls-verify"
 printf '%s' "$BUILD_IMAGE" > "$local_work/metadata/image"
 printf '%s' "$BUILD_CONTEXT" > "$local_work/metadata/context"
 printf '%s' "$CONTAINERFILE" > "$local_work/metadata/containerfile"

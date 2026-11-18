@@ -161,6 +161,7 @@ remoteBuild:
   port: 22
   sshSecretName: dmz-build-ssh
   hostKeyPolicy: strict
+  tlsVerify: true
   # Relative to the SSH account home; alternatively set the approved absolute path.
   workRoot: tekton-builds
   maxParallel: 4

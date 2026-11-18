@@ -46,6 +46,7 @@ spec:
         - {name: ssh-auth, mountPath: /ssh-auth, readOnly: true}
         - {name: runner, mountPath: /opt/dmz-build, readOnly: true}
       env:
+        - {name: DMZ_TLS_VERIFY, value: {{ .Values.remoteBuild.tlsVerify | quote }}}
         - {name: DMZ_HOST_KEY_POLICY, value: {{ .Values.remoteBuild.hostKeyPolicy | quote }}}
         - {name: DMZ_HOST, value: {{ .Values.remoteBuild.host | quote }}}
         - {name: DMZ_USER, value: {{ .Values.remoteBuild.user | quote }}}

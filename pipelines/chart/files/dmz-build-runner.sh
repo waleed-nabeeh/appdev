@@ -52,6 +52,10 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 test "$(podman info --format '{{.Host.Security.Rootless}}')" = true || {
   echo 'The dedicated account must use rootless Podman.' >&2; exit 1;
 }
+tls_verify=true
+if [ -f "$job/metadata/tls-verify" ]; then tls_verify=$(cat "$job/metadata/tls-verify"); fi
+case "$tls_verify" in true|false) ;; *) echo 'Invalid registry TLS verification setting.' >&2; exit 1 ;; esac
+if [ "$tls_verify" = false ]; then echo 'Temporary test mode: Podman registry TLS certificate verification is disabled.'; fi
 image=$(cat "$job/metadata/image")
 context=$(cat "$job/metadata/context")
 containerfile=$(cat "$job/metadata/containerfile")
@@ -65,9 +69,9 @@ set --
 while IFS= read -r -d '' argument; do set -- "$@" --build-arg "$argument"; done < "$job/metadata/build-args0"
 if [ -s "$job/credentials/npm_token" ]; then set -- "$@" --secret "id=npm_token,src=$job/credentials/npm_token"; fi
 build_started=true
-podman build --authfile "$job/credentials/registry.json" --rm --force-rm \
+podman build --tls-verify="$tls_verify" --authfile "$job/credentials/registry.json" --rm --force-rm \
   "$@" -f "$containerfile" -t "$local_image" "$context"
-podman push --authfile "$job/credentials/registry.json" \
+podman push --tls-verify="$tls_verify" --authfile "$job/credentials/registry.json" \
   --digestfile "$job/digest" "$local_image" "docker://$image"
 digest=$(cat "$job/digest")
 [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo 'Podman returned an invalid digest.' >&2; exit 1; }

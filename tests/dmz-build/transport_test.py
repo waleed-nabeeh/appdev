@@ -68,6 +68,8 @@ if args[0] == 'info':
     print('true'); sys.exit(0)
 if args[:2] == ['image', 'rm']:
     sys.exit(0)
+if args[0] in ('build', 'push'):
+    assert '--tls-verify='+os.environ.get('EXPECT_TLS_VERIFY', 'true') in args
 if args[0] == 'build':
     assert pathlib.Path('shared/shared.csproj').is_file(), 'full repository missing'
     assert pathlib.Path('.dockerignore').is_file()
@@ -147,11 +149,11 @@ sys.exit(2)
     case.mkdir()
     result = subprocess.run(['bash', str(client_path), 'BUILD_ENVIRONMENT=dev with space'],
                             env=dict(env, JOB_ID=case.name, NPM_AUTH_BOUND='false', EXPECT_NPM='false',
-                                     DMZ_HOST_KEY_POLICY='accept-new', RESULT_DIGEST=str(case/'digest'),
+                                     DMZ_HOST_KEY_POLICY='accept-new', DMZ_TLS_VERIFY='false', EXPECT_TLS_VERIFY='false', RESULT_DIGEST=str(case/'digest'),
                                      RESULT_IMAGE=str(case/'image')), text=True, capture_output=True)
     assert result.returncode == 0, (result.stdout, result.stderr)
     assert (case/'digest').read_text() == 'sha256:'+'a'*64
-    print('PASS: explicit accept-new test mode works with private key only')
+    print('PASS: private-key-only test mode with TLS disabled on both Podman build and push')
 
 # Use real ssh-keygen to validate the normalization, without exposing key material.
 with tempfile.TemporaryDirectory(prefix='dmz-key-format-') as tmp:

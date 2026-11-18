@@ -202,3 +202,13 @@ using Browse in the Secret UI rather than retyping it. Confirm format/algorithm
 compatibility and whether the supplied key is passphrase-encrypted; a PuTTY PPK
 file needs conversion to an OpenSSH format. Never paste the key into logs/chat.
 No format normalization can repair missing or altered key data.
+
+### Temporary Podman registry TLS bypass
+
+Current customer values set `remoteBuild.tlsVerify: false` to unblock the reported
+Quay certificate error. Both Podman build (registry pulls) and push receive
+`--tls-verify=false`; the runner logs this temporary setting. Other pipelines and
+TLS checks inside Dockerfile RUN commands (npm/NuGet/curl) are unchanged. This
+setting skips registry certificate verification; it does not fix certificate
+trust. Install the approved CA on the VM, restore `remoteBuild.tlsVerify: true`
+(the chart default), and upgrade Helm to restore verification for new runs.
