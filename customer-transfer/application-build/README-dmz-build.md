@@ -275,3 +275,14 @@ parameter to empty, so their behavior is unchanged. For another Node base tag,
 set `diagnostic-base-image` to the exact Dockerfile base reference on the UI.
 Set it empty to disable after troubleshooting; the test requires that image
 already in appdevpipeline's local Podman store.
+
+On a failed base-image check, the runner also logs Podman/storage metadata,
+the local manifest digest, and (when Skopeo/coreutils timeout are available)
+Quay manifest metadata with a 30-second request limit. Registry and local
+manifest digests may differ for a multi-architecture index, so a difference
+alone does not prove corruption. It then creates an unstarted temporary
+container and streams its exported filesystem to a filename listing, showing
+passwd/shell/Node/loader paths without printing file contents. The container
+and listing are cleaned with the job. It does not pull, prune, reset storage,
+or overwrite the mirrored image. These details narrow the failure before
+any image replacement or storage repair.

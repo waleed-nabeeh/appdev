@@ -64,6 +64,20 @@ print(pathlib.Path(sys.argv[-1]).resolve(strict=True))
     executable(bin_dir / 'podman', '''#!/usr/bin/env python3
 import fcntl, json, os, pathlib, sys, time
 args = sys.argv[1:]
+if args == ['--version']:
+    print('podman mock'); sys.exit(0)
+if args[0] == 'create':
+    assert '--pull=never' in args and '--network=none' in args
+    print('diagnostic-container'); sys.exit(0)
+if args[0] == 'rm':
+    assert args[1] == 'diagnostic-container'; sys.exit(0)
+if args[0] == 'export':
+    import io, tarfile
+    with tarfile.open(fileobj=sys.stdout.buffer, mode='w|') as archive:
+        for path in ['etc/passwd', 'usr/bin/bash', 'usr/lib64/ld-linux-x86-64.so.2']:
+            entry=tarfile.TarInfo(path); entry.size=1
+            archive.addfile(entry,io.BytesIO(b'x'))
+    sys.exit(0)
 if args[0] == 'info':
     print('true'); sys.exit(0)
 if args[:2] == ['image', 'inspect']:
@@ -161,6 +175,7 @@ sys.exit(2)
         assert (result.returncode == 0) == (not fail), (result.stdout, result.stderr)
         if fail:
             assert 'BASE IMAGE CHECK FAILED' in result.stderr
+            assert 'usr/bin/bash' in result.stdout and 'Filesystem entry count:' in result.stdout
             assert not (case/'digest').exists() and not (case/'checked').exists()
         else:
             assert 'BASE IMAGE CHECK PASSED' in result.stdout and (case/'digest').exists()

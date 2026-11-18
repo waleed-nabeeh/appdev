@@ -11,7 +11,9 @@ root=$(pwd -P)
 job="$root/jobs/$job_id"
 local_image="localhost/tekton-build:$job_id"
 build_started=false
+diagnostic_container=""
 cleanup() {
+  if [ -n "$diagnostic_container" ]; then podman rm "$diagnostic_container" >/dev/null 2>&1 || true; fi
   if [ "$build_started" = true ]; then
     podman image rm "$local_image" >/dev/null 2>&1 || true
   fi
@@ -94,6 +96,32 @@ if [ -n "$diagnostic_image" ]; then
     echo 'BASE IMAGE CHECK PASSED: shell, Node and npm run from the local base image.'
     echo 'Continuing with the Dockerfile build; cached intermediate layers are not validated by this check.'
   else
+    echo 'BASE IMAGE FAILURE DETAILS (read-only image checks):'
+    podman --version || true
+    podman info --format 'Storage: {{.Store.GraphDriverName}}; root: {{.Store.GraphRoot}}' || true
+    podman image inspect --format 'Local manifest digest: {{.Digest}}' "$diagnostic_image" || true
+    if command -v skopeo >/dev/null && command -v timeout >/dev/null; then
+      echo 'Quay manifest metadata (30-second maximum; no image pull):'
+      timeout 30 skopeo inspect --authfile "$job/credentials/registry.json" \
+        --tls-verify="$tls_verify" --format 'Registry digest: {{.Digest}}; platform: {{.Os}}/{{.Architecture}}' \
+        "docker://$diagnostic_image" || echo 'Registry metadata unavailable; retain the local diagnostic output.'
+    else
+      echo 'Registry metadata skipped: skopeo/timeout is unavailable on the VM.'
+    fi
+    if diagnostic_container=$(podman create --pull=never --network=none --user 0:0 \
+      --entrypoint /bin/sh "$diagnostic_image" -c ':'); then
+      echo 'Inspecting filesystem paths without starting the diagnostic container:'
+      if podman export "$diagnostic_container" | tar -tvf - > "$job/base-file-list"; then
+        printf 'Filesystem entry count: '; wc -l < "$job/base-file-list"
+        grep -E ' (\./)?(etc/passwd|bin(/sh)?|usr/bin/(sh|bash|node|npm)|([^ ]*/)?ld-linux[^ /]*)( |$)' \
+          "$job/base-file-list" || echo 'No matching passwd/shell/Node/loader paths found in exported filesystem.'
+      else
+        echo 'Filesystem export failed; check the preceding storage/runtime error.'
+      fi
+      if podman rm "$diagnostic_container" >/dev/null; then diagnostic_container=""; fi
+    else
+      echo 'Could not create diagnostic container for filesystem inspection.'
+    fi
     echo 'BASE IMAGE CHECK FAILED: local base image/container filesystem or runtime issue; Dockerfile/npm install has not run.' >&2
     exit 1
   fi
