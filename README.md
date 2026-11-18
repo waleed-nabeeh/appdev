@@ -29,6 +29,9 @@ For a clean installation on another cluster, follow
 [New Cluster Replication](docs/new-cluster-replication.md).
 For disconnected mirroring, use
 [Air-Gap Image Inventory](docs/air-gap-image-inventory.md).
+For existing Vault and RHTAS installations, use
+[Move Existing Platform Deployments to GitOps](customer-transfer/platform-gitops/README.md)
+to preserve the running configuration and storage during adoption.
 
 ## Bootstrap order
 
