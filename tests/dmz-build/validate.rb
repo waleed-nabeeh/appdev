@@ -29,7 +29,7 @@ check(task['steps'][0]['image'].end_with?('/devops/alpine-git:2026-10-07'), 'Reu
   pipeline = index.fetch(['Pipeline', "application-#{scope}-dmz-test"])['spec']
   check(pipeline['tasks'].map { |t| t['name'] } == %w[clone build], 'Smoke test must not deploy')
   diagnostic = pipeline['params'].find { |p| p['name'] == 'diagnostic-base-image' }['default']
-  check(scope == 'frontend' ? diagnostic.include?('/devops/nodejs-24:') : diagnostic == '', 'Enable Node diagnostics only for frontend smoke test')
+  check(diagnostic == '', 'Base-image diagnostics must be opt-in for both smoke tests')
   check(pipeline['tasks'].last.dig('taskRef', 'name') == 'build-image-dmz', 'Smoke test must build remotely')
   run = YAML.safe_load(index.fetch(['ConfigMap', "#{scope}-dmz-test-run-template"])['data']['pipelinerun.yaml'])
   check(run.dig('spec', 'pipelineRef', 'name') == "application-#{scope}-dmz-test", 'Wrong run template')

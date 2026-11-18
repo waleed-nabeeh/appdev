@@ -258,8 +258,10 @@ Reference: [Podman build proxy forwarding](https://docs.podman.io/en/stable/mark
 
 ## Frontend base-image diagnostic
 
-`application-frontend-dmz-test` now defaults `diagnostic-base-image` to the
-configured Node builder image. Before running the Dockerfile, the same VM task
+`application-frontend-dmz-test` defaults `diagnostic-base-image` to empty
+(disabled), allowing Dockerfile base-image changes without a stale diagnostic
+reference blocking the build. To enable it, supply the exact Node builder image
+as the parameter. Before running the Dockerfile, the same VM task
 inspects that local image ID/platform and starts it as numeric UID/GID `0:0`,
 with `/bin/sh`, to print `id`, Node version and npm version. It uses
 `--pull=never --network=none`, mounts no build credentials, and removes the
