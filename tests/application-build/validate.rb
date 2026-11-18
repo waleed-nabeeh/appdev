@@ -49,7 +49,7 @@ check(runs.size == 2, 'Expected two dispatcher TaskRun examples')
   check(config['scope'] == scope && config['catalog'].size == (front ? 3 : 14), 'Incorrect allowed catalog')
   check(config['fanoutPipeline'] == "application-#{scope}-build-fanout" && config['npmAuth'] == front, 'Incorrect build scope/workspaces')
   check(config['workspaceSize'] == '3Gi', 'Incorrect storage settings')
-  check(config['testsEnabled'] == !front, 'Only frontend tests are temporarily disabled')
+  check(config['testsEnabled'] == false, 'Customer tests must be temporarily disabled for both scopes')
   check(config['applicationNamePrefix'] == 'pre-' && config['applicationNameSuffix'] == '', 'GitOps must target pre- application names')
   gitops_apps = YAML.load_file("customer-transfer/backend-gitops/#{scope}-preproduction.yaml").fetch('argocd-applications').fetch('applications')
   config['catalog'].each do |service|
@@ -66,15 +66,11 @@ check(runs.size == 2, 'Expected two dispatcher TaskRun examples')
   check(fanout['tasks'].last['name'] == 'update-gitops' && !fanout['tasks'].last.key?('when'), 'GitOps must be in the main fanout')
   config['catalog'].each do |service|
     name = service['name']
-    stages = front ? %w[clone build scan gate sign] : %w[clone test build scan gate sign]
+    stages = %w[clone build scan gate sign]
     lane = ['resolve-source'] + stages.map { |stage| "#{stage}-#{name}" }
     lane.each_cons(2) { |a, b| check(fanout['tasks'].find { |t| t['name'] == b }['runAfter'] == [a], 'Broken working lane') }
     unit = fanout['tasks'].find { |t| t['name'] == 'test-' + name }
-    if front
-      check(unit.nil?, 'Disabled frontend tests must be absent from the graph')
-    else
-      check(unit['taskRef']['name'] == 'unit-test' && !unit.key?('onError'), 'Backend tests must remain blocking')
-    end
+    check(unit.nil?, 'Disabled tests must be absent from the graph')
     build = fanout['tasks'].find { |t| t['name'] == 'build-' + name }
     args = build['params'].find { |p| p['name'] == 'build-args' }['value']
     check(args == [front ? 'BUILD_ENVIRONMENT=$(params.env)' : 'CERT_KEYWORD=$(params.env)'], 'env must control build arguments')
@@ -218,15 +214,20 @@ Dir.mktmpdir do |tmp|
     'CREDENTIALS_PATH' => '', 'MODE' => 'manual', 'TARGET_COMMIT' => ''), 'sh', launch_script)
   check(result.success? && File.read(File.join(launch_work, 'commit')) == source_sha, err)
 end
-enabled_output, enabled_error, enabled_status = Open3.capture3(*command, '--set', 'frontendRelease.testsEnabled=true')
+enabled_output, enabled_error, enabled_status = Open3.capture3(*command, '--set', 'frontendRelease.testsEnabled=true', '--set', 'backendBuild.testsEnabled=true')
 check(enabled_status.success?, enabled_error)
 enabled_documents = YAML.load_stream(enabled_output).compact
-enabled_front = enabled_documents.find { |d| d['kind'] == 'Pipeline' && d.dig('metadata', 'name') == 'application-frontend-build-fanout' }['spec']
-%w[admin-portal applicant-portal operational-portal].each do |service|
-  unit = enabled_front['tasks'].find { |t| t['name'] == "test-#{service}" }
-  build = enabled_front['tasks'].find { |t| t['name'] == "build-#{service}" }
-  check(unit && unit['taskRef']['name'] == 'frontend-unit-test' && unit['onError'] == 'continue', 'Frontend tests must be restorable')
-  check(build['runAfter'] == [unit['name']], 'Restored tests must precede build')
+%w[backend frontend].each do |scope|
+  enabled_spec = enabled_documents.find { |d| d['kind'] == 'Pipeline' && d.dig('metadata', 'name') == "application-#{scope}-build-fanout" }['spec']
+  units = enabled_spec['tasks'].select { |t| t['name'].start_with?('test-') }
+  check(units.size == (scope == 'frontend' ? 3 : 14), 'Every selected service test must be restorable')
+  units.each do |unit|
+    expected = scope == 'frontend' ? 'frontend-unit-test' : 'unit-test'
+    check(unit['taskRef']['name'] == expected, 'Restored tests must use the existing scope Task')
+    check(scope == 'frontend' ? unit['onError'] == 'continue' : !unit.key?('onError'), 'Restored test failure policy must be preserved')
+    build = enabled_spec['tasks'].find { |t| t['name'] == unit['name'].sub(/^test-/, 'build-') }
+    check(build['runAfter'] == [unit['name']], 'Restored tests must precede build')
+  end
 end
 [['frontendRelease.selectedServices', '["wrong-portal"]'], ['frontendRelease.selectedServices', '["admin-portal","admin-portal"]'], ['frontendRelease.dispatch.maxParallel', '0']].each do |key, value|
   _, _, result = Open3.capture3(*command, '--set-json', key + '=' + value)

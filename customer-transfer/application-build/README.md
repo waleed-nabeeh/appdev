@@ -5,8 +5,9 @@ Use this folder's **single values.yaml**; no other overlays or `--set` flags are
 required for the current customer setup.
 
 The customer values enable **DMZ image builds for the full frontend/backend
-workflows** (`remoteBuild.useForApplicationBuilds: true`). Clone, backend tests,
-RHACS scan/policy gate, signing and GitOps updates stay on Hub. Only container
+workflows** (`remoteBuild.useForApplicationBuilds: true`). Clone, RHACS
+scan/policy gate, signing and GitOps updates stay on Hub. Backend and frontend
+unit tests are temporarily disabled in this customer configuration. Only container
 build/push runs on the VM, with four shared build slots across both scopes.
 For SSH, credentials, workspaces, smoke tests and rollback, use the
 [DMZ build instructions](README-dmz-build.md).
@@ -59,9 +60,9 @@ For the first full-workflow validation, start one service per scope:
 `acl-service` for backend and `admin-portal` for frontend. Once successful, expand
 the service list. Other portals use their own Dockerfiles; apply the working
 frontend builder image and required fixes there before selecting all three.
-Backend unit tests still restore packages on Hub using the existing proxy Secret;
-a successful DMZ smoke build does not establish that this test dependency path
-works. RHACS policy gates remain blocking for both application workflows.
+Backend unit tests are temporarily omitted with `backendBuild.testsEnabled: false`.
+If restored, the existing test Task still runs on Hub and needs package access;
+VM test execution has not been implemented. RHACS policy gates remain blocking for both application workflows.
 Successful full runs update the selected `pre-` GitOps entries; Argo CD deployment
 and application readiness must be checked separately.
 
@@ -151,16 +152,19 @@ The allowlists are `selectedServices` in values.yaml. The backend catalog contai
 17 services; add prepared services and reapply Helm to allow more than the current
 14. Gateway, Payment and AuthServer are excluded by default; prepare their source
 Dockerfiles and GitOps entries before enabling them. Empty backend selectedServices
-enables all 17 known catalog entries. Each selected backend lane runs:
-
-**clone → test → build/push → ACS scan → policy gate → sign → final combined GitOps update**
-
-Frontend lanes currently skip unit tests with `frontendRelease.testsEnabled: false`:
+enables all 17 known catalog entries. Backend and frontend currently omit unit
+tests (`backendBuild.testsEnabled: false`, `frontendRelease.testsEnabled: false`).
+Both scopes run:
 
 **clone → build/push → ACS scan → policy gate → sign → final combined GitOps update**
 
-To restore tests, set `frontendRelease.testsEnabled: true` in the same values
-file, reapply Helm, and start a fresh run. The existing `allowTestFailure: true`
+To restore backend tests, set `backendBuild.testsEnabled: true`, reapply Helm,
+and start a fresh entry run. Restored backend tests run on Hub and block builds
+on failure (`backendBuild.allowTestFailure: false`). The chart default keeps
+backend tests enabled for other installations.
+
+To restore frontend tests, set `frontendRelease.testsEnabled: true` in the same
+values file, reapply Helm, and start a fresh run. The existing `allowTestFailure: true`
 then allows failed frontend tests to continue; set it to false when tests must
 block the build. Existing prepared runs retain their original graph.
 

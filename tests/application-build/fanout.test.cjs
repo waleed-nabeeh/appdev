@@ -12,6 +12,7 @@ function rendered(extra = []) {
 const documents = rendered();
 const allBackend = rendered(['--set-json', 'backendBuild.selectedServices=[]']);
 const frontendTestsEnabled = rendered(['--set', 'frontendRelease.testsEnabled=true']);
+const backendTestsEnabled = rendered(['--set', 'backendBuild.testsEnabled=true']);
 const commit = '12345678' + 'a'.repeat(32);
 const dispatcher = {metadata: {name: 'backend-dispatch-demo', namespace: 'devops', uid: '12345678-1234-1234-1234-123456789abc'}};
 function fixture(docs, scope) {
@@ -32,7 +33,7 @@ function verify(docs, scope, count) {
   check(values.services === selected.join(',') && values['source-url'] === config.sourceUrl && values.env === 'dev' && values['image-tag'] === '', 'Generated PipelineRun inputs');
   check(JSON.stringify(defaults) === JSON.stringify(values), 'Prepared PipelineRun must contain matching editable defaults');
   const tasks = spec.tasks;
-  const testsEnabled = scope !== 'frontend' || config.testsEnabled !== false;
+  const testsEnabled = config.testsEnabled !== false;
   check(tasks.length === 2 + count * (testsEnabled ? 6 : 5), 'Only selected lanes plus selection and GitOps');
   check(tasks[0].name === 'dispatch-service-selection' && tasks.at(-1).name === 'update-gitops', 'Selection to GitOps graph');
   check(tasks[0].params.find(p => p.name === 'expected-services').value === selected.join(','), 'Must reject selection edits after graph preparation');
@@ -79,6 +80,7 @@ function verify(docs, scope, count) {
 for (const count of [1, 2, 14]) verify(documents, 'backend', count);
 for (const count of [1, 2, 3]) verify(documents, 'frontend', count);
 for (const count of [1, 2, 3]) verify(frontendTestsEnabled, 'frontend', count);
+for (const count of [1, 2, 14]) verify(backendTestsEnabled, 'backend', count);
 verify(allBackend, 'backend', 17);
 const {run, config, template, selected} = verify(documents, 'backend', 2);
 const backendCatalog = fixture(documents, 'backend').config.catalog;
@@ -155,7 +157,7 @@ async function renderedLaunch(scope, mode, services, paths, expected) {
   const received = resolve(source.params.find(p => p.name === 'services').value);
   const prepared = source.params.find(p => p.name === 'expected-services').value;
   check(received === expected.join(',') && received === prepared, 'Service selection guard would fail after nested substitution');
-  const stageCount = scope === 'frontend' && config.testsEnabled === false ? 5 : 6;
+  const stageCount = config.testsEnabled === false ? 5 : 6;
   check(params.services === expected.join(',') && created.spec.pipelineSpec.tasks.length === 2 + expected.length * stageCount, 'Generated graph includes unselected lanes');
 }
 module.exports = (async () => {
@@ -172,7 +174,7 @@ module.exports = (async () => {
     check(method === 'POST' && path.endsWith('/pipelineruns'), 'Expected exactly one build run create'); creates++; return body;
   };
   const created = await launchFanout(api, config, selected, commit, 'test', dispatcher);
-  check(creates === 1 && created.spec.pipelineSpec.tasks.length === 14, 'Two services must create one run with two complete lanes');
+  check(creates === 1 && created.spec.pipelineSpec.tasks.length === 12, 'Two services must create one run with two complete lanes');
   check(await launchFanout(() => { throw Error('No API needed'); }, config, [], commit, 'test', dispatcher) === null, 'Empty PR diff is a no-op');
   const conflictApi = async (method, path) => {
     if (path.endsWith('/pipelines/' + config.fanoutPipeline)) return template;

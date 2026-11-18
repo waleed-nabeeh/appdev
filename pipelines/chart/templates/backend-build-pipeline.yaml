@@ -3,7 +3,7 @@
 {{- $scope := .scope }}
 {{- $settings := .settings }}
 {{- $frontend := eq $scope "frontend" }}
-{{- $testsEnabled := or (not $frontend) $settings.testsEnabled }}
+{{- $testsEnabled := $settings.testsEnabled }}
 {{- $catalog := $root.Files.Get (printf "files/%s-services.json" $scope) | fromJsonArray }}
 {{- $selected := $settings.selectedServices }}
 {{- $gitops := and $settings.dispatch.enabled $settings.dispatch.gitops.enabled }}

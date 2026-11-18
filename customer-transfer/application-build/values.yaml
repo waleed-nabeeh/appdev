@@ -33,6 +33,8 @@ frontendPr:
   enabled: false
 backendBuild:
   enabled: true
+  # Temporary integration setting; restore true when backend tests are ready.
+  testsEnabled: false
   env: dev
   sourceUrl: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Backend
   sourceRevision: test

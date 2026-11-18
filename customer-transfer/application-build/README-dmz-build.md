@@ -173,17 +173,17 @@ after validation. The launcher's `build-pipeline-run` result names the actual
 run containing the selected lanes. The launcher only creates that run; its
 success is not proof that builds or GitOps updates succeeded. Generated build
 runs have a four-hour pipeline timeout, including time waiting for VM slots.
-Backend tests remain blocking; frontend tests keep their existing disabled
-setting. Both RHACS policy gates remain blocking. The last task updates selected
+Backend and frontend tests are temporarily disabled in the customer values
+(`backendBuild.testsEnabled: false`, `frontendRelease.testsEnabled: false`). Both RHACS policy gates remain blocking. The last task updates selected
 `pre-` image tags in `RedHat_HelmCharts/dev`, `app-chart/backend.yaml` or
 `app-chart/frontend.yaml`. This is a Git update, not an Argo CD sync/health check.
 
-**Backend tests remain on Hub** and currently run NuGet restore with the existing
-proxy Secret. Frontend tests, when enabled, also need package access. Remote image
-building does not fix Hub-side test dependency access. Do not claim the complete
-workflow is proxy-free until that separate dependency path is resolved. These
-smoke tests intentionally isolate build connectivity without silently disabling
-unit tests in the actual release workflows.
+**Test execution location when restored:** the existing backend test Task runs
+on Hub and uses NuGet restore with the existing proxy Secret. Setting
+`backendBuild.testsEnabled: true` restores that Task as a blocking predecessor to
+build; it does not move tests to the VM. Frontend tests, when enabled, also need
+Hub package access. VM test execution remains separate work. Remote image builds
+still use the configured DMZ proxy for package downloads.
 
 Rollback: set `useForApplicationBuilds: false` and upgrade Helm to restore existing
 Hub Buildah routing for new runs. This does not cancel already-running VM jobs.

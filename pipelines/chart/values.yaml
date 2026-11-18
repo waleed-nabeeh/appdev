@@ -26,6 +26,7 @@ applicationPromotion:
 
 backendBuild:
   enabled: false
+  testsEnabled: true
   env: dev
   sourceUrl: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Backend
   sourceRevision: test
