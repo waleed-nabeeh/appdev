@@ -81,6 +81,7 @@ fi
 printf '%s' "$DMZ_PROXY_ENABLED" > "$local_work/metadata/proxy-enabled"
 find "$local_work/credentials" -type f -exec chmod 600 {} \;
 printf '%s' "$DMZ_TLS_VERIFY" > "$local_work/metadata/tls-verify"
+printf '%s' "${DIAGNOSTIC_BASE_IMAGE:-}" > "$local_work/metadata/diagnostic-image"
 printf '%s' "$BUILD_IMAGE" > "$local_work/metadata/image"
 printf '%s' "$BUILD_CONTEXT" > "$local_work/metadata/context"
 printf '%s' "$CONTAINERFILE" > "$local_work/metadata/containerfile"

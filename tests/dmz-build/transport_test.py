@@ -66,7 +66,19 @@ import fcntl, json, os, pathlib, sys, time
 args = sys.argv[1:]
 if args[0] == 'info':
     print('true'); sys.exit(0)
+if args[:2] == ['image', 'inspect']:
+    print('sha256:fixture linux/amd64'); sys.exit(0)
+if args[0] == 'run':
+    assert '--pull=never' in args and '--network=none' in args
+    assert args[args.index('--entrypoint')+1] == '/bin/sh'
+    assert args[args.index('--user')+1] == '0:0'
+    assert '--authfile' not in args and '--secret' not in args
+    if os.environ.get('MOCK_DIAGNOSTIC_FAIL') == 'true':
+        print('mock /bin/sh not found', file=sys.stderr); sys.exit(127)
+    pathlib.Path(os.environ['DIAGNOSTIC_MARKER']).touch()
+    print('uid=0 gid=0; node fixture; npm fixture'); sys.exit(0)
 if args[:2] == ['image', 'rm']:
+
     sys.exit(0)
 if args[0] in ('build', 'push'):
     if os.environ.get('EXPECT_PROXY') == 'true':
@@ -77,6 +89,8 @@ if args[0] in ('build', 'push'):
         assert not any(os.environ.get(k) for k in ['HTTP_PROXY','HTTPS_PROXY','http_proxy','https_proxy','ALL_PROXY','all_proxy'])
     assert '--tls-verify='+os.environ.get('EXPECT_TLS_VERIFY', 'true') in args
 if args[0] == 'build':
+    if os.environ.get('DIAGNOSTIC_BASE_IMAGE'):
+        assert pathlib.Path(os.environ['DIAGNOSTIC_MARKER']).exists(), 'build started before base-image check'
     assert '--http-proxy=true' in args
     assert pathlib.Path('shared/shared.csproj').is_file(), 'full repository missing'
     assert pathlib.Path('.dockerignore').is_file()
@@ -135,6 +149,23 @@ sys.exit(2)
         else:
             assert not (case/'digest').exists(), 'failed build returned successful results'
         print('PASS:', label, 'full context, secret isolation, result handling and cleanup')
+    for fail in [False, True]:
+        case = root / ('diagnostic-fail' if fail else 'diagnostic-pass')
+        case.mkdir()
+        result = subprocess.run(['bash', str(client_path), 'BUILD_ENVIRONMENT=dev with space'],
+             env=dict(env, JOB_ID=case.name, NPM_AUTH_BOUND='false', EXPECT_NPM='false',
+                      DIAGNOSTIC_BASE_IMAGE='quay.example/devops/node:fixture',
+                      MOCK_DIAGNOSTIC_FAIL=str(fail).lower(), DIAGNOSTIC_MARKER=str(case/'checked'),
+                      RESULT_DIGEST=str(case/'digest'), RESULT_IMAGE=str(case/'image')),
+             text=True, capture_output=True)
+        assert (result.returncode == 0) == (not fail), (result.stdout, result.stderr)
+        if fail:
+            assert 'BASE IMAGE CHECK FAILED' in result.stderr
+            assert not (case/'digest').exists() and not (case/'checked').exists()
+        else:
+            assert 'BASE IMAGE CHECK PASSED' in result.stdout and (case/'digest').exists()
+        assert not (remote/'tekton-builds/jobs'/case.name).exists()
+    print('PASS: in-pipeline base-image check precedes build, uses no pull/network/secrets, and blocks build on failure')
     case = root / 'proxy-enabled'
     case.mkdir()
     result = subprocess.run(['bash', str(client_path), 'BUILD_ENVIRONMENT=dev with space'],

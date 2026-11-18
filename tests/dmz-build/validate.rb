@@ -18,7 +18,9 @@ render('--set', 'remoteBuild.enabled=false').each do |doc|
 end
 task = index.fetch(['Task', 'build-image-dmz'])['spec']
 legacy = index.fetch(['Task', 'build-image'])['spec']
-%w[params results workspaces].each { |field| check(task[field] == legacy[field], "Task contract changed: #{field}") }
+%w[results workspaces].each { |field| check(task[field] == legacy[field], "Task contract changed: #{field}") }
+check(task['params'].reject { |p| p['name'] == 'diagnostic-base-image' } == legacy['params'], 'Legacy build params must be preserved')
+check(task['params'].find { |p| p['name'] == 'diagnostic-base-image' }['default'] == '', 'Diagnostics must be opt-in for normal application builds')
 check(!task.to_json.include?('capabilities'), 'Remote build must not require privileges')
 check(task['steps'][0]['env'].none? { |e| e.key?('valueFrom') }, 'Proxy values must be transferred as files, not injected into Hub environment')
 check(task['volumes'].any? { |v| v.dig('secret', 'secretName') == 'pipeline-proxy' }, 'Reuse existing proxy Secret')
@@ -26,6 +28,8 @@ check(task['steps'][0]['image'].end_with?('/devops/alpine-git:2026-10-07'), 'Reu
 %w[backend frontend].each do |scope|
   pipeline = index.fetch(['Pipeline', "application-#{scope}-dmz-test"])['spec']
   check(pipeline['tasks'].map { |t| t['name'] } == %w[clone build], 'Smoke test must not deploy')
+  diagnostic = pipeline['params'].find { |p| p['name'] == 'diagnostic-base-image' }['default']
+  check(scope == 'frontend' ? diagnostic.include?('/devops/nodejs-24:') : diagnostic == '', 'Enable Node diagnostics only for frontend smoke test')
   check(pipeline['tasks'].last.dig('taskRef', 'name') == 'build-image-dmz', 'Smoke test must build remotely')
   run = YAML.safe_load(index.fetch(['ConfigMap', "#{scope}-dmz-test-run-template"])['data']['pipelinerun.yaml'])
   check(run.dig('spec', 'pipelineRef', 'name') == "application-#{scope}-dmz-test", 'Wrong run template')

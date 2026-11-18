@@ -80,6 +80,24 @@ test -d "$context"
 for path in "$(realpath -e "$containerfile")" "$(realpath -e "$context")"; do
   case "$path/" in "$job/source/"*) ;; *) echo 'Build path escapes its source directory.' >&2; exit 1 ;; esac
 done
+diagnostic_image=""
+if [ -f "$job/metadata/diagnostic-image" ]; then diagnostic_image=$(cat "$job/metadata/diagnostic-image"); fi
+if [ -n "$diagnostic_image" ]; then
+  printf '\nBASE IMAGE CHECK: %s\n' "$diagnostic_image"
+  echo 'Checking existing local image; no pull, no build cache changes, no network.'
+  podman image inspect --format '{{.Id}} {{.Os}}/{{.Architecture}}' "$diagnostic_image" || {
+    echo 'Base image is not available for inspection under this VM account.' >&2; exit 1;
+  }
+  if podman run --rm --pull=never --network=none --user 0:0 \
+    --entrypoint /bin/sh "$diagnostic_image" \
+    -c 'set -e; id; node --version; npm --version'; then
+    echo 'BASE IMAGE CHECK PASSED: shell, Node and npm run from the local base image.'
+    echo 'Continuing with the Dockerfile build; cached intermediate layers are not validated by this check.'
+  else
+    echo 'BASE IMAGE CHECK FAILED: local base image/container filesystem or runtime issue; Dockerfile/npm install has not run.' >&2
+    exit 1
+  fi
+fi
 set --
 while IFS= read -r -d '' argument; do set -- "$@" --build-arg "$argument"; done < "$job/metadata/build-args0"
 if [ -s "$job/credentials/npm_token" ]; then set -- "$@" --secret "id=npm_token,src=$job/credentials/npm_token"; fi

@@ -156,6 +156,7 @@ foundationCi:
 remoteBuild:
   enabled: false
   useForApplicationBuilds: false
+  frontendDiagnosticImage: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops/nodejs-24:9.8-1782938304
   host: 172.28.50.40
   user: appdevpipeline
   port: 22

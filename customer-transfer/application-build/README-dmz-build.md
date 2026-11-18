@@ -255,3 +255,23 @@ To disable the feature later, set `remoteBuild.proxy.enabled: false` and upgrade
 Helm; the runner will again clear inherited proxy variables for new builds.
 
 Reference: [Podman build proxy forwarding](https://docs.podman.io/en/stable/markdown/podman-build.1.html#http-proxy).
+
+## Frontend base-image diagnostic
+
+`application-frontend-dmz-test` now defaults `diagnostic-base-image` to the
+configured Node builder image. Before running the Dockerfile, the same VM task
+inspects that local image ID/platform and starts it as numeric UID/GID `0:0`,
+with `/bin/sh`, to print `id`, Node version and npm version. It uses
+`--pull=never --network=none`, mounts no build credentials, and removes the
+container afterward. It neither prunes storage nor refreshes images/cache.
+
+Look in **build logs** for `BASE IMAGE CHECK PASSED` or `BASE IMAGE CHECK FAILED`.
+A failed check stops before Dockerfile build/push. Missing local image, missing
+shell/loader, missing Node/npm, or runtime/storage errors need investigation;
+the check alone cannot distinguish all those causes. A pass confirms basic
+base-image execution but does not prove cached intermediate layers are healthy.
+The backend test and normal application workflows default this optional task
+parameter to empty, so their behavior is unchanged. For another Node base tag,
+set `diagnostic-base-image` to the exact Dockerfile base reference on the UI.
+Set it empty to disable after troubleshooting; the test requires that image
+already in appdevpipeline's local Podman store.

@@ -16,6 +16,10 @@ spec:
     - {name: source-url, type: string, default: {{ $settings.sourceUrl | quote }}}
     - {name: source-revision, type: string, default: {{ $settings.sourceRevision | quote }}}
     - {name: source-commit, type: string, default: ""}
+    - name: diagnostic-base-image
+      type: string
+      default: {{ ternary $root.Values.remoteBuild.frontendDiagnosticImage "" $frontend | quote }}
+      description: Optional local base-image shell/Node/npm check before building; empty disables. No pull or network access.
     - {name: context, type: string, default: {{ $service.context | quote }}}
     - {name: containerfile, type: string, default: {{ $service.containerfile | quote }}}
     - name: image
@@ -48,6 +52,7 @@ spec:
       taskRef: {name: build-image-dmz}
       params:
         - {name: image, value: $(params.image)}
+        - {name: diagnostic-base-image, value: $(params.diagnostic-base-image)}
         - {name: context, value: $(params.context)}
         - {name: containerfile, value: $(params.containerfile)}
         - {name: build-args, value: ["$(params.build-args[*])"]}
