@@ -35,6 +35,11 @@ spec:
     - name: ssh-auth
       secret:
         secretName: {{ .Values.remoteBuild.sshSecretName }}
+{{- if .Values.remoteBuild.proxy.enabled }}
+    - name: dmz-proxy
+      secret:
+        secretName: {{ .Values.remoteBuild.proxy.secretName }}
+{{- end }}
     - name: runner
       configMap:
         name: dmz-build-runner
@@ -44,8 +49,12 @@ spec:
       args: ["$(params.build-args[*])"]
       volumeMounts:
         - {name: ssh-auth, mountPath: /ssh-auth, readOnly: true}
+{{- if .Values.remoteBuild.proxy.enabled }}
+        - {name: dmz-proxy, mountPath: /dmz-proxy, readOnly: true}
+{{- end }}
         - {name: runner, mountPath: /opt/dmz-build, readOnly: true}
       env:
+        - {name: DMZ_PROXY_ENABLED, value: {{ .Values.remoteBuild.proxy.enabled | quote }}}
         - {name: DMZ_TLS_VERIFY, value: {{ .Values.remoteBuild.tlsVerify | quote }}}
         - {name: DMZ_HOST_KEY_POLICY, value: {{ .Values.remoteBuild.hostKeyPolicy | quote }}}
         - {name: DMZ_HOST, value: {{ .Values.remoteBuild.host | quote }}}

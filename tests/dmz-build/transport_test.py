@@ -69,8 +69,15 @@ if args[0] == 'info':
 if args[:2] == ['image', 'rm']:
     sys.exit(0)
 if args[0] in ('build', 'push'):
+    if os.environ.get('EXPECT_PROXY') == 'true':
+        assert os.environ['HTTP_PROXY'] == os.environ['http_proxy'] == 'http://fixture-user:fixture-pass@proxy.example:8080'
+        assert os.environ['HTTPS_PROXY'] == os.environ['https_proxy'] == os.environ['HTTP_PROXY']
+        assert os.environ['NO_PROXY'] == os.environ['no_proxy'] == 'localhost,quay.example,azure.example'
+    else:
+        assert not any(os.environ.get(k) for k in ['HTTP_PROXY','HTTPS_PROXY','http_proxy','https_proxy','ALL_PROXY','all_proxy'])
     assert '--tls-verify='+os.environ.get('EXPECT_TLS_VERIFY', 'true') in args
 if args[0] == 'build':
+    assert '--http-proxy=true' in args
     assert pathlib.Path('shared/shared.csproj').is_file(), 'full repository missing'
     assert pathlib.Path('.dockerignore').is_file()
     assert not pathlib.Path('.git').exists()
@@ -97,7 +104,13 @@ if args[0] == 'push':
     sys.exit(0)
 sys.exit(2)
 ''')
-    script = CLIENT.replace('/ssh-auth', str(ssh_auth)).replace('/opt/dmz-build/runner.sh', str(RUNNER))
+    proxy = root / 'proxy'
+    proxy.mkdir()
+    for key, value in {'HTTP_PROXY':'http://fixture-user:fixture-pass@proxy.example:8080',
+                       'HTTPS_PROXY':'http://fixture-user:fixture-pass@proxy.example:8080',
+                       'NO_PROXY':'localhost,quay.example,azure.example'}.items():
+        (proxy/key).write_text(value+'\r\n')
+    script = CLIENT.replace('/dmz-proxy', str(proxy)).replace('/ssh-auth', str(ssh_auth)).replace('/opt/dmz-build/runner.sh', str(RUNNER))
     client_path = root / 'client.sh'
     client_path.write_text(script)
     env = dict(os.environ, PATH=str(bin_dir)+':'+os.environ['PATH'], MOCK_REMOTE=str(remote),
@@ -122,6 +135,16 @@ sys.exit(2)
         else:
             assert not (case/'digest').exists(), 'failed build returned successful results'
         print('PASS:', label, 'full context, secret isolation, result handling and cleanup')
+    case = root / 'proxy-enabled'
+    case.mkdir()
+    result = subprocess.run(['bash', str(client_path), 'BUILD_ENVIRONMENT=dev with space'],
+              env=dict(env, JOB_ID=case.name, NPM_AUTH_BOUND='false', EXPECT_NPM='false',
+                       DMZ_PROXY_ENABLED='true', EXPECT_PROXY='true', RESULT_DIGEST=str(case/'digest'),
+                       RESULT_IMAGE=str(case/'image')), text=True, capture_output=True)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert 'fixture-pass' not in result.stdout+result.stderr
+    assert not (remote/'tekton-builds/jobs'/case.name).exists()
+    print('PASS: secret proxy values forwarded to VM build/push, normalized, not evaluated/logged and cleaned')
     # Two additional jobs queue behind the same four globally shared locks.
     track = root / 'concurrency.json'
     track.write_text('{"active":0,"max":0}')

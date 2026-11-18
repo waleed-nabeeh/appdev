@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 umask 077
-unset HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy
+unset HTTP_PROXY HTTPS_PROXY NO_PROXY ALL_PROXY FTP_PROXY http_proxy https_proxy no_proxy all_proxy ftp_proxy
 base=$1
 job_id=$2
 max_builds=$3
@@ -56,6 +56,21 @@ tls_verify=true
 if [ -f "$job/metadata/tls-verify" ]; then tls_verify=$(cat "$job/metadata/tls-verify"); fi
 case "$tls_verify" in true|false) ;; *) echo 'Invalid registry TLS verification setting.' >&2; exit 1 ;; esac
 if [ "$tls_verify" = false ]; then echo 'Temporary test mode: Podman registry TLS certificate verification is disabled.'; fi
+proxy_enabled=false
+if [ -f "$job/metadata/proxy-enabled" ]; then proxy_enabled=$(cat "$job/metadata/proxy-enabled"); fi
+case "$proxy_enabled" in true|false) ;; *) echo 'Invalid DMZ proxy setting.' >&2; exit 1 ;; esac
+if [ "$proxy_enabled" = true ]; then
+  # Read data only: never source/eval files received from a Secret.
+  HTTP_PROXY=$(cat "$job/credentials/proxy/HTTP_PROXY")
+  HTTPS_PROXY=$(cat "$job/credentials/proxy/HTTPS_PROXY")
+  NO_PROXY=$(cat "$job/credentials/proxy/NO_PROXY")
+  for endpoint in "$HTTP_PROXY" "$HTTPS_PROXY"; do
+    case "$endpoint" in http://?*|https://?*) ;; *) echo 'Proxy URLs must use http:// or https://.' >&2; exit 1 ;; esac
+  done
+  export HTTP_PROXY HTTPS_PROXY NO_PROXY
+  export http_proxy="$HTTP_PROXY" https_proxy="$HTTPS_PROXY" no_proxy="$NO_PROXY"
+  echo 'Approved DMZ proxy enabled for Podman registry operations and build containers; runner does not print its values.'
+fi
 image=$(cat "$job/metadata/image")
 context=$(cat "$job/metadata/context")
 containerfile=$(cat "$job/metadata/containerfile")
@@ -69,7 +84,7 @@ set --
 while IFS= read -r -d '' argument; do set -- "$@" --build-arg "$argument"; done < "$job/metadata/build-args0"
 if [ -s "$job/credentials/npm_token" ]; then set -- "$@" --secret "id=npm_token,src=$job/credentials/npm_token"; fi
 build_started=true
-podman build --tls-verify="$tls_verify" --authfile "$job/credentials/registry.json" --rm --force-rm \
+podman build --http-proxy=true --tls-verify="$tls_verify" --authfile "$job/credentials/registry.json" --rm --force-rm \
   "$@" -f "$containerfile" -t "$local_image" "$context"
 podman push --tls-verify="$tls_verify" --authfile "$job/credentials/registry.json" \
   --digestfile "$job/digest" "$local_image" "docker://$image"

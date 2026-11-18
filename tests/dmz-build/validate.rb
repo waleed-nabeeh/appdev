@@ -19,7 +19,9 @@ end
 task = index.fetch(['Task', 'build-image-dmz'])['spec']
 legacy = index.fetch(['Task', 'build-image'])['spec']
 %w[params results workspaces].each { |field| check(task[field] == legacy[field], "Task contract changed: #{field}") }
-check(!task.to_json.include?('pipeline-proxy') && !task.to_json.include?('capabilities'), 'Remote build must not require proxy/privileges')
+check(!task.to_json.include?('capabilities'), 'Remote build must not require privileges')
+check(task['steps'][0]['env'].none? { |e| e.key?('valueFrom') }, 'Proxy values must be transferred as files, not injected into Hub environment')
+check(task['volumes'].any? { |v| v.dig('secret', 'secretName') == 'pipeline-proxy' }, 'Reuse existing proxy Secret')
 check(task['steps'][0]['image'].end_with?('/devops/alpine-git:2026-10-07'), 'Reuse approved Git/SSH image')
 %w[backend frontend].each do |scope|
   pipeline = index.fetch(['Pipeline', "application-#{scope}-dmz-test"])['spec']

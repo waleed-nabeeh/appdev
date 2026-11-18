@@ -55,7 +55,7 @@ chart CI pipelines do not switch to the DMZ VM.
 
 No new client image is introduced: the task uses the configured internal Git
 image, currently `devops/alpine-git:2026-10-07`. There is no runtime package
-installation or proxy Secret dependency in the DMZ build task. It does not
+installation. The shared pipeline-proxy Secret is mounted only when DMZ proxy support is enabled. It does not
 configure VM internet access or rewrite Dockerfiles/package sources.
 
 ## Install and start from the UI
@@ -212,3 +212,46 @@ TLS checks inside Dockerfile RUN commands (npm/NuGet/curl) are unchanged. This
 setting skips registry certificate verification; it does not fix certificate
 trust. Install the approved CA on the VM, restore `remoteBuild.tlsVerify: true`
 (the chart default), and upgrade Helm to restore verification for new runs.
+
+## DMZ proxy configuration
+
+Connectivity tests confirmed that this VM reaches public npm/NuGet endpoints
+through `http://172.24.223.254:8080`, while direct connections time out. Customer
+values therefore enable `remoteBuild.proxy.enabled` with Secret
+`pipeline-proxy`. The chart default is disabled. This reuses the existing `pipeline-proxy` Secret. Updating its values also
+affects older Hub tasks that reference that Secret.
+
+In **devops → Workloads → Secrets → Create → Key/value secret**, edit the existing
+`pipeline-proxy` Secret with these three keys:
+
+| Key | Value |
+| --- | --- |
+| `HTTP_PROXY` | `http://172.24.223.254:8080` |
+| `HTTPS_PROXY` | `http://172.24.223.254:8080` |
+| `NO_PROXY` | `localhost,127.0.0.1,172.28.50.40,azuredevops.mofa.gov.sa,quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa,.svc,.cluster.local` |
+
+Use the bypass list agreed with the network team: the listed internal services
+must be directly reachable. Neither public npm/NuGet nor ABP belongs in NO_PROXY
+while its direct path is blocked. All three keys are required; NO_PROXY may be
+empty only if all target connections must intentionally traverse the proxy.
+Do not add proxy credentials to Helm values or pipeline parameters.
+
+Apply the usual Helm upgrade and start a new run. With proxy enabled, the Secret
+is mounted only into the remote-build Task. The Hub client keeps its SSH connection
+free of proxy variables, copies proxy files into the per-job credentials directory
+and transfers them through SSH. The VM reads the files as data, sets upper/lower
+case HTTP_PROXY/HTTPS_PROXY/NO_PROXY, and runs `podman build --http-proxy=true` so
+RUN commands such as npm install and dotnet restore receive the proxy environment.
+Podman registry pulls/pushes also use this environment and the bypass list.
+The files are outside the source build context and use the same cleanup as other
+per-job credentials. Runner code does not print values or put them in build args;
+application Dockerfiles/scripts must also avoid logging credentials.
+
+This does not grant Hub pods external internet access or depend on root's shell
+profile on the VM. It also does not repair CA trust inside builder images.
+Remove stale conflicting proxy settings from application configs as appropriate;
+package-source configuration and credentials are not rewritten by this Task.
+To disable the feature later, set `remoteBuild.proxy.enabled: false` and upgrade
+Helm; the runner will again clear inherited proxy variables for new builds.
+
+Reference: [Podman build proxy forwarding](https://docs.podman.io/en/stable/markdown/podman-build.1.html#http-proxy).

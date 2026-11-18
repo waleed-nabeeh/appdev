@@ -1,7 +1,7 @@
 #!/bin/sh
 set -euo pipefail
 umask 077
-unset HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy
+unset HTTP_PROXY HTTPS_PROXY NO_PROXY ALL_PROXY FTP_PROXY http_proxy https_proxy no_proxy all_proxy ftp_proxy
 for tool in ssh ssh-keygen tar tee; do command -v "$tool" >/dev/null; done
 case "$DMZ_HOST" in ""|*[!A-Za-z0-9.-]*) echo 'Invalid DMZ host' >&2; exit 1 ;; esac
 case "$DMZ_USER" in ""|*[!A-Za-z0-9_-]*) echo 'Invalid DMZ user' >&2; exit 1 ;; esac
@@ -66,7 +66,20 @@ if [ "$NPM_AUTH_BOUND" = true ]; then
   test -s "$NPM_AUTH/NPM_TOKEN"
   cp "$NPM_AUTH/NPM_TOKEN" "$local_work/credentials/npm_token"
 fi
-chmod 600 "$local_work/credentials/"*
+DMZ_PROXY_ENABLED=${DMZ_PROXY_ENABLED:-false}
+case "$DMZ_PROXY_ENABLED" in true|false) ;; *) echo 'Invalid DMZ proxy setting.' >&2; exit 1 ;; esac
+if [ "$DMZ_PROXY_ENABLED" = true ]; then
+  mkdir "$local_work/credentials/proxy"
+  for key in HTTP_PROXY HTTPS_PROXY NO_PROXY; do
+    test -f "/dmz-proxy/$key" || { echo "Proxy Secret must contain $key" >&2; exit 1; }
+    tr -d '\r\n' < "/dmz-proxy/$key" > "$local_work/credentials/proxy/$key"
+    chmod 600 "$local_work/credentials/proxy/$key"
+  done
+  test -s "$local_work/credentials/proxy/HTTP_PROXY"
+  test -s "$local_work/credentials/proxy/HTTPS_PROXY"
+fi
+printf '%s' "$DMZ_PROXY_ENABLED" > "$local_work/metadata/proxy-enabled"
+find "$local_work/credentials" -type f -exec chmod 600 {} \;
 printf '%s' "$DMZ_TLS_VERIFY" > "$local_work/metadata/tls-verify"
 printf '%s' "$BUILD_IMAGE" > "$local_work/metadata/image"
 printf '%s' "$BUILD_CONTEXT" > "$local_work/metadata/context"

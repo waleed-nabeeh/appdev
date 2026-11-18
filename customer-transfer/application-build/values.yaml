@@ -118,3 +118,6 @@ remoteBuild:
   hostKeyPolicy: accept-new
   # Temporary registry certificate bypass on DMZ; restore true after CA installation.
   tlsVerify: false
+  proxy:
+    enabled: true
+    secretName: pipeline-proxy
