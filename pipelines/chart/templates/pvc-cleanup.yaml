@@ -1,0 +1,92 @@
+{{- if .Values.pvcCleanup.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: application-build-pvc-cleanup
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: application-build-pvc-cleanup
+rules:
+  - apiGroups: [""]
+    resources: [persistentvolumeclaims]
+    verbs: [get, list, delete]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [list]
+  - apiGroups: [tekton.dev]
+    resources: [pipelineruns]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: application-build-pvc-cleanup
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: application-build-pvc-cleanup
+subjects:
+  - kind: ServiceAccount
+    name: application-build-pvc-cleanup
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: application-build-pvc-cleanup
+data:
+  pvc-cleanup.js: |
+{{ .Files.Get "files/pvc-cleanup.js" | indent 4 }}
+  backend-dispatch.js: |
+{{ .Files.Get "files/backend-dispatch.js" | indent 4 }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: application-build-pvc-cleanup
+spec:
+  schedule: {{ .Values.pvcCleanup.schedule | quote }}
+  timeZone: {{ .Values.pvcCleanup.timeZone | quote }}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
+      template:
+        spec:
+          serviceAccountName: application-build-pvc-cleanup
+          imagePullSecrets:
+{{ .Values.backendBuild.dispatch.imagePullSecrets | toYaml | indent 12 }}
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: cleanup
+              image: {{ .Values.images.nodejs24 | quote }}
+              command: [node, /scripts/pvc-cleanup.js]
+              env:
+                - name: NAMESPACE
+                  valueFrom:
+                    fieldRef: {fieldPath: metadata.namespace}
+                - name: DRY_RUN
+                  value: {{ .Values.pvcCleanup.dryRun | quote }}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              resources:
+                requests: {cpu: 50m, memory: 64Mi}
+                limits: {cpu: 250m, memory: 256Mi}
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+          volumes:
+            - name: scripts
+              configMap:
+                name: application-build-pvc-cleanup
+{{- end }}

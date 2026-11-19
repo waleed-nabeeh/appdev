@@ -4,6 +4,12 @@ serviceAccount:
 applicationBuild:
   singleRun: false
 
+pvcCleanup:
+  enabled: false
+  schedule: "0 3 * * 5"
+  timeZone: Asia/Riyadh
+  dryRun: false
+
 applicationPromotion:
   enabled: false
   gitops:

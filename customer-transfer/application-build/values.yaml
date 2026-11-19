@@ -27,6 +27,11 @@ serviceAccount:
   name: pipeline
 applicationBuild:
   singleRun: true
+pvcCleanup:
+  enabled: true
+  schedule: "0 3 * * 5"
+  timeZone: Asia/Riyadh
+  dryRun: false
 applicationPromotion:
   enabled: true
 frontendPr:

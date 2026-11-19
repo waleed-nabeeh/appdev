@@ -70,6 +70,57 @@ For the new Git-only copy of selected preproduction images into production and
 DR values, use [Application Promotion](../application-promotion/README.md).
 It uses this same values file and keeps the current application names unchanged.
 
+## Weekly workspace PVC cleanup
+
+The customer values enable Helm-managed CronJob `application-build-pvc-cleanup`
+in the release namespace (`devops`), every Friday at **03:00 Asia/Riyadh**.
+Configure `pvcCleanup.schedule`, `timeZone`, `dryRun`, or `enabled` in the single
+values file. Chart defaults leave cleanup disabled for other installations.
+CronJob `timeZone` requires Kubernetes 1.27 or later; verify with
+`oc explain cronjob.spec.timeZone` on the customer cluster before installation.
+
+The job requests deletion only for backend/frontend fanout-labelled PVCs whose
+matching PipelineRun UID has a terminal Succeeded condition and completionTime.
+It skips active owners, unknown/orphan owners, claims already terminating, and
+claims referenced by nonterminal pods. It rechecks the claim and uses UID and
+resourceVersion deletion preconditions. It never force-removes finalizers.
+Kubernetes PVC protection can delay actual deletion until pods release claims.
+New pods referencing a claim after the check remain subject to that protection.
+
+PipelineRuns, TaskRuns, pods and logs are retained. Deleting workspaces means
+those completed runs cannot reuse their old source workspace for debugging or
+retries; start a fresh entry run. Storage reclamation follows the PV reclaim
+policy, so Retain volumes need administrator handling. VM Podman caches are
+not affected. The dedicated namespaced Role allows read/list/delete PVCs,
+read-only pod listing and PipelineRun lookup. Kubernetes RBAC cannot restrict
+PVC deletion by label; owner/label protections are enforced by the script.
+
+Helm upgrade installs the schedule; it does not immediately start cleanup.
+Inspect after installation:
+
+```bash
+oc -n devops get cronjob application-build-pvc-cleanup
+oc -n devops get jobs --sort-by=.metadata.creationTimestamp
+oc -n devops get pvc -l 'pipeline in (backend-build-fanout,frontend-build-fanout)'
+```
+
+For a preview, set `pvcCleanup.dryRun: true` and upgrade Helm. Then:
+
+```bash
+oc -n devops create job --from=cronjob/application-build-pvc-cleanup pvc-cleanup-preview
+oc -n devops logs -f job/pvc-cleanup-preview
+```
+
+Preview logs say `WOULD DELETE`; restore `dryRun: false` and upgrade to enable
+Friday deletions. Use a fresh Job name when repeating previews. Suspend future
+cleanup through `oc -n devops patch cronjob application-build-pvc-cleanup --type=merge -p '{"spec":{"suspend":true}}'`;
+this does not stop an already-running Job. Set `pvcCleanup.enabled: false` and
+upgrade to remove the chart-managed cleanup resources. Deleted PVCs cannot be
+restored by disabling cleanup; start new builds to provision new workspaces.
+
+Local checks: `ruby tests/application-build/pvc-cleanup-validate.rb` and
+`node tests/application-build/pvc-cleanup.test.cjs`. They do not delete live PVCs.
+
 ## Manual start in the OpenShift console
 
 1. Select project **devops**, then **Pipelines → Pipelines**.
