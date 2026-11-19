@@ -84,8 +84,12 @@ if [ "${NUGET_AUTH_BOUND:-false}" = true ]; then
 '*|*"$carriage_return"*) echo 'Unsupported delimiter in NuGet credentials.' >&2; exit 1 ;;
   esac
   test -n "$nuget_user" && test -n "$nuget_password"
-  printf 'Username=%s;Password=%s;ValidAuthenticationTypes=Basic' \
-    "$nuget_user" "$nuget_password" > "$local_work/credentials/nuget_credentials"
+  # Escape XML attributes; never write credentials into the source checkout.
+  nuget_user=$(printf '%s' "$nuget_user" | sed -e 's/\&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's/"/\&quot;/g')
+  nuget_password=$(printf '%s' "$nuget_password" | sed -e 's/\&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's/"/\&quot;/g')
+  printf '<?xml version="1.0" encoding="utf-8"?>\n<configuration><packageSourceCredentials><MofaNuget><add key="Username" value="%s"/><add key="ClearTextPassword" value="%s"/><add key="ValidAuthenticationTypes" value="Basic"/></MofaNuget></packageSourceCredentials></configuration>\n' \
+    "$nuget_user" "$nuget_password" > "$local_work/credentials/nuget.config"
+  printf '%s' "${NUGET_USER_CONFIG_PATH:-/opt/app-root/.nuget/NuGet/NuGet.Config}" > "$local_work/metadata/nuget-config-path"
   unset nuget_user nuget_password
   rm -f "$local_work/nuget-credential-response"
 fi

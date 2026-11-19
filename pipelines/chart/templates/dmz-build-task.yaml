@@ -75,6 +75,7 @@ spec:
         - {name: NUGET_AUTH_BOUND, value: $(workspaces.nuget-auth.bound)}
         - {name: NUGET_AUTH, value: $(workspaces.nuget-auth.path)}
         - {name: NUGET_CREDENTIAL_URL, value: $(params.nuget-credential-url)}
+        - {name: NUGET_USER_CONFIG_PATH, value: {{ .Values.remoteBuild.nugetUserConfigPath | quote }}}
         - {name: DIAGNOSTIC_BASE_IMAGE, value: $(params.diagnostic-base-image)}
         - {name: BUILD_IMAGE, value: $(params.image)}
         - {name: BUILD_CONTEXT, value: $(params.context)}

@@ -132,12 +132,18 @@ if args[0] == 'build':
     expected = os.environ.get('EXPECT_NPM') == 'true'
     secrets = [args[i+1] for i, value in enumerate(args) if value == '--secret']
     assert any(s.startswith('id=npm_token,') for s in secrets) == expected
-    nuget = [s for s in secrets if s.startswith('id=nuget_credentials,')]
+    nuget = [args[i+1] for i, value in enumerate(args) if value == '--volume']
     assert bool(nuget) == (os.environ.get('NUGET_AUTH_BOUND') == 'true')
     if nuget:
-        credential = pathlib.Path(nuget[0].split('src=', 1)[1])
-        assert credential.read_text() == 'Username=fixture@user;Password=fixture-pat;ValidAuthenticationTypes=Basic'
-        assert credential.stat().st_mode & 0o777 == 0o600
+        import xml.etree.ElementTree as ET
+        source_path, target, options = nuget[0].split(':')
+        assert target == '/opt/app-root/.nuget/NuGet/NuGet.Config' and options == 'ro,Z'
+        credential = pathlib.Path(source_path)
+        config = ET.parse(credential).getroot()
+        values = {x.get('key'): x.get('value') for x in config.find('packageSourceCredentials/MofaNuget')}
+        assert values == {'Username': 'fixture@user', 'ClearTextPassword': 'fixture-pat', 'ValidAuthenticationTypes': 'Basic'}
+        assert credential.stat().st_mode & 0o777 == 0o444
+        assert credential.parent.stat().st_mode & 0o777 == 0o700
         assert not credential.is_relative_to(pathlib.Path.cwd())
     assert '--build-arg' in args and 'BUILD_ENVIRONMENT=dev with space' in args
     if os.environ.get('MOCK_FAIL') == 'build': sys.exit(14)

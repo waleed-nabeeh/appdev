@@ -34,38 +34,33 @@ build; Git checkout credentials are not automatically NuGet credentials. A
 401/403 must be resolved before the full build test. Test `acl-service` first,
 then the full set. XML validation here does not verify live feed access.
 
-The DMZ backend build now reuses the existing `git-credentials` workspace's
-`.git-credentials` entry for the configured backend Azure host. It sends only
-the resolved username/PAT as a temporary Podman build secret named
-`nuget_credentials`, outside the source context. Frontend builds are unchanged.
-The PAT must have Packaging Read scope and the account must have feed access;
-successful Git checkout alone does not prove the PAT has Packaging scope.
+The DMZ backend build reuses the existing `git-credentials` workspace's
+`.git-credentials` entry for the configured backend Azure host. It creates a
+per-job NuGet XML file containing only `packageSourceCredentials/MofaNuget`,
+using the resolved username/PAT with Basic authentication. This file stays outside
+the source checkout and is mounted read-only during all Dockerfile RUN steps.
+The repository `NuGet.Config` still supplies feed URLs, source mappings and limits.
+**No Dockerfile changes are required.** Do not commit a PAT into NuGet.Config.
 
-**Required backend Dockerfile change:** supplying a build secret alone does not
-authenticate NuGet. For each `RUN dotnet restore`, `RUN dotnet build` or
-`RUN dotnet publish` that can contact the feed, add the mount and export below,
-keeping the existing dotnet command and arguments. For example, ACL restore:
+The mount target is `remoteBuild.nugetUserConfigPath`, defaulting to
+`/opt/app-root/.nuget/NuGet/NuGet.Config`, matching HOME=/opt/app-root in the
+current customer .NET SDK logs. NuGet merges user credentials with repository
+configuration. If the SDK HOME changes, update this path to the corresponding
+`$HOME/.nuget/NuGet/NuGet.Config`. An explicit `dotnet --configfile` that bypasses
+user configuration needs separate handling; the current reference commands do
+not specify it. Frontend and non-DMZ build paths are unchanged.
 
-```dockerfile
-RUN --mount=type=secret,id=nuget_credentials \
-    test -s /run/secrets/nuget_credentials && \
-    NuGetPackageSourceCredentials_MofaNuget="$(cat /run/secrets/nuget_credentials)" && \
-    export NuGetPackageSourceCredentials_MofaNuget && \
-    dotnet restore "./services/acl/MOFA.UnifiedVisaPlatform.ACL/MOFA.UnifiedVisaPlatform.ACL.csproj"
-```
+The temporary file is readable by the container user, protected on the VM by
+private per-job directories, and removed with job credentials on normal exits,
+including failures. Podman mounts it with `ro,Z`; the runner does not copy it
+into the source or image. Do not add Dockerfile commands that print/copy the
+user credentials config. The account must have feed access and the PAT must
+have Packaging Read scope (confirmed by the user for this test).
 
-Use the same prefix for the existing build and publish RUN instructions because
-they may perform implicit restore. Preserve their project paths and flags. Do
-not use Dockerfile `ENV`, `ARG`, `echo` or shell tracing for credentials, and do
-not copy the mounted secret into the image. The variable name must match the
-`MofaNuget` source key exactly. Secret files are removed with the per-job
-credentials on normal exits, including build/push failures.
-
-After pulling appdev, apply Helm to install the new Task/workspace bindings.
-Copy `NuGet.Config` and commit the Dockerfile changes in backend `test`, then
-start a fresh ACL build. No new OpenShift Secret or manual VM setup is needed.
-Existing smoke PipelineRuns do not bind `nuget-auth`; use the full backend entry
-for this authentication test. Other non-DMZ build paths are unchanged.
+After pulling appdev, apply Helm, retain the prepared credential-free
+`NuGet.Config` in backend `test`, and start a fresh ACL build. No new OpenShift
+Secret, backend Dockerfile edit or manual VM setup is needed. Existing smoke
+PipelineRuns do not bind `nuget-auth`; use the full backend entry for this test.
 
 For the new Git-only copy of selected preproduction images into production and
 DR values, use [Application Promotion](../application-promotion/README.md).

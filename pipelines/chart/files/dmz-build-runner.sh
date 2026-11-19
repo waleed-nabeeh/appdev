@@ -146,8 +146,19 @@ fi
 set --
 while IFS= read -r -d '' argument; do set -- "$@" --build-arg "$argument"; done < "$job/metadata/build-args0"
 if [ -s "$job/credentials/npm_token" ]; then set -- "$@" --secret "id=npm_token,src=$job/credentials/npm_token"; fi
-if [ -s "$job/credentials/nuget_credentials" ]; then
-  set -- "$@" --secret "id=nuget_credentials,src=$job/credentials/nuget_credentials"
+if [ -s "$job/credentials/nuget.config" ]; then
+  nuget_config_path=$(cat "$job/metadata/nuget-config-path")
+  case "$nuget_config_path" in
+    /*) ;;
+    *) echo 'NuGet user config path must be absolute.' >&2; exit 1 ;;
+  esac
+  case "$nuget_config_path" in
+    *[!A-Za-z0-9_./-]*|*/../*|*/..) echo 'Invalid NuGet user config path.' >&2; exit 1 ;;
+  esac
+  # Parent job/credentials directories are private (0700). Allow the SDK's
+  # non-root container user to read the temporary mount without changing owner.
+  chmod 444 "$job/credentials/nuget.config"
+  set -- "$@" --volume "$job/credentials/nuget.config:$nuget_config_path:ro,Z"
 fi
 build_started=true
 podman build --http-proxy=true --tls-verify="$tls_verify" --authfile "$job/credentials/registry.json" --rm --force-rm \

@@ -158,6 +158,8 @@ remoteBuild:
   enabled: false
   useForApplicationBuilds: false
   frontendDiagnosticImage: ""
+  # User-level NuGet configuration in the current Red Hat .NET SDK image.
+  nugetUserConfigPath: /opt/app-root/.nuget/NuGet/NuGet.Config
   host: 172.28.50.40
   user: appdevpipeline
   port: 22
