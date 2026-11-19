@@ -4,6 +4,19 @@ serviceAccount:
 applicationBuild:
   singleRun: false
 
+externalSecrets:
+  enabled: false
+  apiVersion: external-secrets.io/v1
+  secretStoreName: vault-backend
+  refreshInterval: 1m
+  secrets:
+    - {name: git-credentials, remoteKey: devops/pipelines/git-credentials}
+    - {name: registry-auth, remoteKey: devops/pipelines/registry-auth}
+    - {name: npm-auth, remoteKey: devops/pipelines/npm-auth}
+    - {name: rhacs-auth, remoteKey: devops/pipelines/rhacs-auth}
+    - {name: pipeline-proxy, remoteKey: devops/pipelines/pipeline-proxy}
+    - {name: dmz-build-ssh, remoteKey: devops/pipelines/dmz-build-ssh}
+
 versioning:
   enabled: false
   repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_HelmCharts

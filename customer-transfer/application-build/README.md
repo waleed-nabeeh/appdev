@@ -70,6 +70,15 @@ For the new Git-only copy of selected preproduction images into production and
 DR values, use [Application Promotion](../application-promotion/README.md).
 It uses this same values file and keeps the current application names unchanged.
 
+## Pipeline Secrets from Vault
+
+The customer values enable ESO mappings for the six existing pipeline Secrets,
+using the existing `vault-backend` SecretStore with Merge/Retain lifecycle.
+Populate matching raw values in Vault and grant the store's role read access
+before upgrading. Helm does not upload current Secret values to Vault.
+See [Vault wiring and validation](README-vault-secrets.md). Pipeline Secret names
+and build Tasks are unchanged; no Dockerfile changes are needed.
+
 ## Release 1 frontend/backend versioning
 
 The customer values now enable automatic service versioning. Leave `image-tag`

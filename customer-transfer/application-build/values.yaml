@@ -27,6 +27,10 @@ serviceAccount:
   name: pipeline
 applicationBuild:
   singleRun: true
+externalSecrets:
+  enabled: true
+  secretStoreName: vault-backend
+  refreshInterval: 1m
 versioning:
   enabled: true
   repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_HelmCharts
