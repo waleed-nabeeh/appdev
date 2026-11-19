@@ -146,8 +146,22 @@ all active/queued builds, then updating the stored limit and Helm value together
 Each build has its own local Podman tag to avoid collisions between simultaneous
 builds targeting the same destination. After normal completion/failure the VM
 runner removes its source/credentials directory and its temporary local image
-tag. Shared base images and build caches are retained; no global prune/reset is
-run. Arrange coordinated disk monitoring/cache maintenance separately.
+tag. Each slot uses its own persistent image/cache store under
+`tekton-builds/podman-slots/<slot>/storage` and its own runtime directory under
+`$XDG_RUNTIME_DIR/mofa-dmz-<work-root-hash>/<slot>`. All runner Podman commands,
+including push, diagnostics and cleanup, use that slot's storage. The slot lock
+is held through cleanup so the next build cannot overlap it.
+
+Directories are created automatically without changing the user's storage.conf.
+The existing default Podman store is left intact and is not read or copied.
+Drain older runs before the first isolated-storage test. First builds pull base
+images again; cache/base images are duplicated across up to 14 stores and retained
+for reuse. Monitor disk capacity. No global prune/reset is run. Schedule any cache
+maintenance only when builds have drained. Explicit `--root` overrides storage
+options from storage.conf; this uses the observed native Overlay/XFS setup with
+empty graphOptions. Recheck custom storage requirements before using elsewhere.
+Opt-in base-image diagnostics now inspect the assigned slot's store; a base image
+cached only in the old default store will not satisfy that no-pull check.
 
 A terminated SSH connection or host/process crash can leave an abandoned job;
 remote execution is not guaranteed to stop instantly when a Tekton run is
@@ -207,7 +221,8 @@ python3 tests/dmz-build/transport_test.py
 
 Transport tests use mocked SSH and Podman with real tar transfers and file locks;
 they exercise full-context transfer, optional npm secrets, success/failure
-results, cleanup and six concurrent jobs sharing four slots. They are not live
+results, cleanup, automatic limit increases and six concurrent jobs using distinct
+stores across four slots. They are not live
 VM or OpenShift tests. Verify installed Podman/client compatibility on the VM.
 
 References: [Podman build](https://docs.podman.io/en/stable/markdown/podman-build.1.html),

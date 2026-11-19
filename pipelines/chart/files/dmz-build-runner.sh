@@ -23,7 +23,7 @@ trap cleanup EXIT
 trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
-for tool in podman flock tar realpath; do command -v "$tool" >/dev/null; done
+for tool in podman flock tar realpath sha256sum; do command -v "$tool" >/dev/null; done
 # All runs for this account/root share these same lock files; never delete them.
 mkdir -p "$root/slots"
 exec 8>"$root/slots/config.lock"
@@ -57,6 +57,17 @@ while [ "$acquired" = false ]; do
 done
 printf 'Acquired shared DMZ build slot %s/%s for %s\n' "$slot" "$max_builds" "$job_id"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+# Keep the slot lock through EXIT cleanup, including push and image removal.
+# Each slot owns its writable image metadata and reuses only its own cache.
+store_id=$(printf '%s' "$root" | sha256sum)
+store_id=${store_id%% *}
+podman_root="$root/podman-slots/$slot/storage"
+podman_runroot="$XDG_RUNTIME_DIR/mofa-dmz-$store_id/$slot"
+mkdir -p "$podman_root" "$podman_runroot"
+podman() {
+  command podman --root "$podman_root" --runroot "$podman_runroot" "$@"
+}
+printf 'Isolated Podman storage: %s; runtime: %s\n' "$podman_root" "$podman_runroot"
 test "$(podman info --format '{{.Host.Security.Rootless}}')" = true || {
   echo 'The dedicated account must use rootless Podman.' >&2; exit 1;
 }

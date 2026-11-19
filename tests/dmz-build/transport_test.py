@@ -64,6 +64,21 @@ print(pathlib.Path(sys.argv[-1]).resolve(strict=True))
     executable(bin_dir / 'podman', '''#!/usr/bin/env python3
 import fcntl, json, os, pathlib, sys, time
 args = sys.argv[1:]
+assert args[0] == '--root' and args[2] == '--runroot', 'Podman must always use isolated storage'
+graphroot = pathlib.Path(args[1])
+runroot = pathlib.Path(args[3])
+assert graphroot.parent.parent.name == 'podman-slots'
+assert graphroot.name == 'storage' and graphroot.parent.name.isdigit()
+assert runroot.name == graphroot.parent.name
+assert graphroot.is_dir() and runroot.is_dir()
+assert not graphroot.is_relative_to(pathlib.Path(os.environ['MOCK_REMOTE'])/'tekton-builds/jobs')
+record = pathlib.Path(os.environ['MOCK_REMOTE']) / ('store-' + os.environ['JOB_ID'])
+identity = str(graphroot) + '|' + str(runroot)
+if record.exists():
+    assert record.read_text() == identity, 'Podman commands switched storage within one job'
+else:
+    record.write_text(identity)
+args = args[4:]
 if args == ['--version']:
     print('podman mock'); sys.exit(0)
 if args[0] == 'create':
@@ -119,12 +134,17 @@ if args[0] == 'build':
         track = pathlib.Path(os.environ['TRACK'])
         with track.open('r+') as f:
             fcntl.flock(f, fcntl.LOCK_EX)
-            d=json.load(f); d['active']+=1; d['max']=max(d['max'],d['active'])
+            d=json.load(f)
+            stores=d.setdefault('stores', [])
+            assert str(graphroot) not in stores, 'Concurrent builds shared writable storage'
+            stores.append(str(graphroot))
+            d['active']+=1; d['max']=max(d['max'],d['active'])
             f.seek(0); json.dump(d,f); f.truncate()
         time.sleep(0.4)
         with track.open('r+') as f:
             fcntl.flock(f, fcntl.LOCK_EX)
-            d=json.load(f); d['active']-=1; f.seek(0); json.dump(d,f); f.truncate()
+            d=json.load(f); d['active']-=1; d['stores'].remove(str(graphroot))
+            f.seek(0); json.dump(d,f); f.truncate()
     sys.exit(0)
 if args[0] == 'push':
     if os.environ.get('MOCK_FAIL') == 'push': sys.exit(15)
@@ -142,6 +162,7 @@ sys.exit(2)
     client_path = root / 'client.sh'
     client_path.write_text(script)
     env = dict(os.environ, PATH=str(bin_dir)+':'+os.environ['PATH'], MOCK_REMOTE=str(remote),
+               XDG_RUNTIME_DIR=str(root/'runtime'),
                DMZ_HOST='172.28.50.40', DMZ_USER='appdevpipeline', DMZ_PORT='22',
                DMZ_ROOT='tekton-builds', DMZ_MAX_BUILDS='4', DMZ_WAIT_SECONDS='30',
                SOURCE_DIR=str(source), REGISTRY_AUTH=str(auth), NPM_AUTH=str(npm),
