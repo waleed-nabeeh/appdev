@@ -20,15 +20,19 @@ feeds, registry/CDN downloads and conditional installer endpoints by source.
 
 Copy this folder's `NuGet.Config` to the root of the backend source repository
 on branch `test`, review and commit it there, then start a fresh build. Adding it
-to appdev alone does not change application restores. It replaces direct
-nuget.org access with the customer-confirmed `MofaNuget@Local` upstream feed,
-retains the existing ABP endpoint and limits requests to four per source per
-NuGet process. Public `Volo.*` packages may come from the internal feed; ABP is
-also eligible for `Volo.*`. These are eligible sources, not ordered fallbacks.
+to appdev alone does not change application restores. It enables the internal
+`MofaNuget@Local` feed and direct nuget.org access alongside the existing ABP
+endpoint, and limits requests to four per source per NuGet process. Both the
+internal feed and nuget.org are eligible for public packages, including `Volo.*`;
+ABP is also eligible for `Volo.*`. Explicit `Volo.*` mappings on both public
+sources preserve eligibility alongside ABP's more specific pattern. These are
+eligible sources, not ordered fallbacks; NuGet may query sources concurrently.
+Direct nuget.org access does not populate the internal feed's cache.
 
 The file contains no package credentials or proxy settings. Existing
 `pipeline-proxy` configuration must bypass the external proxy for
-`azuredevops.mofa.gov.sa` and allow ABP through the approved proxy. If the internal
+`azuredevops.mofa.gov.sa` and allow nuget.org package endpoints/CDNs and ABP
+through the approved proxy. If the internal
 feed requires authentication, supply it securely to restore inside the image
 build; Git checkout credentials are not automatically NuGet credentials. A
 401/403 must be resolved before the full build test. Test `acl-service` first,
