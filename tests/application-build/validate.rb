@@ -60,6 +60,7 @@ check(runs.size == 2, 'Expected two dispatcher TaskRun examples')
   check(documents.none? { |d| d['kind'] == 'Pipeline' && d.dig('metadata', 'name') == "application-#{scope}-service-build" }, 'No per-service child PipelineRuns')
   fanout = get.call('Pipeline', config['fanoutPipeline'])['spec']
   defaults = fanout['params'].to_h { |p| [p['name'], p['default']] }
+  check(defaults['source-revision'] == 'test', 'Both customer scopes must build from test')
   check(defaults['source-url'] == config['sourceUrl'] && defaults['env'] == 'dev', 'Missing Pipeline source-url/env defaults')
   check(defaults['services'] == config['catalog'].map { |s| s['name'] }.join(','), 'Missing Pipeline services default')
   check(!defaults.key?('build-args'), 'Expose env instead of a build argument parameter')
@@ -138,14 +139,14 @@ check(runs.size == 2, 'Expected two dispatcher TaskRun examples')
         binding['target-commit'] == '$(body.resource.lastMergeTargetCommit.commitId)', 'Azure PR SHA/branch mapping drift')
   filter = listener.dig('spec', 'triggers', 0, 'interceptors', 0, 'params').find { |p| p['name'] == 'filter' }['value']
   check(filter.include?("body.resource.repository.remoteUrl == '#{defaults['source-url']}'") &&
-        filter.include?("body.resource.targetRefName == 'refs/heads/#{front ? 'pre-prod' : 'test'}'") &&
+        filter.include?("body.resource.targetRefName == 'refs/heads/test'") &&
         filter.include?("body.resource.status == 'active'") &&
         %w[git.pullrequest.created git.pullrequest.updated].all? { |event| filter.include?(event) }, 'Azure PR filters drift')
   # Resolve real-shaped Azure fields through the rendered binding/template.
   # This checks data wiring, not execution of the CEL interceptor or cluster API.
   %w[git.pullrequest.created git.pullrequest.updated].each do |event|
     body = {'eventType' => event, 'resource' => {'status' => 'active', 'pullRequestId' => 123,
-      'sourceRefName' => 'refs/heads/feature/pr-test', 'targetRefName' => "refs/heads/#{front ? 'pre-prod' : 'test'}",
+      'sourceRefName' => 'refs/heads/feature/pr-test', 'targetRefName' => "refs/heads/test",
       'repository' => {'remoteUrl' => defaults['source-url']},
       'lastMergeSourceCommit' => {'commitId' => 'a' * 40}, 'lastMergeTargetCommit' => {'commitId' => 'b' * 40}}}
     context = {'body' => body, 'extensions' => {'pr-id' => '123', 'source-short' => 'a' * 12, 'target-short' => 'b' * 12}}

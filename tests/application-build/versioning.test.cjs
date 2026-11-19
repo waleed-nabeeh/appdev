@@ -136,7 +136,7 @@ module.exports = (async () => {
     const template = docs.find(d => d.kind === 'Pipeline' && d.metadata.name === cfg.fanoutPipeline);
     for (const count of [1, 2, cfg.catalog.length]) {
       const selected = cfg.catalog.slice(0, count).map(s => s.name);
-      const run = makeFanoutRun(template, cfg, selected, commit, scope === 'backend' ? 'test' : 'pre-prod',
+      const run = makeFanoutRun(template, cfg, selected, commit, 'test',
         {metadata: {namespace: 'devops', name: 'launcher', uid: '12345678-abcd-1234-abcd-123456789abc'}});
       const tasks = run.spec.pipelineSpec.tasks;
       assert.equal(tasks.length, 4 + 5 * count);

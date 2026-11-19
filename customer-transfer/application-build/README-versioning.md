@@ -30,8 +30,8 @@ historical versions are not automatically imported into the new series.
 
 `versioning.environment` selects the version lineage: dev/alpha, test/beta,
 preprod/rc. It does not change source branches or GitOps destinations. The current
-customer build argument `env=dev`, backend source `test`, frontend source
-`pre-prod`, GitOps branch **dev**, `pre-` application keys, and registry paths are
+customer build argument `env=dev`, backend/frontend source `test`, GitOps branch
+**dev**, `pre-` application keys, and registry paths are
 preserved. Metadata is written only to **ocp**. Do not enable another lifecycle
 until its source/build/GitOps mappings are separately configured and reviewed.
 
@@ -41,6 +41,12 @@ default to versioning disabled and retain their previous SHA/manual tag behavior
 
 ## Existing access and prerequisites
 
+- Both customer source repositories use `test` for manual builds and PR targets.
+  Before using this configuration, create the frontend `test` branch from the
+  intended `pre-prod` baseline in Azure Repos. Update any Azure frontend service
+  hook target-branch filter from `pre-prod` to `test`; Helm changes the Tekton
+  listener filter, not Azure service hook registration. Current hooks still run
+  on active PR created/updated events, not post-merge events.
 - `RedHat_HelmCharts/ocp` must already exist. The pipeline does not create or
   reset this branch, alter branch policies or bypass approvals.
 - Existing `git-credentials`, key `.git-credentials`, is reused. Its Azure PAT

@@ -90,7 +90,7 @@ frontendRelease:
   testsEnabled: false
   env: dev
   sourceUrl: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Frontend
-  sourceRevision: pre-prod
+  sourceRevision: test
   imageRepository: quay-registry-prod.apps.hub-visa-ocp.mofa.gov.sa/devops
   scanEnabled: true
   verifyEnabled: false
@@ -119,7 +119,7 @@ frontendRelease:
     triggers:
       enabled: true
       authRequired: false
-      targetBranch: pre-prod
+      targetBranch: test
 
 keycloakBuild:
   enabled: true

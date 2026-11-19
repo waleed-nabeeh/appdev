@@ -23,7 +23,7 @@ function verify(docs, scope, count) {
   const {config, template} = fixture(docs, scope);
   const before = JSON.stringify(template);
   const selected = config.catalog.slice(0, count).map(s => s.name);
-  const run = makeFanoutRun(template, config, selected, commit, scope === 'backend' ? 'test' : 'pre-prod', dispatcher);
+  const run = makeFanoutRun(template, config, selected, commit, 'test', dispatcher);
   check(JSON.stringify(template) === before, 'Must not modify installed template');
   check(run.spec.pipelineSpec && !run.spec.pipelineRef, 'One embedded graph must be fixed before run creation');
   check(!run.metadata.ownerReferences, 'Pruning the launcher must not delete an active build');

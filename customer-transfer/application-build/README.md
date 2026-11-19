@@ -157,7 +157,7 @@ The console interaction still needs live validation on the customer cluster.
 | Scope | Start this Pipeline | Defaults | Actual build template | GitOps file |
 | --- | --- | --- | --- | --- |
 | Backend | `application-backend-build` | 14 services, source branch `test`, env `dev` | `application-backend-build-fanout` | `app-chart/backend.yaml` |
-| Frontend | `application-frontend-build` | 3 portals, source branch `pre-prod`, env `dev` | `application-frontend-build-fanout` | `app-chart/frontend.yaml` |
+| Frontend | `application-frontend-build` | 3 portals, source branch `test`, env `dev` | `application-frontend-build-fanout` | `app-chart/frontend.yaml` |
 
 Both GitOps files are updated in **RedHat_HelmCharts**, branch **dev**. Their
 application keys use the preproduction prefix: `acl-service` updates
@@ -212,7 +212,7 @@ credential workspace for earlier standalone TaskRun examples.
 | --- | --- |
 | `services` | Explicit full comma-separated enabled list. Edit to choose fewer; `all` is also accepted. Spaces are trimmed, duplicates deduplicated, unknown/empty names rejected. |
 | `source-url` | Matching customer backend/frontend HTTPS repository URL. Used for resolution and cloning. |
-| `source-revision` | Backend `test`; frontend `pre-prod`. |
+| `source-revision` | Both backend and frontend `test`. |
 | `env` | `dev`. Backend builds receive `CERT_KEYWORD=$(params.env)`; frontend builds receive `BUILD_ENVIRONMENT=$(params.env)`. |
 | `source-commit` | Empty resolves the source branch once; optionally provide a full SHA for a rebuild. |
 | `image-tag` | Leave empty with automatic versioning. With `versioning.enabled: false`, empty uses the short SHA and a manual tag is supported. |
@@ -329,7 +329,7 @@ Expected Azure values:
 | `eventType` | Accepts `git.pullrequest.created` and `git.pullrequest.updated` |
 | `resource.status` | Must be `active`; completed/abandoned PRs are not built |
 | `resource.repository.remoteUrl` | Must exactly match the configured backend/frontend source URL |
-| `resource.targetRefName` | Backend `refs/heads/test`; frontend `refs/heads/pre-prod` |
+| `resource.targetRefName` | Both scopes `refs/heads/test` |
 | `resource.sourceRefName` | Passed as `source-revision`; resolver removes `refs/heads/` |
 | `resource.lastMergeSourceCommit.commitId` | Full source SHA passed as `source-commit` |
 | `resource.lastMergeTargetCommit.commitId` | Full target SHA passed as `target-commit` for Git diff |
