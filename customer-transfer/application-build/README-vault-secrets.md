@@ -60,6 +60,40 @@ unseal, restart or recreate Vault as part of this Secret migration.
 
 ### One-time copy of existing values into Vault
 
+If the bastion reports `vault: command not found`, reuse the CLI from the existing
+Vault pod instead of downloading another version. First confirm the pod name and
+that its binary architecture matches the bastion:
+
+```bash
+oc -n infra-platforms get pods
+uname -m
+oc -n infra-platforms exec vault-0 -- vault version
+```
+
+For a matching Linux architecture (for example, bastion `x86_64` and Vault
+`linux/amd64`), run the following in the bastion Bash shell. Substitute the actual
+pod/container if it is not `vault-0` or has multiple containers:
+
+```bash
+VAULT_CLI_DIR=$(mktemp -d /tmp/mofa-vault-cli.XXXXXX)
+
+VAULT_BIN_PATH=$(oc -n infra-platforms exec vault-0 -- \
+  sh -c 'command -v vault')
+
+oc -n infra-platforms exec vault-0 -- \
+  cat "$VAULT_BIN_PATH" > "$VAULT_CLI_DIR/vault"
+
+chmod 700 "$VAULT_CLI_DIR/vault"
+export PATH="$VAULT_CLI_DIR:$PATH"
+
+vault version
+```
+
+Do not continue if the copy fails or `vault version` cannot execute. The binary
+is outside the Git checkout; this PATH addition applies to the current shell.
+This copies only the executable, not credentials or configuration from the pod.
+Host/container library compatibility must also allow that binary to run.
+
 Use `migrate-secrets-to-vault.sh` on the customer bastion with `oc` and `vault`
 CLIs installed. Use an approved migration login that can read the six Kubernetes
 Secrets, inspect the Vault KV mount metadata and create those Vault paths. This
