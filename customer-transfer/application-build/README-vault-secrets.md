@@ -58,6 +58,54 @@ unseal, restart or recreate Vault as part of this Secret migration.
 
 ## Install through the existing Helm release
 
+### One-time copy of existing values into Vault
+
+Use `migrate-secrets-to-vault.sh` on the customer bastion with `oc` and `vault`
+CLIs installed. Use an approved migration login that can read the six Kubernetes
+Secrets, inspect the Vault KV mount metadata and create those Vault paths. This
+is separate from ESO's read-only policy; do not grant the ESO role write access.
+Point `VAULT_ADDR` at the same existing Vault instance, through an address
+reachable from the bastion, and authenticate without printing a token:
+
+```bash
+export VAULT_ADDR='https://<existing-vault-route>'
+vault login -no-print
+bash customer-transfer/application-build/migrate-secrets-to-vault.sh git-credentials
+```
+
+After confirming this entry synchronizes, migrate the others:
+
+```bash
+bash customer-transfer/application-build/migrate-secrets-to-vault.sh \
+  registry-auth npm-auth rhacs-auth pipeline-proxy dmz-build-ssh
+```
+
+With no Secret-name arguments, the script processes all six. It verifies the Hub
+API identity and KV v2, extracts raw values into a private temporary directory,
+and uses `vault kv put -cas=0` with file references. Secret contents do not appear
+in command arguments, output or Git. It preserves hidden property names and
+multiline content. Temporary migration files are removed on normal exit and
+handled signals; a host crash/SIGKILL can leave them, so use an approved protected
+temporary location (`TMPDIR`) and inspect it after interrupted migrations.
+
+Existing Vault entries (including soft-deleted versioned entries) are **never
+overwritten**. On a CAS/access failure the script stops; already created entries
+remain. Review the existing entry and run the script with only the remaining
+names. Do not delete existing Vault data just to make bootstrap pass.
+
+Defaults match the chart: namespace `devops`, mount `secret`, relative prefix
+`devops/pipelines`. Only if your reviewed store differs, set `PIPELINE_NAMESPACE`,
+`VAULT_KV_MOUNT`, `VAULT_PIPELINE_PREFIX` and/or `EXPECTED_OCP_SERVER` explicitly.
+The script does not modify cluster Secrets, Vault roles/policies or Helm resources.
+It handles the textual credentials used by these pipelines; it is not a general
+binary Secret migration tool. Confirm ESO readiness and a fresh build afterward.
+
+Local checks: `bash -n customer-transfer/application-build/migrate-secrets-to-vault.sh`
+and `python3 tests/application-build/vault-migration-test.py` use synthetic values
+and mocked CLIs only. No customer credentials were read by those checks.
+
+### Apply the mappings
+
 Customer `values.yaml` enables `externalSecrets.enabled: true`, store
 `vault-backend`, refresh `1m`; the chart defaults leave the feature off elsewhere.
 The configured API is `external-secrets.io/v1`, matching the existing test
