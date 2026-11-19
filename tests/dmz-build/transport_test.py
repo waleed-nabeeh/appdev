@@ -35,6 +35,9 @@ with tempfile.TemporaryDirectory(prefix='dmz-test-') as tmp:
     npm = root / 'npm'
     npm.mkdir()
     (npm / 'NPM_TOKEN').write_text('test-token-not-a-real-credential')
+    nuget_auth = root / 'nuget-auth'
+    nuget_auth.mkdir()
+    (nuget_auth / '.git-credentials').write_text('https://fixture%40user:fixture-pat@azure.example\n')
     ssh_auth = root / 'ssh'
     ssh_auth.mkdir()
     (ssh_auth / 'ssh-privatekey').write_text('mock-private-key')
@@ -127,7 +130,15 @@ if args[0] == 'build':
     credential = pathlib.Path(args[args.index('--authfile')+1])
     assert credential.is_file() and not credential.is_relative_to(pathlib.Path.cwd())
     expected = os.environ.get('EXPECT_NPM') == 'true'
-    assert ('--secret' in args) == expected
+    secrets = [args[i+1] for i, value in enumerate(args) if value == '--secret']
+    assert any(s.startswith('id=npm_token,') for s in secrets) == expected
+    nuget = [s for s in secrets if s.startswith('id=nuget_credentials,')]
+    assert bool(nuget) == (os.environ.get('NUGET_AUTH_BOUND') == 'true')
+    if nuget:
+        credential = pathlib.Path(nuget[0].split('src=', 1)[1])
+        assert credential.read_text() == 'Username=fixture@user;Password=fixture-pat;ValidAuthenticationTypes=Basic'
+        assert credential.stat().st_mode & 0o777 == 0o600
+        assert not credential.is_relative_to(pathlib.Path.cwd())
     assert '--build-arg' in args and 'BUILD_ENVIRONMENT=dev with space' in args
     if os.environ.get('MOCK_FAIL') == 'build': sys.exit(14)
     if os.environ.get('TRACK'):
@@ -166,6 +177,7 @@ sys.exit(2)
                DMZ_HOST='172.28.50.40', DMZ_USER='appdevpipeline', DMZ_PORT='22',
                DMZ_ROOT='tekton-builds', DMZ_MAX_BUILDS='4', DMZ_WAIT_SECONDS='30',
                SOURCE_DIR=str(source), REGISTRY_AUTH=str(auth), NPM_AUTH=str(npm),
+               NUGET_AUTH=str(nuget_auth), NUGET_CREDENTIAL_URL='https://azure.example/project/_git/backend',
                BUILD_IMAGE='quay.example/devops/acl-service:dmz-test-1',
                BUILD_CONTEXT='.', CONTAINERFILE='Dockerfile')
     for label, use_npm, failure in [('frontend', 'true', ''), ('backend', 'false', ''),
@@ -173,10 +185,12 @@ sys.exit(2)
         case = root / label
         case.mkdir()
         run_env = dict(env, JOB_ID=label, NPM_AUTH_BOUND=use_npm, EXPECT_NPM=use_npm,
+                       NUGET_AUTH_BOUND=str(label in ('backend', 'build-fail', 'push-fail')).lower(),
                        MOCK_FAIL=failure, RESULT_DIGEST=str(case/'digest'), RESULT_IMAGE=str(case/'image'))
         result = subprocess.run(['bash', str(client_path), 'BUILD_ENVIRONMENT=dev with space'],
                                 env=run_env, text=True, capture_output=True)
         assert (result.returncode == 0) == (not failure), (label, result.stdout, result.stderr)
+        assert 'fixture-pat' not in result.stdout + result.stderr
         assert not (remote/'tekton-builds/jobs'/label).exists(), 'remote workspace/credentials not cleaned'
         if not failure:
             assert (case/'digest').read_text() == 'sha256:'+'a'*64

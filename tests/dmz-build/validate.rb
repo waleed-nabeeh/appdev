@@ -25,8 +25,10 @@ check(task['steps'][0]['env'].find { |e| e['name'] == 'DMZ_MAX_BUILDS' }['value'
   check(!status.success? && err.include?('remoteBuild.maxParallel must be a positive integer'), "Invalid concurrency accepted: #{limit}")
 end
 legacy = index.fetch(['Task', 'build-image'])['spec']
-%w[results workspaces].each { |field| check(task[field] == legacy[field], "Task contract changed: #{field}") }
-check(task['params'].reject { |p| p['name'] == 'diagnostic-base-image' } == legacy['params'], 'Legacy build params must be preserved')
+check(task['results'] == legacy['results'], 'Task results must be preserved')
+check(task['workspaces'].reject { |w| w['name'] == 'nuget-auth' } == legacy['workspaces'], 'Legacy workspaces must be preserved')
+check(task['workspaces'].include?({'name' => 'nuget-auth', 'optional' => true}), 'NuGet workspace must be optional')
+check(task['params'].reject { |p| %w[diagnostic-base-image nuget-credential-url].include?(p['name']) } == legacy['params'], 'Legacy build params must be preserved')
 check(task['params'].find { |p| p['name'] == 'diagnostic-base-image' }['default'] == '', 'Diagnostics must be opt-in for normal application builds')
 check(!task.to_json.include?('capabilities'), 'Remote build must not require privileges')
 check(task['steps'][0]['env'].none? { |e| e.key?('valueFrom') }, 'Proxy values must be transferred as files, not injected into Hub environment')
@@ -48,7 +50,15 @@ active = docs
   check(!builds.empty? && builds.all? { |t| t.dig('taskRef', 'name') == 'build-image-dmz' }, 'Every selected service must route to DMZ')
   original = inactive_index.fetch(['Pipeline', pipeline['metadata']['name']])
   expected = Marshal.load(Marshal.dump(original))
-  expected['spec']['tasks'].select { |t| t['name'].start_with?('build-') }.each { |t| t['taskRef']['name'] = 'build-image-dmz' }
+  expected['spec']['tasks'].select { |t| t['name'].start_with?('build-') }.each do |t|
+    t['taskRef']['name'] = 'build-image-dmz'
+    if scope == 'backend'
+      t['params'] << {'name' => 'nuget-credential-url', 'value' => 'https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_UnifiedVisaPlatform.Backend'}
+      t['workspaces'] << {'name' => 'nuget-auth', 'workspace' => 'git-credentials'}
+    end
+  end
+  expected['spec']['tasks'].each { |t| t['params']&.sort_by! { |p| p['name'] } }
+  pipeline['spec']['tasks'].each { |t| t['params']&.sort_by! { |p| p['name'] } }
   check(pipeline == expected, 'DMZ activation changed unrelated stages, source, workspaces or image results')
 end
 puts 'PASS: customer full pipelines use DMZ, rollback preserves Hub stages, smoke pipelines and remote task contract remain valid'

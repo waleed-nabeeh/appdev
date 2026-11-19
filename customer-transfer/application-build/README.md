@@ -34,6 +34,39 @@ build; Git checkout credentials are not automatically NuGet credentials. A
 401/403 must be resolved before the full build test. Test `acl-service` first,
 then the full set. XML validation here does not verify live feed access.
 
+The DMZ backend build now reuses the existing `git-credentials` workspace's
+`.git-credentials` entry for the configured backend Azure host. It sends only
+the resolved username/PAT as a temporary Podman build secret named
+`nuget_credentials`, outside the source context. Frontend builds are unchanged.
+The PAT must have Packaging Read scope and the account must have feed access;
+successful Git checkout alone does not prove the PAT has Packaging scope.
+
+**Required backend Dockerfile change:** supplying a build secret alone does not
+authenticate NuGet. For each `RUN dotnet restore`, `RUN dotnet build` or
+`RUN dotnet publish` that can contact the feed, add the mount and export below,
+keeping the existing dotnet command and arguments. For example, ACL restore:
+
+```dockerfile
+RUN --mount=type=secret,id=nuget_credentials \
+    test -s /run/secrets/nuget_credentials && \
+    NuGetPackageSourceCredentials_MofaNuget="$(cat /run/secrets/nuget_credentials)" && \
+    export NuGetPackageSourceCredentials_MofaNuget && \
+    dotnet restore "./services/acl/MOFA.UnifiedVisaPlatform.ACL/MOFA.UnifiedVisaPlatform.ACL.csproj"
+```
+
+Use the same prefix for the existing build and publish RUN instructions because
+they may perform implicit restore. Preserve their project paths and flags. Do
+not use Dockerfile `ENV`, `ARG`, `echo` or shell tracing for credentials, and do
+not copy the mounted secret into the image. The variable name must match the
+`MofaNuget` source key exactly. Secret files are removed with the per-job
+credentials on normal exits, including build/push failures.
+
+After pulling appdev, apply Helm to install the new Task/workspace bindings.
+Copy `NuGet.Config` and commit the Dockerfile changes in backend `test`, then
+start a fresh ACL build. No new OpenShift Secret or manual VM setup is needed.
+Existing smoke PipelineRuns do not bind `nuget-auth`; use the full backend entry
+for this authentication test. Other non-DMZ build paths are unchanged.
+
 For the new Git-only copy of selected preproduction images into production and
 DR values, use [Application Promotion](../application-promotion/README.md).
 It uses this same values file and keeps the current application names unchanged.

@@ -62,6 +62,33 @@ authfile="$REGISTRY_AUTH/config.json"
 if [ ! -f "$authfile" ]; then authfile="$REGISTRY_AUTH/.dockerconfigjson"; fi
 test -s "$authfile"
 cp "$authfile" "$local_work/credentials/registry.json"
+if [ "${NUGET_AUTH_BOUND:-false}" = true ]; then
+  test -s "$NUGET_AUTH/.git-credentials"
+  case "${NUGET_CREDENTIAL_URL:-}" in
+    https://*) ;;
+    *) echo 'NuGet credential lookup requires an HTTPS source URL.' >&2; exit 1 ;;
+  esac
+  # Use Git's URL decoding and host matching without interactive prompts or logs.
+  printf 'url=%s\n\n' "$NUGET_CREDENTIAL_URL" | \
+    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0 \
+    GIT_ASKPASS=/bin/false git -c credential.helper= -c credential.useHttpPath=false \
+    -c "credential.helper=store --file=$NUGET_AUTH/.git-credentials" credential fill \
+    > "$local_work/nuget-credential-response" 2>/dev/null || {
+      echo 'Could not resolve NuGet credentials from the existing Git Secret.' >&2; exit 1;
+    }
+  nuget_user=$(sed -n 's/^username=//p' "$local_work/nuget-credential-response")
+  nuget_password=$(sed -n 's/^password=//p' "$local_work/nuget-credential-response")
+  carriage_return=$(printf '\r')
+  case "$nuget_user$nuget_password" in
+    *';'*|*'
+'*|*"$carriage_return"*) echo 'Unsupported delimiter in NuGet credentials.' >&2; exit 1 ;;
+  esac
+  test -n "$nuget_user" && test -n "$nuget_password"
+  printf 'Username=%s;Password=%s;ValidAuthenticationTypes=Basic' \
+    "$nuget_user" "$nuget_password" > "$local_work/credentials/nuget_credentials"
+  unset nuget_user nuget_password
+  rm -f "$local_work/nuget-credential-response"
+fi
 if [ "$NPM_AUTH_BOUND" = true ]; then
   test -s "$NPM_AUTH/NPM_TOKEN"
   cp "$NPM_AUTH/NPM_TOKEN" "$local_work/credentials/npm_token"

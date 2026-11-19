@@ -225,6 +225,10 @@ spec:
           value: {{ $service.context | quote }}
         - name: containerfile
           value: {{ $service.containerfile | quote }}
+{{- if and (not $frontend) $root.Values.remoteBuild.enabled $root.Values.remoteBuild.useForApplicationBuilds }}
+        - name: nuget-credential-url
+          value: {{ $settings.sourceUrl | quote }}
+{{- end }}
         - name: build-args
 {{- if $root.Values.applicationBuild.singleRun }}
           value: [{{ printf "%s=$(params.env)" (ternary "BUILD_ENVIRONMENT" "CERT_KEYWORD" $frontend) | quote }}]
@@ -236,6 +240,10 @@ spec:
           workspace: source-{{ $service.name }}
         - name: registry-auth
           workspace: registry-auth
+{{- if and (not $frontend) $root.Values.remoteBuild.enabled $root.Values.remoteBuild.useForApplicationBuilds }}
+        - name: nuget-auth
+          workspace: git-credentials
+{{- end }}
 {{- if $frontend }}
         - name: npm-auth
           workspace: npm-auth

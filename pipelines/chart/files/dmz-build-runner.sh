@@ -146,6 +146,9 @@ fi
 set --
 while IFS= read -r -d '' argument; do set -- "$@" --build-arg "$argument"; done < "$job/metadata/build-args0"
 if [ -s "$job/credentials/npm_token" ]; then set -- "$@" --secret "id=npm_token,src=$job/credentials/npm_token"; fi
+if [ -s "$job/credentials/nuget_credentials" ]; then
+  set -- "$@" --secret "id=nuget_credentials,src=$job/credentials/nuget_credentials"
+fi
 build_started=true
 podman build --http-proxy=true --tls-verify="$tls_verify" --authfile "$job/credentials/registry.json" --rm --force-rm \
   "$@" -f "$containerfile" -t "$local_image" "$context"
