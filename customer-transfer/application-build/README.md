@@ -16,6 +16,24 @@ For firewall/proxy preparation and the internal-only target, use the
 [network access requirements](README-network-access.md). It separates package
 feeds, registry/CDN downloads and conditional installer endpoints by source.
 
+### Backend NuGet configuration transfer
+
+Copy this folder's `NuGet.Config` to the root of the backend source repository
+on branch `test`, review and commit it there, then start a fresh build. Adding it
+to appdev alone does not change application restores. It replaces direct
+nuget.org access with the customer-confirmed `MofaNuget@Local` upstream feed,
+retains the existing ABP endpoint and limits requests to four per source per
+NuGet process. Public `Volo.*` packages may come from the internal feed; ABP is
+also eligible for `Volo.*`. These are eligible sources, not ordered fallbacks.
+
+The file contains no package credentials or proxy settings. Existing
+`pipeline-proxy` configuration must bypass the external proxy for
+`azuredevops.mofa.gov.sa` and allow ABP through the approved proxy. If the internal
+feed requires authentication, supply it securely to restore inside the image
+build; Git checkout credentials are not automatically NuGet credentials. A
+401/403 must be resolved before the full build test. Test `acl-service` first,
+then the full set. XML validation here does not verify live feed access.
+
 For the new Git-only copy of selected preproduction images into production and
 DR values, use [Application Promotion](../application-promotion/README.md).
 It uses this same values file and keeps the current application names unchanged.
