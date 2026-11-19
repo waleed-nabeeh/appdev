@@ -116,6 +116,8 @@ foundationCi:
 
 remoteBuild:
   enabled: true
+  # Shared VM build slots across backend/frontend runs.
+  maxParallel: 14
   # Full frontend/backend workflows build/push on DMZ; other stages stay on Hub.
   useForApplicationBuilds: true
   # Temporary private-key-only connection test; restore strict with verified known_hosts.

@@ -29,9 +29,15 @@ mkdir -p "$root/slots"
 exec 8>"$root/slots/config.lock"
 flock -x 8
 if [ -f "$root/slots/max-builds" ]; then
-  test "$(cat "$root/slots/max-builds")" = "$max_builds" || {
-    echo 'Shared VM concurrency configuration differs. Drain active builds before changing it.' >&2; exit 1;
-  }
+  stored_max=$(cat "$root/slots/max-builds")
+  [[ "$stored_max" =~ ^[1-9][0-9]*$ ]] || { echo 'Invalid stored VM build limit.' >&2; exit 1; }
+  if ((max_builds > stored_max)); then
+    printf '%s' "$max_builds" > "$root/slots/max-builds"
+    printf 'Increased shared DMZ build limit from %s to %s.\n' "$stored_max" "$max_builds"
+  elif ((max_builds < stored_max)); then
+    echo 'VM build limit is higher than this run requests. Use the current Helm configuration; drain builds before reducing the stored limit.' >&2
+    exit 1
+  fi
 else
   printf '%s' "$max_builds" > "$root/slots/max-builds"
 fi

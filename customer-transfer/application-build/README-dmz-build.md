@@ -126,14 +126,22 @@ Build arguments must not contain passwords/tokens. The SSH private key stays on
 Hub; it is never copied to the VM. Source checkouts may contain existing sensitive
 configuration, so protect build storage and keep source credentials out of Git.
 
-All runs using the same account and work root share **four flock-protected
-build slots**. Additional builds wait; each run is not given another four slots.
+With the customer values, all runs using the same account and work root share
+**14 flock-protected build slots**. Additional builds wait; the limit is shared
+across backend and frontend runs, rather than allocated per run.
 Transfers may overlap while builds wait, so size workspace storage accordingly.
 The configured slot-wait timeout is three hours; enclosing PipelineRun timeouts
 still apply. All active clients must use the same root and maxParallel value.
-A changed concurrency setting is rejected against the stored limit: drain all
-builds before the Linux/DevOps team changes the shared `slots/max-builds` file
-and the Helm value together. Do not delete slot lock files during operation.
+The first run with a higher `remoteBuild.maxParallel` automatically updates
+`slots/max-builds` under the shared configuration lock. No manual VM change is
+needed to increase from four to 14. Existing builds keep their slot locks;
+new builds can use the additional slots. Older runs requesting a lower limit
+fail rather than overwrite the increased setting. Start fresh runs after Helm
+is updated. Do not delete slot lock files during operation.
+
+The chart default remains four for other installations. Monitor VM memory, CPU
+and disk during the 14-build test. Reducing the limit still requires draining
+all active/queued builds, then updating the stored limit and Helm value together.
 
 Each build has its own local Podman tag to avoid collisions between simultaneous
 builds targeting the same destination. After normal completion/failure the VM

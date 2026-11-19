@@ -208,6 +208,25 @@ sys.exit(2)
     stats = json.loads(track.read_text())
     assert stats['active'] == 0 and 1 < stats['max'] <= 4, stats
     print('PASS: six simultaneous jobs respect the shared four-build limit:', stats)
+    case = root / 'increase-limit'
+    case.mkdir()
+    result = subprocess.run(['bash', str(client_path), 'BUILD_ENVIRONMENT=dev with space'],
+              env=dict(env, JOB_ID=case.name, DMZ_MAX_BUILDS='14', NPM_AUTH_BOUND='false',
+                       EXPECT_NPM='false', RESULT_DIGEST=str(case/'digest'), RESULT_IMAGE=str(case/'image')),
+              text=True, capture_output=True)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert (remote/'tekton-builds/slots/max-builds').read_text() == '14'
+    assert 'Increased shared DMZ build limit from 4 to 14.' in result.stdout
+    case = root / 'stale-limit'
+    case.mkdir()
+    result = subprocess.run(['bash', str(client_path)],
+              env=dict(env, JOB_ID=case.name, NPM_AUTH_BOUND='false', EXPECT_NPM='false',
+                       RESULT_DIGEST=str(case/'digest'), RESULT_IMAGE=str(case/'image')),
+              text=True, capture_output=True)
+    assert result.returncode != 0 and 'VM build limit is higher' in result.stderr
+    assert (remote/'tekton-builds/slots/max-builds').read_text() == '14'
+    env['DMZ_MAX_BUILDS'] = '14'
+    print('PASS: pipeline automatically raises stored limit to 14 and stale runs cannot lower it')
     (ssh_auth/'known_hosts').unlink()
     result = subprocess.run(['bash', str(client_path)], env=dict(env, JOB_ID='missing-host',
                             NPM_AUTH_BOUND='false'), text=True, capture_output=True)

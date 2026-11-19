@@ -8,7 +8,7 @@ The customer values enable **DMZ image builds for the full frontend/backend
 workflows** (`remoteBuild.useForApplicationBuilds: true`). Clone, RHACS
 scan/policy gate, signing and GitOps updates stay on Hub. Backend and frontend
 unit tests are temporarily disabled in this customer configuration. Only container
-build/push runs on the VM, with four shared build slots across both scopes.
+build/push runs on the VM, with 14 shared build slots across both scopes.
 For SSH, credentials, workspaces, smoke tests and rollback, use the
 [DMZ build instructions](README-dmz-build.md).
 

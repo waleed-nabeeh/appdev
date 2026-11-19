@@ -19,6 +19,11 @@ render('--set', 'remoteBuild.enabled=false', '--set', 'remoteBuild.useForApplica
   check(inactive_index[[doc['kind'], doc['metadata']['name']]] == doc, 'Existing resources changed before DMZ activation')
 end
 task = index.fetch(['Task', 'build-image-dmz'])['spec']
+check(task['steps'][0]['env'].find { |e| e['name'] == 'DMZ_MAX_BUILDS' }['value'] == '14', 'Customer VM concurrency must render as 14')
+%w[0 -1 1.5 invalid].each do |limit|
+  _, err, status = Open3.capture3('helm', 'template', 'release-pipeline', './pipelines/chart', '-f', 'customer-transfer/application-build/values.yaml', '--set', "remoteBuild.maxParallel=#{limit}")
+  check(!status.success? && err.include?('remoteBuild.maxParallel must be a positive integer'), "Invalid concurrency accepted: #{limit}")
+end
 legacy = index.fetch(['Task', 'build-image'])['spec']
 %w[results workspaces].each { |field| check(task[field] == legacy[field], "Task contract changed: #{field}") }
 check(task['params'].reject { |p| p['name'] == 'diagnostic-base-image' } == legacy['params'], 'Legacy build params must be preserved')
