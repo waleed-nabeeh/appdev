@@ -134,12 +134,17 @@ spec:
     - name: source-commit
       type: string
       default: ""
-    - {name: image-tag, type: string, default: "", description: "Optional image tag; empty uses the first eight source SHA characters"}
+    - {name: image-tag, type: string, default: "", description: {{ ternary "Leave empty: service versions are reserved automatically" "Optional image tag; empty uses the first eight source SHA characters" $root.Values.versioning.enabled | quote }}}
   results:
     - name: source-commit
       value: $(tasks.resolve-source.results.commit)
+{{- if $root.Values.versioning.enabled }}
+    - name: product-version
+      value: $(tasks.record-versions.results.product-version)
+{{- else }}
     - name: image-tag
       value: $(tasks.resolve-source.results.tag)
+{{- end }}
 {{- range $service := $services }}
     - name: {{ $service.name }}-image
       value: $(tasks.build-{{ $service.name }}.results.image-url)
@@ -174,9 +179,27 @@ spec:
       workspaces:
         - name: git-credentials
           workspace: git-credentials
+{{- if $root.Values.versioning.enabled }}
+    - name: reserve-versions
+      runAfter: [resolve-source]
+      retries: 2
+      taskRef:
+        name: {{ $scope }}-version-reserve
+      params:
+        - {name: source-commit, value: $(tasks.resolve-source.results.commit)}
+        - {name: source-url, value: $(params.source-url)}
+        - {name: source-revision, value: $(params.source-revision)}
+        - {name: build-env, value: $(params.env)}
+        - {name: services, value: $(params.services)}
+        - {name: image-tag, value: $(params.image-tag)}
+        - {name: run-id, value: $(context.pipelineRun.uid)}
+        - {name: run-name, value: $(context.pipelineRun.name)}
+      workspaces:
+        - {name: git-credentials, workspace: git-credentials}
+{{- end }}
 {{- range $service := $services }}
     - name: clone-{{ $service.name }}
-      runAfter: [resolve-source]
+      runAfter: [{{ ternary "reserve-versions" "resolve-source" $root.Values.versioning.enabled }}]
       taskRef:
         name: clone
       params:
@@ -220,7 +243,11 @@ spec:
         name: {{ ternary "build-image-dmz" "build-image" (and $root.Values.remoteBuild.enabled $root.Values.remoteBuild.useForApplicationBuilds) }}
       params:
         - name: image
+{{- if $root.Values.versioning.enabled }}
+          value: {{ $settings.imageRepository }}/{{ $service.name }}:$(tasks.reserve-versions.results.tag-{{ $service.name }})
+{{- else }}
           value: {{ $settings.imageRepository }}/{{ $service.name }}:$(tasks.resolve-source.results.tag)
+{{- end }}
         - name: context
           value: {{ $service.context | quote }}
         - name: containerfile
@@ -279,7 +306,8 @@ spec:
 {{- range $service := $services }}
 {{- $names = append $names $service.name }}
 {{- $repository := printf "%s/%s" $settings.imageRepository $service.name }}
-{{- $_ := set $images $service.name (dict "repository" $repository "tag" "$(tasks.resolve-source.results.tag)" "digest" (printf "$(tasks.build-%s.results.image-digest)" $service.name) "image" (printf "%s@$(tasks.build-%s.results.image-digest)" $repository $service.name)) }}
+{{- $tag := ternary (printf "$(tasks.reserve-versions.results.tag-%s)" $service.name) "$(tasks.resolve-source.results.tag)" $root.Values.versioning.enabled }}
+{{- $_ := set $images $service.name (dict "repository" $repository "tag" $tag "digest" (printf "$(tasks.build-%s.results.image-digest)" $service.name) "image" (printf "%s@$(tasks.build-%s.results.image-digest)" $repository $service.name)) }}
 {{- end }}
     - name: update-gitops
       runAfter:
@@ -292,11 +320,34 @@ spec:
         - name: source-commit
           value: $(tasks.resolve-source.results.commit)
         - {name: image-tag, value: $(params.image-tag)}
+{{- if $root.Values.versioning.enabled }}
+        - {name: version-tags-json, value: $(tasks.reserve-versions.results.tags-json)}
+{{- end }}
         - name: release-json
           value: {{ dict "schemaVersion" 1 "succeeded" true "sourceCommit" "$(tasks.resolve-source.results.commit)" "selected" $names "images" $images "failed" (list) "notStarted" (list) | toJson | quote }}
       workspaces:
         - name: git-credentials
           workspace: git-credentials
+{{- if $root.Values.versioning.enabled }}
+    - name: record-versions
+      runAfter: [update-gitops]
+      retries: 2
+      taskRef:
+        name: {{ $scope }}-version-complete
+      params:
+        - {name: source-commit, value: $(tasks.resolve-source.results.commit)}
+        - {name: source-url, value: $(params.source-url)}
+        - {name: source-revision, value: $(params.source-revision)}
+        - {name: build-env, value: $(params.env)}
+        - {name: services, value: $(params.services)}
+        - {name: run-id, value: $(context.pipelineRun.uid)}
+        - {name: run-name, value: $(context.pipelineRun.name)}
+        - {name: gitops-commit, value: $(tasks.update-gitops.results.commit)}
+        - name: release-json
+          value: {{ dict "schemaVersion" 1 "succeeded" true "sourceCommit" "$(tasks.resolve-source.results.commit)" "selected" $names "images" $images "failed" (list) "notStarted" (list) | toJson | quote }}
+      workspaces:
+        - {name: git-credentials, workspace: git-credentials}
+{{- end }}
 {{- end }}
 ---
 # Store only a run template in Helm. Applying the release never starts builds.

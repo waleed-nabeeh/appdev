@@ -38,7 +38,7 @@ documents.select { |d| d['kind'] == 'Pipeline' }.each do |pipeline|
   spec.to_json.scan(/\$\(tasks\.([^.]+)\.results\.([^)]+)\)/).each do |producer, result|
     producer_task = spec['tasks'].find { |t| t['name'] == producer }
     definition = producer_task && (producer_task['taskSpec'] || tasks.fetch(producer_task.dig('taskRef', 'name')))
-    check(definition && definition.fetch('results', []).any? { |r| r['name'] == result }, 'Invalid task result reference')
+    check(definition && definition.fetch('results', []).any? { |r| r['name'] == result.split('.')[0] }, 'Invalid task result reference')
   end
 end
 runs = YAML.load_stream(File.read('customer-transfer/application-build/dispatches.yaml')).compact
@@ -63,11 +63,14 @@ check(runs.size == 2, 'Expected two dispatcher TaskRun examples')
   check(defaults['source-url'] == config['sourceUrl'] && defaults['env'] == 'dev', 'Missing Pipeline source-url/env defaults')
   check(defaults['services'] == config['catalog'].map { |s| s['name'] }.join(','), 'Missing Pipeline services default')
   check(!defaults.key?('build-args'), 'Expose env instead of a build argument parameter')
-  check(fanout['tasks'].last['name'] == 'update-gitops' && !fanout['tasks'].last.key?('when'), 'GitOps must be in the main fanout')
+  versioned = config.dig('versioning', 'enabled')
+  updater_task = fanout['tasks'].find { |t| t['name'] == 'update-gitops' }
+  check(updater_task && !updater_task.key?('when'), 'GitOps must be in the main fanout')
+  check(fanout['tasks'].last['name'] == (versioned ? 'record-versions' : 'update-gitops'), 'Wrong final stage')
   config['catalog'].each do |service|
     name = service['name']
     stages = %w[clone build scan gate sign]
-    lane = ['resolve-source'] + stages.map { |stage| "#{stage}-#{name}" }
+    lane = [versioned ? 'reserve-versions' : 'resolve-source'] + stages.map { |stage| "#{stage}-#{name}" }
     lane.each_cons(2) { |a, b| check(fanout['tasks'].find { |t| t['name'] == b }['runAfter'] == [a], 'Broken working lane') }
     unit = fanout['tasks'].find { |t| t['name'] == 'test-' + name }
     check(unit.nil?, 'Disabled tests must be absent from the graph')
@@ -89,7 +92,7 @@ check(runs.size == 2, 'Expected two dispatcher TaskRun examples')
   %w[services source-url source-revision env source-commit image-tag].each { |p| check(entry_defaults[p] == defaults[p], 'Console defaults must match fanout defaults') }
   check(entry_defaults['image-tag'] == '', 'Manual image tag must default to automatic SHA tagging')
   check(fanout['tasks'].first['params'].any? { |p| p['name'] == 'image-tag' && p['value'] == '$(params.image-tag)' }, 'Manual tag must reach resolver')
-  check(fanout['tasks'].last['params'].any? { |p| p['name'] == 'image-tag' && p['value'] == '$(params.image-tag)' }, 'Manual tag must reach GitOps validation')
+  check(updater_task['params'].any? { |p| p['name'] == 'image-tag' && p['value'] == '$(params.image-tag)' }, 'Manual tag must reach GitOps validation')
   check(entry['tasks'].size == 1 && entry['tasks'][0].dig('taskRef', 'name') == scope + '-build-dispatch', 'UI entry must use the shared dispatcher')
   check(entry['results'].any? { |r| r['name'] == 'build-pipeline-run' }, 'UI must expose the actual build run name')
   updater = tasks.fetch(scope + '-gitops-update')

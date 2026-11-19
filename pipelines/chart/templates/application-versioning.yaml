@@ -1,0 +1,83 @@
+{{- if .Values.versioning.enabled }}
+{{- if not .Values.applicationBuild.singleRun }}
+{{- fail "Automatic versioning requires applicationBuild.singleRun=true" }}
+{{- end }}
+{{- range $settings := list .Values.backendBuild .Values.frontendRelease }}
+{{- if and $settings.enabled (not (and $settings.dispatch.enabled $settings.dispatch.gitops.enabled)) }}
+{{- fail "Automatic versioning requires the enabled scope's dispatcher and GitOps updater" }}
+{{- end }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: application-versioning-code
+data:
+  application-versioning.js: |
+{{ .Files.Get "files/application-versioning.js" | indent 4 }}
+binaryData:
+  js-yaml.js: {{ .Files.Get "files/vendor/js-yaml.js" | b64enc | quote }}
+{{- range $scope := list "backend" "frontend" }}
+{{- $settings := ternary $.Values.frontendRelease $.Values.backendBuild (eq $scope "frontend") }}
+{{- if and $settings.enabled $settings.dispatch.enabled $settings.dispatch.gitops.enabled }}
+{{- $catalog := $.Files.Get (printf "files/%s-services.json" $scope) | fromJsonArray }}
+{{- range $action := list "reserve" "complete" }}
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: {{ $scope }}-version-{{ $action }}
+spec:
+  params:
+    - {name: source-commit, type: string}
+    - {name: source-url, type: string}
+    - {name: source-revision, type: string}
+    - {name: build-env, type: string}
+    - {name: services, type: string}
+    - {name: run-id, type: string}
+    - {name: run-name, type: string}
+    - {name: image-tag, type: string, default: ""}
+    - {name: release-json, type: string, default: ""}
+    - {name: gitops-commit, type: string, default: ""}
+  workspaces:
+    - name: git-credentials
+  results:
+{{- if eq $action "reserve" }}
+{{- range $service := $catalog }}
+{{- if or (empty $settings.selectedServices) (has $service.name $settings.selectedServices) }}
+    - name: tag-{{ $service.name }}
+{{- end }}
+{{- end }}
+    - name: tags-json
+{{- else }}
+    - name: product-version
+{{- end }}
+  volumes:
+    - name: config
+      projected:
+        sources:
+          - configMap: {name: {{ $scope }}-dispatch-config}
+          - configMap: {name: application-versioning-code}
+  steps:
+    - name: {{ $action }}
+      image: {{ $.Values.images.nodejs24 | quote }}
+      command: [node, /config/application-versioning.js]
+      volumeMounts:
+        - {name: config, mountPath: /config, readOnly: true}
+      env:
+        - {name: NODE_USE_SYSTEM_CA, value: "1"}
+        - {name: ACTION, value: {{ $action | quote }}}
+        - {name: SOURCE_COMMIT, value: $(params.source-commit)}
+        - {name: SOURCE_URL, value: $(params.source-url)}
+        - {name: SOURCE_REVISION, value: $(params.source-revision)}
+        - {name: BUILD_ENV, value: $(params.build-env)}
+        - {name: SERVICES, value: $(params.services)}
+        - {name: RUN_ID, value: $(params.run-id)}
+        - {name: RUN_NAME, value: $(params.run-name)}
+        - {name: IMAGE_TAG, value: $(params.image-tag)}
+        - {name: RELEASE_JSON, value: $(params.release-json)}
+        - {name: GITOPS_COMMIT, value: $(params.gitops-commit)}
+        - {name: CREDENTIALS_PATH, value: $(workspaces.git-credentials.path)}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

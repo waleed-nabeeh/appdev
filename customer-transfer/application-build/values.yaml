@@ -27,6 +27,16 @@ serviceAccount:
   name: pipeline
 applicationBuild:
   singleRun: true
+versioning:
+  enabled: true
+  repository: https://azuredevops.mofa.gov.sa/MOFA/UnifiedVisaPlatform/_git/RedHat_HelmCharts
+  revision: ocp
+  directory: versioning
+  environment: preprod
+  initialVersion: 1.0.0
+  createTags: true
+  bump: AUTO
+  apiVersion: "6.0"
 pvcCleanup:
   enabled: true
   schedule: "0 3 * * 5"

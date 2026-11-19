@@ -1,7 +1,7 @@
 'use strict';
 
 function check(ok, message) { if (!ok) throw new Error(message); }
-function updateCore(document, record, config, expectedCommit, imageTag = '') {
+function updateCore(document, record, config, expectedCommit, imageTag = '', versionTags = {}) {
   check(record.schemaVersion === 1 && record.succeeded === true, 'Only a successful batch can update GitOps');
   check(typeof expectedCommit === 'string' && expectedCommit.length === 40 && /^[a-f0-9]+$/.test(expectedCommit) && record.sourceCommit === expectedCommit, 'Batch source SHA mismatch');
   const expectedTag = imageTag === '' ? expectedCommit.slice(0, 8) : imageTag;
@@ -20,13 +20,27 @@ function updateCore(document, record, config, expectedCommit, imageTag = '') {
     check(config.catalog.some(s => s.name === name), 'Unknown or disabled service: ' + name);
     const image = images[name];
     const repository = config.imageRepository + '/' + name;
-    check(image && image.repository === repository && image.tag === expectedTag, 'Unexpected image identity: ' + name);
+    const tag = config.versioning?.enabled ? versionTags[name] : expectedTag;
+    check(typeof tag === 'string' && tag.length <= 128 && /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/.test(tag), 'Missing or invalid reserved version: ' + name);
+    check(image && image.repository === repository && image.tag === tag, 'Unexpected image identity: ' + name);
     check(typeof image.digest === 'string' && image.digest.length === 71 && /^sha256:[a-f0-9]{64}$/.test(image.digest) && image.image === repository + '@' + image.digest, 'Invalid image digest: ' + name);
     const key = prefix + name + suffix;
     check(Object.hasOwn(apps, key), 'Missing GitOps application: ' + key);
     const target = apps[key].overrideValues?.image;
     check(target && target.repository === repository && typeof target.tag === 'string', 'GitOps repository mismatch: ' + key);
     check(!target.digest, 'Existing digest override requires promotion-aware handling: ' + key);
+    if (config.versioning?.enabled) {
+      const pattern = /^(\d+)\.(\d+)\.(\d+)-(alpha|beta|rc)\.(\d+)$/;
+      const old = pattern.exec(target.tag), next = pattern.exec(tag);
+      check(next, 'Expected a reserved semantic image version');
+      if (old) {
+        check(old[4] === next[4], 'Existing GitOps tag belongs to another lifecycle');
+        const before = [old[1], old[2], old[3], old[5]].map(Number);
+        const after = [next[1], next[2], next[3], next[5]].map(Number);
+        const index = before.findIndex((n, i) => n !== after[i]);
+        check(index < 0 || after[index] > before[index], 'Refusing stale GitOps version: ' + name);
+      }
+    }
     target.tag = image.tag;
   }
   return output;
@@ -62,7 +76,8 @@ if (require.main === module) {
     check(filename === path.resolve(repo, relative), 'GitOps values path must not contain symlinks');
     const original = fs.readFileSync(filename, 'utf8');
     const document = yaml.load(original, {schema: yaml.JSON_SCHEMA, maxDepth: 100});
-    const updated = updateCore(document, record, config, process.env.SOURCE_COMMIT, process.env.IMAGE_TAG);
+    const updated = updateCore(document, record, config, process.env.SOURCE_COMMIT, process.env.IMAGE_TAG,
+      JSON.parse(process.env.VERSION_TAGS_JSON || '{}'));
     if (JSON.stringify(updated) !== JSON.stringify(document)) {
       fs.writeFileSync(filename, yaml.dump(updated, {schema: yaml.JSON_SCHEMA, noRefs: true, lineWidth: -1, quotingType: '"'}));
     }

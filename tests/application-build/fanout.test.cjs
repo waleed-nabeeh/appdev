@@ -6,7 +6,7 @@ const {selectDiff} = require('../../pipelines/chart/files/backend-dispatch.js');
 function check(ok, message) { if (!ok) throw new Error(message); }
 function reject(fn) { let failed = false; try { fn(); } catch (_) { failed = true; } check(failed, 'Expected rejection'); }
 function rendered(extra = []) {
-  const output = execFileSync('helm', ['template', 'release-pipeline', 'pipelines/chart', '-n', 'devops', '-f', 'customer-transfer/application-build/values.yaml', ...extra], {encoding: 'utf8'});
+  const output = execFileSync('helm', ['template', 'release-pipeline', 'pipelines/chart', '-n', 'devops', '-f', 'customer-transfer/application-build/values.yaml', '--set', 'versioning.enabled=false', ...extra], {encoding: 'utf8'});
   const docs = []; yaml.loadAll(output, d => { if (d) docs.push(d); }); return docs;
 }
 const documents = rendered();

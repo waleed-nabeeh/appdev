@@ -70,6 +70,18 @@ For the new Git-only copy of selected preproduction images into production and
 DR values, use [Application Promotion](../application-promotion/README.md).
 It uses this same values file and keeps the current application names unchanged.
 
+## Release 1 frontend/backend versioning
+
+The customer values now enable automatic service versioning. Leave `image-tag`
+empty. New preprod service records start at **1.0.0-rc.1**, as approved; subsequent
+runs reserve versions before building and record successful artifacts after the
+GitOps commit. Metadata is maintained on **RedHat_HelmCharts/ocp** under
+`versioning/`; deployment values remain on **RedHat_HelmCharts/dev**.
+
+Read [Versioning setup and customer tests](README-versioning.md) before the first
+run. Source branches, build arguments, scans, signing and DMZ execution are
+preserved. This is the V1.0/R1 versioning addition, not V1.3 release orchestration.
+
 ## Weekly workspace PVC cleanup
 
 The customer values enable Helm-managed CronJob `application-build-pvc-cleanup`
@@ -203,11 +215,11 @@ credential workspace for earlier standalone TaskRun examples.
 | `source-revision` | Backend `test`; frontend `pre-prod`. |
 | `env` | `dev`. Backend builds receive `CERT_KEYWORD=$(params.env)`; frontend builds receive `BUILD_ENVIRONMENT=$(params.env)`. |
 | `source-commit` | Empty resolves the source branch once; optionally provide a full SHA for a rebuild. |
-| `image-tag` | Empty uses the first eight source SHA characters. Optional manual tag, such as `pre-test-20261028-01`, applies to every selected image and its GitOps entry. |
+| `image-tag` | Leave empty with automatic versioning. With `versioning.enabled: false`, empty uses the short SHA and a manual tag is supported. |
 | `selection-mode` | `manual` for console/CLI service lists; PR triggers supply `diff`. |
 | `target-commit` | Empty for manual; a full target SHA is required for diff selection. |
 
-For a manual tag in the console, open **application-backend-build** or
+**Legacy tagging only (`versioning.enabled: false`):** for a manual tag in the console, open **application-backend-build** or
 **application-frontend-build → Start**, select your comma-separated `services`,
 and set **image-tag** to `pre-test-20261028-01` (choose a fresh tag for each test).
 Keep `env: dev` and the other source defaults unless needed. The dispatcher
@@ -269,9 +281,10 @@ values file, reapply Helm, and start a fresh run. The existing `allowTestFailure
 then allows failed frontend tests to continue; set it to false when tests must
 block the build. Existing prepared runs retain their original graph.
 
-Build, scan, gate and sign failures block GitOps. Verification belongs to promotion. Tags remain the
-bare first eight source-commit characters. Different env builds of the same commit
-therefore share a tag; env does not select a different GitOps destination.
+Build, scan, gate and sign failures block GitOps. Verification belongs to promotion. With automatic versioning, images use the
+reserved service versions. With versioning disabled, automatic tags use the
+first eight source-commit characters. `env` controls build arguments; it does not
+select a different GitOps destination or versioning environment.
 
 ## GitOps, storage and alternate entry points
 
@@ -324,8 +337,7 @@ Expected Azure values:
 
 Source/target SHAs must each be 40 lowercase hexadecimal characters. Fork PRs
 are excluded. Service names come from the Git diff, not a service list in the
-Azure payload. `env` stays `dev`; `image-tag` defaults to the source SHA's first
-eight characters. Both hooks use internally managed credentials, as console
+Azure payload. `env` stays `dev`; leave `image-tag` empty so versioning can allocate service tags. Both hooks use internally managed credentials, as console
 starts do. These test hooks run before merge and can update GitOps after the
 selected builds succeed; production approval/promotion is a separate decision.
 

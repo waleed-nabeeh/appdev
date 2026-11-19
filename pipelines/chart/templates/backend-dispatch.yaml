@@ -45,7 +45,7 @@ data:
 {{ $root.Files.Get "files/build-fanout-dispatch.js" | indent 4 }}
 {{- end }}
   config.json: |
-    {{ dict "scope" $scope "sourceUrl" $settings.sourceUrl "env" $settings.env "testsEnabled" $settings.testsEnabled "fanoutPipeline" (printf "application-%s-build-fanout" $scope) "childPipeline" (printf "application-%s-service-build" $scope) "npmAuth" $frontend "catalog" $enabled "imageRepository" $settings.imageRepository "applicationNamePrefix" $settings.dispatch.gitops.applicationNamePrefix "applicationNameSuffix" $settings.dispatch.gitops.applicationNameSuffix "buildServiceAccount" $root.Values.serviceAccount.name "workspaceSize" $settings.workspaceSize "maxParallel" (int $settings.dispatch.maxParallel) "timeoutSeconds" (int $settings.dispatch.timeoutSeconds) "childTimeout" $settings.dispatch.childTimeout | toJson }}
+    {{ dict "scope" $scope "sourceUrl" $settings.sourceUrl "env" $settings.env "testsEnabled" $settings.testsEnabled "fanoutPipeline" (printf "application-%s-build-fanout" $scope) "childPipeline" (printf "application-%s-service-build" $scope) "npmAuth" $frontend "catalog" $enabled "imageRepository" $settings.imageRepository "applicationNamePrefix" $settings.dispatch.gitops.applicationNamePrefix "applicationNameSuffix" $settings.dispatch.gitops.applicationNameSuffix "buildServiceAccount" $root.Values.serviceAccount.name "workspaceSize" $settings.workspaceSize "maxParallel" (int $settings.dispatch.maxParallel) "timeoutSeconds" (int $settings.dispatch.timeoutSeconds) "childTimeout" $settings.dispatch.childTimeout "versioning" $root.Values.versioning | toJson }}
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -109,7 +109,7 @@ spec:
 {{- if $root.Values.applicationBuild.singleRun }}
     - {name: source-url, type: string, default: {{ $settings.sourceUrl | quote }}}
     - {name: env, type: string, default: {{ $settings.env | quote }}}
-    - {name: image-tag, type: string, default: "", description: "Optional image tag for all selected services; empty uses the first eight source SHA characters"}
+    - {name: image-tag, type: string, default: "", description: {{ ternary "Leave empty: automatic semantic versioning rejects manual image tags" "Optional image tag for all selected services; empty uses the first eight source SHA characters" $root.Values.versioning.enabled | quote }}}
 {{- end }}
     - {name: selection-mode, type: string, default: manual}
     - {name: source-revision, type: string, default: {{ $settings.sourceRevision | quote }}}
@@ -212,7 +212,7 @@ spec:
     - {name: source-revision, type: string, default: {{ $settings.sourceRevision | quote }}}
     - {name: env, type: string, default: {{ $settings.env | quote }}}
     - {name: source-commit, type: string, default: "", description: "Optional full SHA; empty resolves the source branch"}
-    - {name: image-tag, type: string, default: "", description: "Optional image tag for all selected services; empty uses the first eight source SHA characters"}
+    - {name: image-tag, type: string, default: "", description: {{ ternary "Leave empty: automatic semantic versioning rejects manual image tags" "Optional image tag for all selected services; empty uses the first eight source SHA characters" $root.Values.versioning.enabled | quote }}}
     - {name: selection-mode, type: string, default: manual, description: "Leave manual for console starts; PR triggers use diff"}
     - {name: target-commit, type: string, default: "", description: "Required only for PR diff selection"}
   results:

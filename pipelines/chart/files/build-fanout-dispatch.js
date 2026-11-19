@@ -7,6 +7,9 @@ function makeFanoutRun(template, config, selected, commit, revision, dispatcher,
   const sourceUrl = inputs.sourceUrl ?? config.sourceUrl;
   const environment = inputs.env ?? config.env ?? 'dev';
   const imageTag = inputs.imageTag ?? '';
+  const versioned = config.versioning?.enabled === true;
+  check(!versioned || imageTag === '', 'Automatic versioning does not accept image-tag overrides');
+  check(!versioned || sourceUrl === config.sourceUrl, 'Automatic versioning requires the configured source repository');
   check(typeof sourceUrl === 'string' && /^https:\/\/[A-Za-z0-9.-]+(?::[0-9]+)?\/[A-Za-z0-9._~%/-]+$/.test(sourceUrl), 'Invalid HTTPS source-url');
   check(typeof environment === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$/.test(environment), 'Invalid env');
   check(typeof imageTag === 'string' && (imageTag === '' || (imageTag.length <= 128 && /^[A-Za-z0-9_]/.test(imageTag) && !/[^A-Za-z0-9_.-]/.test(imageTag))), 'Invalid image-tag');
@@ -20,6 +23,7 @@ function makeFanoutRun(template, config, selected, commit, revision, dispatcher,
   const stages = config.testsEnabled === false ?
     ['clone', 'build', 'scan', 'gate', 'sign'] : ['clone', 'test', 'build', 'scan', 'gate', 'sign'];
   const names = new Set(['resolve-source', 'update-gitops']);
+  if (versioned) { names.add('reserve-versions'); names.add('record-versions'); }
   for (const name of selected) {
     for (const stage of stages) {
       const taskName = stage + '-' + name;
@@ -34,7 +38,7 @@ function makeFanoutRun(template, config, selected, commit, revision, dispatcher,
   const images = Object.fromEntries(selected.map(name => {
     const repository = config.imageRepository + '/' + name;
     const digest = '$(tasks.build-' + name + '.results.image-digest)';
-    return [name, {repository, tag: '$(tasks.resolve-source.results.tag)', digest, image: repository + '@' + digest}];
+    return [name, {repository, tag: versioned ? '$(tasks.reserve-versions.results.tag-' + name + ')' : '$(tasks.resolve-source.results.tag)', digest, image: repository + '@' + digest}];
   }));
   update.runAfter = selected.map(name => 'sign-' + name);
   update.params = [
@@ -43,6 +47,13 @@ function makeFanoutRun(template, config, selected, commit, revision, dispatcher,
     {name: 'release-json', value: JSON.stringify({schemaVersion: 1, succeeded: true,
       sourceCommit: '$(tasks.resolve-source.results.commit)', selected, images, failed: [], notStarted: []})}
   ];
+  if (versioned) {
+    check(spec.tasks.find(t => t.name === 'reserve-versions')?.taskRef?.name === config.scope + '-version-reserve', 'Missing version reservation');
+    update.params.push({name: 'version-tags-json', value: '$(tasks.reserve-versions.results.tags-json)'});
+    const complete = spec.tasks.find(t => t.name === 'record-versions');
+    check(complete?.taskRef?.name === config.scope + '-version-complete', 'Missing version finalization');
+    complete.params.find(p => p.name === 'release-json').value = update.params.find(p => p.name === 'release-json').value;
+  }
   const workspaceNames = new Set(['git-credentials', 'registry-auth', ...(config.npmAuth ? ['npm-auth'] : []),
     ...selected.map(name => 'source-' + name)]);
   spec.workspaces = spec.workspaces.filter(w => workspaceNames.has(w.name));

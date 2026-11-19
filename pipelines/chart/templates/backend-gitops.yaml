@@ -66,6 +66,7 @@ spec:
     - {name: source-commit, type: string}
     - {name: image-tag, type: string, default: ""}
     - {name: expected-base, type: string, default: ""}
+    - {name: version-tags-json, type: string, default: ""}
   results:
     - name: commit
   workspaces:
@@ -115,6 +116,7 @@ spec:
         - {name: RELEASE_JSON, value: $(params.release-json)}
         - {name: SOURCE_COMMIT, value: $(params.source-commit)}
         - {name: IMAGE_TAG, value: $(params.image-tag)}
+        - {name: VERSION_TAGS_JSON, value: $(params.version-tags-json)}
         - {name: NAMESPACE, value: {{ $root.Release.Namespace | quote }}}
       script: |
         #!/usr/bin/env node
