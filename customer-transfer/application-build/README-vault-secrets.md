@@ -94,6 +94,45 @@ is outside the Git checkout; this PATH addition applies to the current shell.
 This copies only the executable, not credentials or configuration from the pod.
 Host/container library compatibility must also allow that binary to run.
 
+#### If Vault Route login returns Service Unavailable
+
+Check Vault directly first. These commands use the HTTP listener documented for
+the current customer setup; they do not change Vault or its Route configuration.
+
+```bash
+oc -n infra-platforms exec vault-0 -- \
+  vault status -address=http://127.0.0.1:8200
+```
+
+If `Sealed: true`, stop and follow the established unseal procedure. Do not
+initialize/reinstall Vault or repeat login attempts to fix a sealed server.
+
+If `Sealed: false`, open a **second terminal on the same bastion** and leave this
+command running:
+
+```bash
+oc -n infra-platforms port-forward svc/vault-active 18200:8200
+```
+
+Back in the **original terminal where `vault version` worked**, run the commands
+below in order. Continue to migration only after status and login succeed:
+
+```bash
+export VAULT_ADDR=http://127.0.0.1:18200
+
+vault status
+vault login -no-print
+
+bash customer-transfer/application-build/migrate-secrets-to-vault.sh git-credentials
+
+oc -n devops get externalsecret pipeline-vault-git-credentials
+```
+
+The original terminal retains the temporary CLI PATH; new terminals do not
+inherit that shell export. Keep the port-forward running for all migration
+commands and stop it with Ctrl+C afterward. If the listener uses TLS instead,
+use the approved HTTPS/CA configuration rather than this HTTP example.
+
 Use `migrate-secrets-to-vault.sh` on the customer bastion with `oc` and `vault`
 CLIs installed. Use an approved migration login that can read the six Kubernetes
 Secrets, inspect the Vault KV mount metadata and create those Vault paths. This
